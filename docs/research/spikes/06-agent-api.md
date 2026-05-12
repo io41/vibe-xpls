@@ -40,6 +40,8 @@ Every response uses this top-level envelope:
 }
 ```
 
+The implementation normalizes omitted `data`, `diagnostics`, and `errors` fields at the JSON boundary, so empty values serialize as `{}` or `[]` instead of `null`.
+
 Command-specific data contracts:
 
 - `list-compositions`: `data.workspace` plus `data.compositions[]` with `id`, `name`, `file`, `mode`, `compositeTypeRef`, and `pipeline[]`.

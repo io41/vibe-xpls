@@ -121,20 +121,72 @@ func TestErrorsAlsoReturnStructuredJSON(t *testing.T) {
 	}
 }
 
+func TestSuccessEnvelopeWireFormatUsesEmptyArrays(t *testing.T) {
+	code, raw := runRawJSON(t, "list-compositions")
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	fields := topLevelFields(t, raw)
+	assertRawJSON(t, fields, "diagnostics", "[]")
+	assertRawJSON(t, fields, "errors", "[]")
+}
+
+func TestErrorEnvelopeWireFormatUsesEmptyObjectAndArray(t *testing.T) {
+	code, raw := runRawJSON(t, "find-schema")
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+
+	fields := topLevelFields(t, raw)
+	assertRawJSON(t, fields, "data", "{}")
+	assertRawJSON(t, fields, "diagnostics", "[]")
+}
+
 func runAndDecode(t *testing.T, args ...string) (int, envelope) {
+	t.Helper()
+
+	code, raw := runRawJSON(t, args...)
+
+	var response envelope
+	if err := json.Unmarshal(raw, &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	return code, response
+}
+
+func runRawJSON(t *testing.T, args ...string) (int, []byte) {
 	t.Helper()
 
 	var out bytes.Buffer
 	code := run(args, &out)
-	if !json.Valid(out.Bytes()) {
+	raw := out.Bytes()
+	if !json.Valid(raw) {
 		t.Fatalf("expected valid JSON, got %q", out.String())
 	}
+	return code, raw
+}
 
-	var response envelope
-	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
+func topLevelFields(t *testing.T, raw []byte) map[string]json.RawMessage {
+	t.Helper()
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("unmarshal top-level fields: %v", err)
 	}
-	return code, response
+	return fields
+}
+
+func assertRawJSON(t *testing.T, fields map[string]json.RawMessage, key, want string) {
+	t.Helper()
+
+	got, ok := fields[key]
+	if !ok {
+		t.Fatalf("expected top-level field %q", key)
+	}
+	if string(got) != want {
+		t.Fatalf("expected %s to encode as %s, got %s", key, want, got)
+	}
 }
 
 func asObject(t *testing.T, value any) map[string]any {

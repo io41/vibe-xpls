@@ -413,6 +413,7 @@ func errorEnvelope(command, code, message string) envelope {
 }
 
 func writeJSON(out io.Writer, response envelope) int {
+	response = normalizeEnvelope(response)
 	if err := json.NewEncoder(out).Encode(response); err != nil {
 		if errors.Is(err, io.ErrClosedPipe) {
 			return 1
@@ -423,6 +424,19 @@ func writeJSON(out io.Writer, response envelope) int {
 		return 0
 	}
 	return 2
+}
+
+func normalizeEnvelope(response envelope) envelope {
+	if response.Data == nil {
+		response.Data = map[string]any{}
+	}
+	if response.Diagnostics == nil {
+		response.Diagnostics = []diagnostic{}
+	}
+	if response.Errors == nil {
+		response.Errors = []responseError{}
+	}
+	return response
 }
 
 func knownSchemaRefs() []schemaRef {
