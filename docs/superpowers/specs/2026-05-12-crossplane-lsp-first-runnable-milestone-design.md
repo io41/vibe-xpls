@@ -12,6 +12,8 @@ Build the first runnable `vibe-xpls` product milestone: a Zed-first Crossplane a
 
 The milestone proves that a local `vibe-xpls` binary can be launched from the existing Zed extension path and can provide useful Crossplane editor intelligence in realistic repository shapes. It does not start by defining a public agent API, executing Crossplane commands, or building a render/validate system.
 
+Runnable means a `vibe-xpls` binary that Zed can launch through `VIBE_XPLS_BIN` and that satisfies the acceptance criteria in this document. If this milestone produces a public release, it ships as `v0.0.1` and remains on the `v0.X.X` line per `docs/research/decisions/gate-06-release-discipline.md`.
+
 ## Product Boundary
 
 The first runnable milestone is a Zed-first editor milestone. It is accepted when Zed can launch the local `vibe-xpls` binary and receive useful language-server behavior for Crossplane workspaces.
@@ -47,6 +49,8 @@ Out of scope for this milestone:
 - Rendered virtual documents.
 - Schema-aware intelligence inside generated template output.
 
+This intentionally narrows the final research synthesis, which recommended a first read-only JSON CLI for terminal and CI agents. The public agent CLI is deferred so the first runnable milestone can prove the unresolved Zed editor gate without also committing to agent UX, unsaved-overlay behavior, or a stable command contract. The internal debug CLI exists only to make analyzer behavior inspectable during implementation and tests.
+
 ## Architecture
 
 Use an analyzer-first architecture with thin adapters.
@@ -67,8 +71,11 @@ The LSP server handles transport concerns only:
 - JSON-RPC framing.
 - LSP lifecycle.
 - Document synchronization.
-- UTF-8, UTF-16, byte, and rune position conversion.
+- LSP position encoding negotiation, defaulting to UTF-16 and using UTF-8 when the client advertises support through LSP 3.17 `general.positionEncodings`.
+- Conversion between protocol positions and analyzer byte offsets in the raw source.
 - Formatting analyzer results into LSP diagnostics, hover responses, and completion items.
+
+The analyzer's canonical source positions are byte offsets in raw document text. Rune indexes are an implementation detail of conversion routines, not part of the LSP contract.
 
 The debug CLI is another adapter over the same analyzer. Its output may be JSON so tests can assert on it, but it is internal and non-contractual. It should help inspect package detection, diagnostics, schema lookup, hover, and completion against fixture paths without launching Zed.
 
@@ -83,6 +90,8 @@ On startup, the LSP server initializes an analyzer workspace for the Zed worktre
 - Multi-package workspace.
 - No package root.
 
+Package detection aligns with the current `zed-up-xpls` launch markers: root `crossplane.yaml` or root `upbound.yaml` start the Zed language server path. After launch, the analyzer scans the workspace for additional `crossplane.yaml` and `upbound.yaml` package markers. A document belongs to the nearest containing package root. Root and nested package facts are isolated by package scope; multi-package workspaces index all package roots but do not share workspace schema facts across package boundaries unless a later design introduces explicit shared schema directories.
+
 For each opened document, the LSP server sends text changes into the analyzer with a monotonic document generation. The analyzer keeps:
 
 - Raw document text.
@@ -92,7 +101,9 @@ For each opened document, the LSP server sends text changes into the analyzer wi
 - Schema context for the nearest package or workspace scope.
 - Diagnostics tied to the document generation.
 
-Async parse, index, and analysis results must be fenced by document and workspace generation. Stale results are dropped instead of overwriting newer diagnostics or hover/completion state.
+Async parse, index, and analysis results must be fenced by document and workspace generation. Document generation advances on each text change for that document. Workspace generation advances when package markers, XRDs, Compositions, provider CRDs, package metadata, or workspace-root detection change.
+
+Diagnostics are push-model results: each publish operation is tied to an internal generation, and the server must not publish diagnostics older than the newest generation already known for that URI. `didClose` sends an empty `publishDiagnostics` notification for the closed URI. Hover and completion are pull-model results: requests run against a snapshot generation and either cancel, return empty, or return an explicit stale-result error if the originating generation is superseded before the response is produced.
 
 Schema lookup is local and deterministic. The first milestone supports:
 
@@ -102,7 +113,15 @@ Schema lookup is local and deterministic. The first milestone supports:
 - Workspace provider CRDs.
 - Workspace package metadata.
 
-Workspace facts may augment built-ins. Within a package scope, a workspace schema for a matching group, version, and kind takes precedence over the shipped built-in schema so checked-in project state can model the user's actual Crossplane version. Missing provider CRDs or package metadata degrade gracefully by producing fewer completions or lower-confidence diagnostics. Conflicts between workspace schemas should be visible through bounded diagnostics or debug CLI output, but they must not block editor startup.
+Workspace facts may augment built-ins by adding new kinds, package facts, and Crossplane graph relationships. They must not field-merge with an existing schema in this milestone.
+
+Schema precedence is split by ownership:
+
+- Crossplane core API groups shipped with `vibe-xpls`, including `apiextensions.crossplane.io`, `pkg.crossplane.io`, and `meta.pkg.crossplane.io`, use the built-in schema as authority. Workspace duplicates produce a bounded diagnostic on the duplicate schema file and debug CLI output rather than silently replacing the built-in schema.
+- Provider and user-defined kinds use the workspace schema as authority because the built-in schema set does not define them.
+- Conflicts between workspace schemas with the same group, version, and kind are reported on the conflicting schema files and in debug CLI output. The analyzer chooses a deterministic winner for continued operation, but the conflict remains visible.
+
+Missing provider CRDs degrade to structural YAML and Crossplane graph analysis: the analyzer can still reason about `apiVersion`, `kind`, package context, and Composition shape, but it should not invent field completions or field-level diagnostics for unknown provider resources.
 
 ## Mixed YAML And Template Handling
 
@@ -117,6 +136,8 @@ The analyzer should:
 - Preserve original source positions for diagnostics.
 - Provide hover and completion in stable YAML structure outside template actions.
 
+Stable YAML structure means an AST node whose key path from the document root contains no template-span bytes. A value that contains template spans can still receive syntax diagnostics, but it is not eligible for schema-aware hover or completion in this milestone.
+
 The analyzer should not attempt schema-aware hover or completion inside generated template output in this milestone. `function-go-templating` context, helper intelligence, filesystem templates, emitted resources, and render-aware template semantics are later product slices.
 
 ## Error Handling And Trust
@@ -129,12 +150,32 @@ Required error behavior:
 
 - Malformed YAML produces source-mapped diagnostics without crashing the server.
 - Unterminated template actions produce template diagnostics without flooding YAML diagnostics.
-- No-root workspaces stay quiet unless an opened document declares a Crossplane API group, a Composition, an XRD, a provider CRD, or package metadata.
+- No-root workspaces stay quiet unless an activation signal is present.
 - Diagnostics are cleared when files close, become valid, or move to a newer generation.
 - Large or invalid files are bounded so editor responsiveness is preserved.
 - Analyzer panics are contained so one bad file cannot terminate the editor loop.
 
-Path handling must be explicit from the start. Workspace and package paths are resolved under the workspace root. Any feature that reads related files must reject path traversal and symlink escapes after path resolution. Diagnostics and debug output must not leak raw environment variables, credentials, kubeconfig data, registry credentials, or secret-bearing file content.
+No-root activation is recomputed per edit and uses this signal order:
+
+1. A package marker in the workspace root or an ancestor directory.
+2. A filename that the Zed extension classifies as `Crossplane YAML`, including documented user `file_types` mappings.
+3. A parseable `apiVersion` in the masked YAML view that belongs to a Crossplane core API group.
+4. A parseable `kind` and shape for Composition, XRD, package metadata, or a CRD document that Zed has already classified as Crossplane YAML.
+
+If an edit removes the activation signal, the server clears prior diagnostics for that URI and returns no hover or completion items until the signal returns.
+
+Initial responsiveness limits are part of acceptance:
+
+- Full document analysis is skipped or downgraded for a single document larger than 2 MiB.
+- Diagnostics are capped at 100 per document.
+- A single document analysis pass has a 500 ms soft deadline before returning partial results.
+- Initial workspace indexing stops after 10,000 YAML-like files or 100 MiB of scanned YAML-like content and reports a bounded workspace-limit diagnostic or debug status.
+
+These values are defaults for the first milestone and can be tuned by later evidence, but the implementation must have explicit limits and tests for the downgrade behavior.
+
+Path handling must be explicit from the start. Workspace and package paths are resolved under the workspace root. In this milestone, traversal and symlink-escape rejection applies to workspace scanning, package-marker discovery, schema-file reads, and any package-relative file reads. Filesystem template expansion is out of scope. Diagnostics and debug output must not leak raw environment variables, credentials, kubeconfig data, registry credentials, or secret-bearing file content.
+
+`VIBE_XPLS_BIN` trust UX is deferred because this milestone uses a developer-controlled local binary. Manual validation must record the canonical binary path used, but end-user executable approval and content-identity trust gates are a later design topic.
 
 ## Testing And Acceptance
 
@@ -146,12 +187,20 @@ Analyzer tests cover core behavior without LSP or Zed:
 
 - Package detection for root, nested, multi-package, and no-root repositories.
 - Schema discovery from built-ins plus workspace XRDs, Compositions, provider CRDs, and package metadata.
-- Diagnostics for valid YAML, invalid YAML, malformed YAML, and mixed YAML/template files.
-- Template span masking and original-source diagnostic mapping.
-- Hover over stable YAML structure.
-- Completion over stable YAML structure.
+- Schema precedence for Crossplane core duplicates, provider CRDs, user-defined XRD schemas, and conflicting workspace schemas.
+- Diagnostics for valid YAML, invalid YAML, malformed YAML, unterminated templates, and mixed YAML/template files.
+- Template span masking, eligible and ineligible stable YAML positions, and original-source diagnostic mapping.
+- No-root activation toggling and diagnostic clearing when activation disappears.
+- Hover at a known `apiVersion`, `kind`, or schema path returns indexed OpenAPI documentation when available and a clear absence when no documentation is indexed.
+- Completion at known schema paths suggests indexed fields and does not invent field completions for unknown provider schemas.
 - Document and workspace generation fencing.
 - Stale diagnostic clearing behavior.
+- Huge-document downgrade behavior.
+- Workspace scan caps.
+- Symlink escape and path traversal rejection during workspace scans and package-relative reads.
+- Analyzer panic recovery for malformed fixtures.
+
+External command timeout fixtures are not required in this milestone because normal editor behavior does not invoke external commands.
 
 ### LSP Protocol Tests
 
@@ -162,8 +211,9 @@ Protocol tests cover:
 - Publish diagnostics.
 - Hover.
 - Completion.
-- UTF-8 and UTF-16 position conversion.
+- UTF-16 default position handling and UTF-8 handling when negotiated with a supporting client.
 - Stale diagnostic clearing.
+- Pull-model stale hover and completion behavior.
 
 ### Manual Zed Validation
 
@@ -171,12 +221,14 @@ Manual Zed validation is required before the milestone counts as runnable. The v
 
 Required checks:
 
+- The local binary is produced from the current worktree for validation, and the canonical path assigned to `VIBE_XPLS_BIN` is recorded with the validation evidence.
 - Zed launches the local `vibe-xpls` binary.
 - Missing-binary behavior is understandable.
 - A root package attaches.
 - A nested package attaches.
 - A multi-package workspace attaches without schema cross-contamination.
 - A no-root workspace stays quiet.
+- `.yaml` attach behavior is verified both without user `file_types` mappings and with the documented Crossplane `file_types` mapping. The mapping used during validation is recorded.
 - Diagnostics appear and clear correctly.
 - Hover works visibly.
 - Completion works visibly.
@@ -191,7 +243,7 @@ The milestone must label evidence by proof level:
 - Fixture-backed analyzer evidence.
 - Protocol-level LSP evidence.
 - Manual Zed editor evidence.
-- Real-workspace evidence, if gathered.
+- Real-workspace evidence, which is not required for this milestone but must be labeled separately if gathered.
 
 Fixture-backed evidence must not be presented as production readiness. Manual Zed evidence is required for the first runnable claim.
 
@@ -205,12 +257,14 @@ Fixture-backed evidence must not be presented as production readiness. Manual Ze
 - Mixed YAML/template source maps may become more complex when later milestones add filesystem templates or render-aware output.
 - The internal debug CLI could accidentally become a public agent API unless documentation and naming keep it explicitly non-contractual.
 
+Implementation planning must include an explicit parser-selection task before product code is written. `docs/research/lanes/05-yaml-template-parsing.md` makes `goccy/go-yaml` the starting candidate and `go.yaml.in/yaml/v4` a fallback, but this milestone design does not silently choose one.
+
 ## Acceptance Summary
 
 The first runnable milestone is complete only when all of these are true:
 
-- Analyzer fixture tests pass for package detection, schema lookup, diagnostics, hover, completion, mixed YAML/template basics, and stale generation behavior.
-- LSP protocol tests pass for document sync, diagnostics, hover, completion, position conversion, and stale diagnostic clearing.
+- Analyzer fixture tests pass for package detection, schema lookup, schema precedence, diagnostics, hover, completion, mixed YAML/template basics, no-root activation, bounded-resource behavior, path safety, and stale generation behavior.
+- LSP protocol tests pass for document sync, diagnostics, hover, completion, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
 - Manual Zed validation passes through `VIBE_XPLS_BIN` for root, nested, multi-package, and no-root workspaces.
 - No external execution, Docker, downloads, cluster reads, kubeconfig reads, or workspace writes occur during normal editor behavior.
 - The debug CLI remains internal and non-contractual.
