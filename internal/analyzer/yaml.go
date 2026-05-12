@@ -45,21 +45,44 @@ func ParseYAMLDocument(text string) YAMLDocument {
 		Diagnostics: append([]Diagnostic(nil), mixed.TemplateDiagnostics...),
 	}
 
-	file, err := parser.ParseBytes([]byte(mixed.MaskedText), 0, parser.AllowDuplicateMapKey())
+	file, err := parseYAMLText(mixed.MaskedText)
 	if err != nil {
-		if diagnostic, ok := yamlDiagnosticFromError(err, mixed.RawText); ok && !doc.overlapsTemplateAction(diagnostic.Span) {
-			doc.Diagnostics = append(doc.Diagnostics, diagnostic)
+		if diagnostic, ok := yamlDiagnosticFromError(err, mixed.RawText); ok {
+			if !doc.overlapsTemplateAction(diagnostic.Span) {
+				doc.Diagnostics = append(doc.Diagnostics, diagnostic)
+			}
+			doc.walkBestEffortPrefix(diagnostic.Span.Start)
 		}
 		return doc
 	}
 
+	doc.walkFile(file)
+	return doc
+}
+
+func parseYAMLText(text string) (*ast.File, error) {
+	return parser.ParseBytes([]byte(text), 0, parser.AllowDuplicateMapKey())
+}
+
+func (d *YAMLDocument) walkFile(file *ast.File) {
 	for _, yamlDoc := range file.Docs {
 		if yamlDoc == nil || yamlDoc.Body == nil {
 			continue
 		}
-		doc.walkNode(yamlDoc.Body, "", true)
+		d.walkNode(yamlDoc.Body, "", true)
 	}
-	return doc
+}
+
+func (d *YAMLDocument) walkBestEffortPrefix(errorOffset int) {
+	prefixEnd := lineStartForOffset(d.Mixed.MaskedText, errorOffset)
+	if prefixEnd <= 0 {
+		return
+	}
+	file, err := parseYAMLText(d.Mixed.MaskedText[:prefixEnd])
+	if err != nil {
+		return
+	}
+	d.walkFile(file)
 }
 
 func (d YAMLDocument) IsStablePath(path string) bool {
@@ -106,8 +129,9 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool) {
 			elementPath := fmt.Sprintf("%s[%d]", path, idx)
 			entrySpan, entryOK := d.sequenceEntrySpan(n, idx)
 			valueSpan, valueOK := d.nodeSpan(value)
-			d.recordPath(elementPath, stable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK)
-			d.walkNode(value, elementPath, stable)
+			elementStable := stable && !d.overlapsKnownSpan(entrySpan, entryOK) && !d.overlapsKnownSpan(valueSpan, valueOK)
+			d.recordPath(elementPath, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK)
+			d.walkNode(value, elementPath, elementStable)
 		}
 	case *ast.MappingValueNode:
 		d.walkMappingValue(n, path, stable)
@@ -123,16 +147,18 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 		return
 	}
 	path := joinYAMLPath(parentPath, key)
-	keySpan, keyOK := d.nodeSpan(entry.Key)
+	keySpan, keyOK := d.keyNodeSpan(entry.Key)
 	valueSpan, valueOK := d.nodeSpan(entry.Value)
 	entrySpan, entryOK := d.mappingValueSpan(entry)
 	stable := parentStable && keyOK && !d.overlapsTemplateAction(keySpan)
+	scalar, scalarOK := scalarValue(entry.Value)
+	if scalarOK && (!valueOK || d.overlapsTemplateAction(valueSpan)) {
+		stable = false
+	}
 
 	d.recordPath(path, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK)
-	if stable {
-		if value, ok := scalarValue(entry.Value); ok {
-			d.Values[path] = value
-		}
+	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
+		d.Values[path] = scalar
 	}
 	d.walkNode(entry.Value, path, stable)
 }
@@ -220,7 +246,7 @@ func (d YAMLDocument) mappingValueSpan(entry *ast.MappingValueNode) (Span, bool)
 	}
 	var span Span
 	ok := false
-	keySpan, keyOK := d.nodeSpan(entry.Key)
+	keySpan, keyOK := d.keyNodeSpan(entry.Key)
 	span, ok = unionOptionalSpan(span, ok, keySpan, keyOK)
 	startSpan, startOK := d.tokenSpan(entry.Start)
 	span, ok = unionOptionalSpan(span, ok, startSpan, startOK)
@@ -325,7 +351,21 @@ func (d YAMLDocument) sequenceEntryNodeSpan(node *ast.SequenceEntryNode) (Span, 
 	}
 }
 
+func (d YAMLDocument) keyNodeSpan(key ast.MapKeyNode) (Span, bool) {
+	if key == nil {
+		return Span{}, false
+	}
+	if mappingKey, ok := key.(*ast.MappingKeyNode); ok && mappingKey.Value != nil {
+		return d.tokenSpanWithWidth(mappingKey.Value.GetToken(), keyTokenTextWidth(mappingKey.Value.GetToken()))
+	}
+	return d.tokenSpanWithWidth(key.GetToken(), keyTokenTextWidth(key.GetToken()))
+}
+
 func (d YAMLDocument) tokenSpan(tk *token.Token) (Span, bool) {
+	return d.tokenSpanWithWidth(tk, tokenTextWidth(tk))
+}
+
+func (d YAMLDocument) tokenSpanWithWidth(tk *token.Token, width int) (Span, bool) {
 	if tk == nil || tk.Position == nil {
 		return Span{}, false
 	}
@@ -333,7 +373,6 @@ func (d YAMLDocument) tokenSpan(tk *token.Token) (Span, bool) {
 	if start < 0 || start > len(d.Mixed.RawText) {
 		return Span{}, false
 	}
-	width := tokenTextWidth(tk)
 	if width == 0 {
 		width = 1
 	}
@@ -392,14 +431,61 @@ func tokenTextWidth(tk *token.Token) int {
 	if tk == nil {
 		return 0
 	}
-	if tk.Value != "" {
-		return len(tk.Value)
-	}
-	origin := strings.TrimRight(tk.Origin, " \t\r\n")
+	origin := strings.TrimLeft(strings.TrimRight(tk.Origin, " \t\r\n"), " \t")
 	if origin != "" {
 		return len(origin)
 	}
-	return 0
+	return len(tk.Value)
+}
+
+func keyTokenTextWidth(tk *token.Token) int {
+	if tk == nil {
+		return 0
+	}
+	origin := strings.TrimRight(tk.Origin, " \t\r\n")
+	if origin != "" {
+		if width, ok := mappingKeySourceWidth(origin); ok {
+			return width
+		}
+		if isQuotedSource(origin) {
+			return len(origin)
+		}
+	}
+	return len(tk.Value)
+}
+
+func mappingKeySourceWidth(origin string) (int, bool) {
+	var quote byte
+	for i := 0; i < len(origin); i++ {
+		c := origin[i]
+		if quote == 0 {
+			if c == ':' {
+				return i, true
+			}
+			if c == '"' || c == '\'' || c == '`' {
+				quote = c
+			}
+			continue
+		}
+		if quote == '`' {
+			if c == '`' {
+				quote = 0
+			}
+			continue
+		}
+		if c == '\\' {
+			i++
+			continue
+		}
+		if c == quote {
+			quote = 0
+		}
+	}
+	return 0, false
+}
+
+func isQuotedSource(text string) bool {
+	return len(text) >= 2 && (text[0] == '"' || text[0] == '\'' || text[0] == '`')
 }
 
 func (d YAMLDocument) overlapsTemplateAction(span Span) bool {
@@ -409,6 +495,10 @@ func (d YAMLDocument) overlapsTemplateAction(span Span) bool {
 		}
 	}
 	return false
+}
+
+func (d YAMLDocument) overlapsKnownSpan(span Span, ok bool) bool {
+	return ok && d.overlapsTemplateAction(span)
 }
 
 func (d YAMLDocument) offsetInTemplateAction(offset int) bool {
@@ -456,4 +546,17 @@ func pathDepth(path string) int {
 		}
 	}
 	return depth
+}
+
+func lineStartForOffset(text string, offset int) int {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(text) {
+		offset = len(text)
+	}
+	for offset > 0 && text[offset-1] != '\n' {
+		offset--
+	}
+	return offset
 }

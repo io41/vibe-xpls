@@ -223,6 +223,30 @@ func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	}
 }
 
+func TestQuotedValueSpansUseRawSource(t *testing.T) {
+	text := "kind: \"Bucket\"\nescaped: \"B\\\"ucket\"\n"
+
+	doc := ParseYAMLDocument(text)
+
+	quotedStart := strings.Index(text, "\"Bucket\"")
+	escapedStart := strings.Index(text, "\"B\\\"ucket\"")
+	for _, tc := range []struct {
+		path  string
+		start int
+		raw   string
+	}{
+		{path: "kind", start: quotedStart, raw: "\"Bucket\""},
+		{path: "escaped", start: escapedStart, raw: "\"B\\\"ucket\""},
+	} {
+		if tc.start < 0 {
+			t.Fatalf("test setup: raw value %q not found", tc.raw)
+		}
+		if got := doc.ValueSpans[tc.path]; got != (Span{Start: tc.start, End: tc.start + len(tc.raw)}) {
+			t.Fatalf("%s value span = %#v, want raw source span", tc.path, got)
+		}
+	}
+}
+
 func TestNullAndEmptyValuesRemainStable(t *testing.T) {
 	text := "spec:\n  empty:\n  explicitNull: null\n"
 
@@ -237,6 +261,48 @@ func TestNullAndEmptyValuesRemainStable(t *testing.T) {
 		if !ok || got != path {
 			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
 		}
+	}
+}
+
+func TestTemplateScalarValueIsNotStable(t *testing.T) {
+	text := "apiVersion: {{ .APIVersion }}\nkind: Composition\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if doc.IsStablePath("apiVersion") {
+		t.Fatal("expected templated scalar value path to be unstable")
+	}
+	if value, ok := doc.Values["apiVersion"]; ok && value != "" {
+		t.Fatalf("templated scalar value recorded as %q", value)
+	}
+	offset := strings.Index(text, "{{ .APIVersion }}")
+	path, ok := doc.PathAtOffset(offset)
+	if ok {
+		t.Fatalf("path inside template action = %q, want no path", path)
+	}
+	if !doc.IsStablePath("kind") {
+		t.Fatal("expected plain sibling path to remain stable")
+	}
+}
+
+func TestTemplateSequenceElementIsNotStable(t *testing.T) {
+	text := "items: [{{ .Items }}]\nkind: Composition\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("items") {
+		t.Fatal("expected parent sequence key to remain stable")
+	}
+	if doc.IsStablePath("items[0]") {
+		t.Fatal("expected templated sequence element to be unstable")
+	}
+	offset := strings.Index(text, "{{ .Items }}")
+	path, ok := doc.PathAtOffset(offset)
+	if ok {
+		t.Fatalf("path inside sequence template action = %q, want no path", path)
+	}
+	if !doc.IsStablePath("kind") {
+		t.Fatal("expected plain sibling path to remain stable")
 	}
 }
 
@@ -260,6 +326,36 @@ func TestYAMLDiagnosticUsesParserSpan(t *testing.T) {
 	}
 	if yamlDiagnostic.Span.End <= yamlDiagnostic.Span.Start {
 		t.Fatalf("expected non-empty diagnostic span, got %#v", yamlDiagnostic)
+	}
+}
+
+func TestMalformedYAMLPreservesEarlierBestEffortPaths(t *testing.T) {
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\n"
+
+	doc := ParseYAMLDocument(text)
+
+	var yamlDiagnostic Diagnostic
+	for _, diagnostic := range doc.Diagnostics {
+		if diagnostic.Source == "yaml" {
+			yamlDiagnostic = diagnostic
+			break
+		}
+	}
+	if yamlDiagnostic.Source == "" {
+		t.Fatalf("expected yaml diagnostic, got %#v", doc.Diagnostics)
+	}
+	if yamlDiagnostic.Span.Start == 0 && yamlDiagnostic.Span.End == 0 {
+		t.Fatalf("expected non-zero yaml diagnostic span, got %#v", yamlDiagnostic)
+	}
+	for _, path := range []string{"apiVersion", "kind"} {
+		if !doc.IsStablePath(path) {
+			t.Fatalf("expected earlier %s path to remain stable", path)
+		}
+		offset := strings.Index(text, path+":")
+		got, ok := doc.PathAtOffset(offset)
+		if !ok || got != path {
+			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
+		}
 	}
 }
 
