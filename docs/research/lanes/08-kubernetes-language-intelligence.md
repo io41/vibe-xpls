@@ -17,6 +17,10 @@ The best direction is interop and selective reuse: learn from YAML Language Serv
 - Helm chart format: https://helm.sh/docs/topics/charts/
 - Kubernetes CRDs: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
 - Crossplane Compositions: https://docs.crossplane.io/latest/composition/compositions/
+- Kubernetes CRD structural schema package: https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apiserver/schema
+- Kubernetes CRD validation package: https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apiserver/validation
+- Kubernetes OpenAPI validation package: https://pkg.go.dev/k8s.io/kube-openapi/pkg/validation/validate
+- Kubernetes field validation errors: https://pkg.go.dev/k8s.io/apimachinery/pkg/util/validation/field
 
 ## Capability Matrix
 
@@ -28,6 +32,7 @@ The best direction is interop and selective reuse: learn from YAML Language Serv
 | `kubectl-validate` | Local validation with Kubernetes apiserver validation code and stronger Kubernetes parity | Project focus is Kubernetes objects, not Crossplane package/function semantics |
 | VS Code Kubernetes Tools | Cluster explorer, `kubectl explain`, apply/diff/logs, Helm authoring UX, command design | VS Code-specific and cluster-oriented; not a portable analyzer layer |
 | Helm LS | Template-aware language server that delegates YAML intelligence to YAML LS, values/schema indexing, noisy diagnostic controls | Helm templates and values differ from Crossplane `function-go-templating` request context |
+| Kubernetes Go libraries | Structural schema conversion, OpenAPI validation, and field-level validation error primitives | Embeddable fit, latency, source mapping, and version compatibility still need a focused spike |
 
 ## Reuse Options
 
@@ -37,6 +42,7 @@ The best direction is interop and selective reuse: learn from YAML Language Serv
 - Use Helm LS as a precedent for mixed template/YAML degradation: template intelligence remains domain-specific while YAML diagnostics can be limited when they get noisy.
 - Provide `kubectl explain`-style hovers where schema descriptions are available, but map them through Crossplane-specific references.
 - Keep ordinary Kubernetes YAML behavior out of the Crossplane-specific language mode unless a package root or file classification says it belongs to `vibe-xpls`.
+- Run a focused embeddable-library spike before production schema implementation. Compare the custom schema index against Kubernetes Go packages such as `k8s.io/apiextensions-apiserver/pkg/apiserver/schema`, `k8s.io/apiextensions-apiserver/pkg/apiserver/validation`, and `k8s.io/kube-openapi/pkg/validation/validate` on the same XRD/CRD fixtures.
 
 ## Limits For Crossplane
 
@@ -50,7 +56,7 @@ The best direction is interop and selective reuse: learn from YAML Language Serv
 
 Build `vibe-xpls` as a Crossplane analyzer that can reuse Kubernetes schema assets and optionally call Kubernetes validation tools. Do not build on top of a Kubernetes LSP as the semantic core.
 
-For first scope, implement local schema lookup from built-in Crossplane schemas, workspace XRDs, provider CRDs, and optional user schema directories. Add explicit commands or CI-friendly hooks for Kubeconform or `kubectl-validate` after the source-mapping and trust model are proven.
+For first scope, implement local schema lookup from built-in Crossplane schemas, workspace XRDs, provider CRDs, and optional user schema directories only after a reuse spike compares custom indexing with embeddable Kubernetes/OpenAPI libraries. Add explicit commands or CI-friendly hooks for Kubeconform or `kubectl-validate` after the source-mapping and trust model are proven.
 
 ## Confidence
 
@@ -60,9 +66,12 @@ High that generic Kubernetes tooling cannot replace Crossplane-specific semantic
 
 Medium on whether `kubectl-validate` should be integrated before Kubeconform; its parity goal is attractive, but integration maturity and output mapping need a runnable spike.
 
+Medium-low on the exact local schema-index implementation path, because the current runnable comparison used only the custom fixture index and did not yet test embeddable Kubernetes/OpenAPI libraries.
+
 ## Evidence That Would Change This Recommendation
 
 - A maintained Kubernetes LSP exposes a stable library/API for CRD schema routing, validation, and source-mapped diagnostics that can be extended cleanly with Crossplane semantics.
+- An embeddable Kubernetes/OpenAPI library spike proves that upstream validation or schema primitives can replace significant custom indexing without losing provenance, source mapping, or Crossplane graph data.
 - The Kubernetes tooling spike shows Kubeconform or `kubectl-validate` can provide fast, source-mapped diagnostics suitable for editor save-time use.
 - User research shows `vibe-xpls` users primarily need generic Kubernetes schema validation and rarely use Crossplane-specific navigation or templates.
 - Zed integration proves that composing with YAML LS is simpler and more reliable than implementing schema handling inside `vibe-xpls`.

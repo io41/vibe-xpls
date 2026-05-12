@@ -49,7 +49,11 @@ Known Zed constraints from the local extension:
 
 - `path_suffixes` works for exact filenames such as `crossplane.yaml`, but broad glob-style matching requires user `file_types`.
 - `first_line_pattern` cannot reliably override built-in YAML suffix matching for normal `.yaml` files.
+- The language server attach path depends on package-root detection. Repositories without root `crossplane.yaml` or `upbound.yaml`, nested packages, and multi-package workspaces need explicit validation before the extension can be called production-ready.
+- Broad Crossplane `.yaml` coverage may require documented user `file_types` mappings unless the extension grows better classification.
 - Mixed YAML/template highlighting is best effort and should not be coupled to semantic validation.
+
+Zed acceptance criteria must therefore include file classification and root detection, not only server process launch. The manual Zed gate should test a normal root package, a nested package, a workspace without root manifests, and behavior before and after any documented `file_types` mapping.
 
 ## Protocol Requirements
 

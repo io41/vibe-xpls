@@ -110,7 +110,7 @@ The next manual check should launch Zed from a shell that exports:
 VIBE_XPLS_BIN=<vibe-xpls-lsp-harness>
 ```
 
-Then open a worktree with a valid root `crossplane.yaml` or `upbound.yaml` and confirm startup logs, diagnostics, hover, and completion.
+Then open a worktree with a valid root `crossplane.yaml` or `upbound.yaml` and confirm startup logs, diagnostics, hover, and completion. Also test attach behavior for a nested package, a multi-package workspace, a workspace without root manifests, and a `.yaml` file before and after any documented `file_types` mapping.
 
 Unvalidated items:
 
@@ -119,16 +119,22 @@ Unvalidated items:
 - Hover and completion through the Zed client.
 - Missing-binary behavior for `VIBE_XPLS_BIN`.
 - Worktree shell-environment propagation in a manually launched Zed session.
+- Trust identity for override binaries: canonical path, symlink target, and content hash/digest are not yet checked or shown to users.
+- Root detection for nested and multi-package repositories.
+- Default attachment behavior when a repository lacks root `crossplane.yaml` or `upbound.yaml`.
+- Whether first release relies on documented manual `file_types` mappings for broad `.yaml` coverage or requires extension changes before release.
 
 ## Compatibility Findings
 
-- The extension can keep its existing `Crossplane YAML` language, grammar, and root detection.
+- The extension can keep its existing `Crossplane YAML` language, grammar, and root detection for the proven code path.
 - The fallback `up xpls serve --verbose` path remains intact for current users.
 - A `vibe-xpls` binary can be introduced as an environment-selected replacement without renaming the language server id or changing file classification.
 - The LSP harness still does not prove Zed UI behavior. It proves only the local stdio protocol loop needed for the next manual Zed run.
+- Real readiness also depends on attach coverage: root manifest detection, nested package detection, multi-package workspaces, and documented or implemented `file_types` behavior for Crossplane YAML files.
+- A future trust model should not treat any prior `VIBE_XPLS_BIN` approval as valid after the executable path, symlink target, mtime+size, content hash, or workspace realpath changes.
 
 ## Decision Impact
 
 The Zed replacement path is promising but not fully proven. The code-path evidence is enough to keep Zed as the first editor gate, but the gate is still open until a manual Zed run confirms startup logs, diagnostics, hover, completion, and worktree environment propagation with `VIBE_XPLS_BIN`.
 
-`vibe-xpls` should expose a stdio LSP binary that the extension can launch directly. The extension should remain a thin launcher/highlighting layer, while Crossplane semantics live in the analyzer and LSP server.
+`vibe-xpls` should expose a stdio LSP binary that the extension can launch directly. The extension should remain a thin launcher/highlighting layer, while Crossplane semantics live in the analyzer and LSP server. The next Zed decision must state whether first release accepts manual `file_types` setup or requires extension changes for automatic attachment in common repository layouts.

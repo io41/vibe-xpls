@@ -18,6 +18,7 @@ Recommended direction: build a Go-native Crossplane analyzer that reuses or adap
 | Kubeconform CLI options | https://kubeconform.mandragor.org/docs/usage/ | JSON output, strict mode, Kubernetes version selection, schema locations, and concurrency controls | Useful as an optional validator, not as the LSP semantic graph |
 | Kubeconform CRD support | https://kubeconform.mandragor.org/docs/crd-support/ | Custom schema locations and CRD-to-JSON-Schema workflows | Requires schema conversion/catalog discipline and still does not derive Crossplane composition intent |
 | `kubectl explain` | https://kubernetes.io/docs/reference/kubectl/generated/kubectl_explain/ | Field documentation from server OpenAPI using JSONPath-like field identifiers | Requires a cluster/server OpenAPI source and remains object-schema oriented |
+| Kubernetes Go libraries | https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apiserver/schema and https://pkg.go.dev/k8s.io/kube-openapi/pkg/validation/validate | Embeddable structural schema and OpenAPI validation primitives | Not exercised in this spike; source mapping, latency, and schema-authority fit remain unproven |
 | Local schema index | `spikes/schema-index` | Fixture-backed Go index for XRD, Composition, provider CRD, and Crossplane package metadata with passing `go test -count=1 ./...` | Narrow research implementation; needs a production YAML parser, watchers, precedence, and package discovery |
 
 ## Commands Run
@@ -59,6 +60,8 @@ go test -count=1 ./...
 
 Result: passing. The spike indexes local XRD, Composition, provider CRD, and Crossplane package metadata fixtures without network access.
 
+Embeddable Kubernetes/OpenAPI libraries were not run in this spike. That is a research gap, not an implicit rejection. The next reuse spike should compare the custom index against upstream Go packages on the same fixture set, measuring source-span preservation, validation error shape, latency, dependency weight, and schema-authority tradeoffs.
+
 ## Capabilities Already Solved
 
 - YAML syntax and structural editing are already covered well by Zed's native YAML support through tree-sitter YAML and YAML Language Server integration.
@@ -88,6 +91,7 @@ Do not rebuild generic Kubernetes/YAML capabilities wholesale. Build a Crossplan
 - Reuse schema association concepts from YAML LS, especially explicit user schemas, schema directories, SchemaStore controls, and custom tags.
 - Reuse Kubeconform-style configurable schema locations, strict/offline validation ideas, JSON output shape, and concurrency model for optional validation commands.
 - Reuse `kubectl explain` as a field-documentation precedent when OpenAPI descriptions are available from XRDs, provider CRDs, or built-in Crossplane schemas.
+- Evaluate embeddable Kubernetes/OpenAPI libraries before committing to a fully custom schema implementation.
 - Keep the core analyzer Go-native and fixture/testable so it remains portable across Zed, CLI, agent APIs, and future editor adapters.
 - Treat external validators as optional interop/delegation points for explicit commands or CI checks, not as the source of truth for per-keystroke Crossplane semantics.
 
@@ -97,4 +101,4 @@ The implementation direction should prioritize a Go-native analyzer with Crosspl
 
 This keeps Zed integration practical: `vibe-xpls` can coexist with Zed's YAML support while adding Crossplane-aware navigation, diagnostics, hovers, and commands that YAML LS cannot infer. It also keeps the analyzer usable outside Zed, which matters for CLI checks and AI agent workflows.
 
-Evidence confidence is high for the reuse decision because the evaluated tools explicitly focus on YAML schemas, Kubernetes OpenAPI validation, or server OpenAPI documentation, while the local Task 6 spike already shows a Go-native path for Crossplane-specific schema facts. Evidence confidence is medium for exact delegation boundaries because a local Kubeconform binary and YAML LS server were not available in this restricted environment; future work should test source-mapped outputs and latency once network access, Homebrew installation, or vendored binaries are available.
+Evidence confidence is high that generic YAML/Kubernetes tools do not replace Crossplane semantics. Evidence confidence is only medium for the schema implementation path because the runnable comparison exercised the custom fixture index, not embeddable Kubernetes/OpenAPI libraries. Future work should test source-mapped outputs, latency, dependency weight, and validation shape once network access, Homebrew installation, vendored binaries, or Go library spikes are available.

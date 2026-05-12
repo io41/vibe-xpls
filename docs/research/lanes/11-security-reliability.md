@@ -25,25 +25,28 @@ The first implementation should treat render, downloads, cluster discovery, and 
 | --- | --- | --- |
 | Docker execution from `crossplane render` | Runs package-defined function containers and may pull images | Off by default; require trusted workspace, explicit command, timeout, and sanitized logs |
 | Function development runtime | Can connect to local endpoints controlled by the workspace | Require explicit trusted-execution gate and disclose target host/port |
-| Package/schema downloads | Remote content can poison cache or change results | Off by default; pin by digest/version when possible; store provenance and cache TTL |
-| Live-cluster discovery | Reads kubeconfig-selected cluster state and may leak names/schemas | Off by default; read-only mode; sanitized diagnostics; explicit context display |
+| Package/schema downloads | Remote content can poison cache or change results | Off by default; require content-addressed storage or verified checksums before cross-workspace reuse; keep tag-only downloads untrusted |
+| Live-cluster discovery | Reads kubeconfig-selected cluster state and may trigger kubeconfig `exec` auth plugins before any intended read | Off by default; no kubeconfig-touching CLI in untrusted mode; require explicit context/path display, env scrubbing, timeout, and separate approval for `exec` auth |
 | Untrusted templates | Go templates can be malformed, expensive, or emit misleading YAML | Parse without executing template logic; execute only through trusted render path |
-| Path traversal in FileSystem templates | Template paths may escape workspace | Normalize paths, reject traversal outside workspace/package root, preserve symlink policy |
+| Path traversal in FileSystem templates | Template paths may escape workspace through `../`, symlinks, or time-of-check/time-of-use races | Resolve workspace and target realpaths, reject escapes after symlink evaluation, prefer no-follow or fd-relative opens, and re-check identity after open |
 | Agent tool permissions | Agent may invoke render, downloads, or cluster reads indirectly | Read-only default; separate capabilities for discovery, execution, network, cluster, and writes |
 | Raw environment leakage | Diagnostics could expose credentials | Never report raw environment; report sanitized tool path/version/exit code only |
-| Cache poisoning | Stale or malicious schemas produce wrong completions/diagnostics | Hash cache entries, record source, separate trusted and untrusted caches, add refresh command |
+| Cache poisoning | Stale or malicious schemas produce wrong completions/diagnostics | Hash cache entries, record source, separate trusted and untrusted caches, require immutable identity before reuse, add refresh command |
 | LSP crashes | Bad YAML/template input can terminate editor intelligence | Panic recovery around document analysis, bounded diagnostics, and test malformed fixtures |
-| Diagnostic noise | Incomplete edits can generate stale or unactionable errors | Debounce, classify confidence, clear diagnostics on close, and suppress lower-confidence errors while typing |
+| Diagnostic noise | Incomplete edits can generate stale or unactionable errors | Debounce, classify confidence, clear diagnostics on close, suppress lower-confidence errors while typing, and fence async results by document/workspace generation |
 | Large workspaces and provider CRDs | Indexing can block editor startup | Incremental indexing, size limits, cancellation, progress reporting, and per-source disable switches |
 
 ## Required Mitigations
 
 - Default `validate-workspace`, `list-compositions`, `find-schema`, and template explanation to read-only static analysis.
 - Make real render execution opt-in. The first agent API render should be simulated or fixture-backed unless the user explicitly enables trusted execution.
-- Never pass unchecked workspace paths to external commands. Resolve paths against the workspace root and reject escapes.
+- Never pass unchecked workspace paths to external commands. Resolve paths against the workspace root, reject escapes after `EvalSymlinks`, define symlink policy, prefer no-follow or fd-relative opens where possible, and re-check target identity after opening.
 - Use timeouts and cancellation for all parsing, indexing, external commands, and cluster calls.
-- Store schema and package caches with provenance: URL, registry, digest or version, retrieval time, and trust level.
+- Attach a monotonic document/workspace generation to every async parse, index, render, or validation task, and drop results whose generation no longer matches current state.
+- Store schema and package caches with provenance: URL, registry, digest or version, retrieval time, and trust level. Do not promote tag-only downloads into a trusted cross-workspace cache without a digest, checksum, or signature. Separate negative-cache entries from positive verified artifacts.
 - Sanitize all diagnostics and structured JSON outputs for secrets, environment variables, kubeconfig paths, and registry credentials.
+- Treat cluster discovery as an execution boundary, not just a read boundary. In untrusted mode, do not call CLIs that may load kubeconfig. In trusted mode, show kubeconfig path and context, detect or require approval for `exec` auth plugins, scrub inherited environment, and isolate subprocess execution with hard timeouts.
+- Bind trust grants to immutable subjects: workspace realpath, operation class, canonical executable path or image reference, content hash or digest when available, and configuration source. Invalidate grants when the executable path, symlink target, mtime+size, image digest, or config source changes.
 - Treat MCP as an outer adapter with least-privilege scopes, not as the core authorization model.
 - Avoid broad wildcard permissions in agent tools. Split low-risk discovery tools from execution and write tools.
 
@@ -54,7 +57,7 @@ The first implementation should treat render, downloads, cluster discovery, and 
 - Security review before live-cluster discovery leaves experimental status.
 - Security review before any MCP adapter exposes tools beyond read-only discovery.
 - Reliability review before indexing large provider CRD sets by default.
-- Regression fixtures for malformed YAML, unterminated templates, template path traversal, huge documents, stale diagnostics, and external command timeouts.
+- Regression fixtures for malformed YAML, unterminated templates, template path traversal, symlink escapes, huge documents, stale diagnostics, async generation fencing, and external command timeouts.
 
 ## Recommendation
 

@@ -13,6 +13,8 @@ NO-GO for product implementation. The project should not yet start building the 
 - `docs/research/spikes/05-render-validate.md` proves `crossplane render` and `crossplane beta validate` are valuable proof commands, but render crosses Docker permissions and validate can depend on cache, registry, credential-helper, or kubeconfig state; they are not hot-path LSP operations.
 - `docs/research/spikes/06-agent-api.md` proves a read-only JSON command envelope for agents, including explicit security metadata, but it remains fixture-backed and does not scan real workspaces, execute Crossplane, download schemas, or read clusters.
 - `docs/research/spikes/07-kubernetes-tooling.md` shows generic YAML and Kubernetes tools solve important infrastructure problems, while Crossplane still needs a Go-native semantic layer for XRD-to-Composition relationships, function pipelines, template source maps, render truth, provider discovery, and agent APIs.
+- The Kubernetes reuse evidence is still provisional for implementation because embeddable Kubernetes/OpenAPI libraries have not been compared against the custom schema-index spike on the same fixture set.
+- The agent API evidence proves a disk-backed JSON CLI shape, not editor-side agent support for unsaved buffers or multi-file drafts.
 - `docs/research/lanes/11-security-reliability.md` identifies the trust model that product design must settle before implementation: untrusted workspace defaults, explicit gates for Docker, downloads, cluster reads, writes, and agent-triggered execution, plus sanitized diagnostics.
 - `docs/research/lanes/10-release-phase-gates.md` requires each later implementation phase to define runnable evidence, tests, release checks, and v0 guardrails before merge or release.
 
@@ -29,6 +31,9 @@ NO-GO for product implementation. The project should not yet start building the 
 - Manual Zed validation may expose client behavior that changes the LSP adapter or extension contract.
 - Parser choice can materially affect diagnostics, source maps, comments, anchors, tags, duplicate keys, performance, and LSP position handling.
 - Real schema/index workloads may reveal latency, memory, freshness, conflict, or package-discovery issues not visible in fixture tests.
+- Embeddable Kubernetes/OpenAPI libraries may change how much custom schema indexing should be built.
+- Editor-embedded agents may need unsaved-overlay state that the file-backed CLI spike does not cover.
+- Zed attach behavior may fail in nested packages, multi-package repositories, no-root-manifest repositories, or without user `file_types` mappings.
 - Trust gates are central to the product boundary and still need concrete UX and policy decisions across CLI, Zed, and future agent adapters.
 
 ## What Would Change This Decision.
@@ -36,5 +41,8 @@ NO-GO for product implementation. The project should not yet start building the 
 - A manual Zed run validates startup, diagnostics, hover, completion, missing-binary behavior, and environment propagation with the local harness.
 - A production YAML/template parser choice is validated against mixed Crossplane fixtures, malformed input, UTF-8/UTF-16 position mapping, and source-map requirements.
 - A real workspace schema/index prototype proves acceptable performance, freshness, conflict handling, and provider package discovery.
-- The trust model is specified for Docker render, package/schema downloads, cluster reads, write-producing tools, and agent-triggered operations.
+- A Kubernetes/OpenAPI library spike clarifies which upstream packages should be embedded versus which schema-index code remains custom.
+- The agent API design specifies unsaved overlays and multi-file draft state for editor-side agents.
+- The Zed manual gate proves launch and attach behavior across root packages, nested packages, multi-package workspaces, and `file_types` setups.
+- The trust model is specified for Docker render, package/schema downloads, cluster reads, kubeconfig `exec` plugins, executable/image identity, write-producing tools, and agent-triggered operations.
 - Broader user validation confirms the intended Crossplane workflows, editor commands, agent APIs, and release gates solve real authoring problems.

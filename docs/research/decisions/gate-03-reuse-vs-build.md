@@ -1,6 +1,6 @@
 ## Decision.
 
-Reuse Kubernetes, YAML, schema, and validation tooling concepts where they are strong, and optionally call external validators for explicit commands or CI. Do not build a generic YAML LSP, and do not delegate the Crossplane semantic core to a generic Kubernetes or YAML LSP. The first analyzer should use a local schema index backed by CRD and XRD OpenAPI schemas, then layer Crossplane-specific relationships and template semantics on top.
+Provisionally reuse Kubernetes, YAML, schema, and validation tooling concepts where they are strong, and optionally call external validators for explicit commands or CI. Do not build a generic YAML LSP, and do not delegate the Crossplane semantic core to a generic Kubernetes or YAML LSP. The first analyzer should use a local schema index backed by CRD and XRD OpenAPI schemas, then layer Crossplane-specific relationships and template semantics on top, but the implementation path must still be checked against embeddable Kubernetes/OpenAPI libraries before production work starts.
 
 ## Evidence.
 
@@ -10,12 +10,14 @@ Reuse Kubernetes, YAML, schema, and validation tooling concepts where they are s
 - `docs/research/lanes/07-schema-workspace-indexing.md` recommends CRD and XRD OpenAPI schemas as the canonical source for validation, completion, and hover, with local workspace sources first and remote or live-cluster sources optional later.
 - `docs/research/spikes/04-schema-index.md` proves local XRD, Composition, provider CRD, and package metadata fixtures can provide `apiVersion`/`kind` lookup and field documentation without external tools or network access.
 - `docs/research/spikes/07-kubernetes-tooling.md` concludes that generic YAML/Kubernetes tools should be reused as infrastructure, ideas, or optional calls, while the core remains a Go-native Crossplane analyzer portable across Zed, CLI, agent APIs, and future editor adapters.
+- `docs/research/spikes/07-kubernetes-tooling.md` also records that embeddable Kubernetes/OpenAPI libraries were not exercised, so the exact custom-versus-library schema implementation remains provisional.
 
 ## Alternatives Considered.
 
 - Build a generic YAML LSP: duplicates mature YAML tooling and still misses Crossplane-specific graph, pipeline, package, and render semantics.
 - Delegate to YAML Language Server plus configuration: reuses schema association and diagnostics, but cannot model XRD-to-Composition links, `function-go-templating` context, or analyzer-level agent commands.
 - Delegate to a Kubernetes validator as the core: useful for structural validation, but it cannot infer whether a Composition step produced the intended managed resource or map function output back to source.
+- Use embeddable Kubernetes/OpenAPI libraries for schema validation and structural checks: still viable, and must be compared in a focused spike before production indexing decisions.
 - Depend on remote CRD catalogs or live cluster discovery first: improves coverage for some workspaces, but adds freshness, trust, auth, cache, and reproducibility problems.
 
 ## Risks.
@@ -24,10 +26,12 @@ Reuse Kubernetes, YAML, schema, and validation tooling concepts where they are s
 - Optional validators may produce diagnostics with different severity, schema precedence, or source mapping than the local analyzer.
 - Local-first schema lookup can miss provider CRDs or package versions that are not checked into the workspace.
 - Avoiding a generic YAML LSP core may require extra coexistence work so ordinary YAML behavior remains familiar in editors.
+- The current runnable evidence compares the custom local index to unavailable external tools, not to in-process Kubernetes/OpenAPI libraries.
 
 ## What Would Change This Decision.
 
 - A maintained Kubernetes or YAML LSP exposes a stable embeddable API for CRD schema routing, source-mapped diagnostics, and extension points that can cleanly host Crossplane semantics.
+- A focused embeddable-library spike shows Kubernetes/OpenAPI packages provide enough validation, field error shape, performance, and source-mapping hooks to replace part of the custom index.
 - User research shows most users only need generic Kubernetes or YAML validation, with little demand for Crossplane navigation, templates, render proof, package awareness, or agent operations.
 - Real-world workspaces rarely contain enough local XRD, CRD, or package metadata for useful local-first indexing.
 - Kubeconform, `kubectl-validate`, or another validator proves fast, hermetic, source-mapped, and extensible enough to serve save-time Crossplane workflows without replacing the analyzer.

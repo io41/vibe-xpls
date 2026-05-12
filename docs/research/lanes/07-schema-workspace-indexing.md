@@ -17,6 +17,8 @@ Package registries, Upbound Marketplace data, `.up/go` model surfaces, and live-
 - YAML Language Server: https://github.com/redhat-developer/yaml-language-server
 - Datree CRDs catalog: https://github.com/datreeio/CRDs-catalog
 - Kubeconform: https://github.com/yannh/kubeconform
+- Kubernetes CRD structural schema package: https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apiserver/schema
+- Kubernetes OpenAPI validation package: https://pkg.go.dev/k8s.io/kube-openapi/pkg/validation/validate
 - Upbound official providers: https://docs.upbound.io/manuals/packages/providers/
 
 ## Schema Source Matrix
@@ -56,6 +58,8 @@ Package registries, Upbound Marketplace data, `.up/go` model surfaces, and live-
 
 Build a local schema index around CRD and XRD OpenAPI documents, with explicit provenance and conflict handling. Support these first: built-in Crossplane APIs, workspace XRDs, workspace Compositions, workspace provider CRDs, package metadata, and user-provided schema directories.
 
+Before production implementation, compare the custom index path with embeddable Kubernetes/OpenAPI libraries on the same fixtures. The comparison must cover validation error shape, field-path/source-range mapping, latency, dependency weight, version compatibility, and whether upstream structural schema primitives reduce custom code without losing Crossplane graph provenance.
+
 Defer live-cluster discovery and remote Marketplace/model indexing until the cache, trust, and auth model are designed. Treat Upbound multi-language resource schemas as a promising enrichment path, not the canonical YAML source.
 
 ## Confidence
@@ -63,6 +67,8 @@ Defer live-cluster discovery and remote Marketplace/model indexing until the cac
 High that CRD OpenAPI and XRD schemas are the right canonical source for YAML intelligence.
 
 Medium on package dependency indexing because local projects may not contain enough resolved version data without registry or cluster access.
+
+Medium on the exact implementation mechanism for local schema indexing until an embeddable Kubernetes/OpenAPI library comparison is complete.
 
 Low on `.up/go` or Marketplace model indexing as a first-scope dependency because the public docs show resource schemas exist, but not a stable local API contract for this project to depend on.
 

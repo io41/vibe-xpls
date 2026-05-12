@@ -6,6 +6,8 @@ This spike implements a dependency-light Go CLI under `spikes/agent-api` that ex
 
 The implementation is intentionally fixture-backed. It does not scan the real workspace, invoke Docker, invoke the Crossplane CLI, download schemas, or read a Kubernetes cluster. The goal is to validate command shape and trust boundaries before building the analyzer that will provide real data.
 
+The spike is also file-backed by design. It does not model editor-side agents working against unsaved buffers or multi-file drafts. The next design must choose an overlay path for those agents, such as LSP document state, a persistent JSON-RPC session, or explicit CLI overlay input.
+
 ## Commands
 
 - `list-compositions` returns one fixture Composition summary with a `compositeTypeRef`, source file, mode, and pipeline steps.
@@ -95,4 +97,4 @@ The command contract leaves room for future trust gates by reporting `trustMode`
 
 The spike supports the research recommendation that agents should use structured repository-level operations rather than scraping cursor-oriented LSP methods. A simple JSON CLI is enough to express the first useful operations and to make safety properties visible to agents.
 
-The next implementation should move fixture data behind a transport-neutral analyzer library, then keep this CLI as a thin adapter. MCP or JSON-RPC can be evaluated later once the analyzer contracts, read-only command set, and trust-gated execution model are stable.
+The next implementation should move fixture data behind a transport-neutral analyzer library, then keep this CLI as a thin adapter for disk-backed terminal and CI agents. MCP, JSON-RPC, or CLI overlay inputs can be evaluated later once the analyzer contracts, read-only command set, unsaved-buffer model, and trust-gated execution model are stable.
