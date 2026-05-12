@@ -1,6 +1,9 @@
 package source
 
-import "unicode/utf16"
+import (
+	"unicode/utf16"
+	"unicode/utf8"
+)
 
 type Encoding string
 
@@ -30,42 +33,60 @@ func PositionAtByteOffset(text string, offset int, encoding Encoding) Position {
 	line := 0
 	character := 0
 	for i := 0; i < offset; {
-		r, size := rune(text[i]), 1
-		if r >= 0x80 {
-			r, size = decodeRune(text[i:])
-		}
-		if r == '\n' {
+		if eolLen := lineEndingLength(text, i); eolLen > 0 {
+			if offset < i+eolLen {
+				return Position{Line: line, Character: character}
+			}
 			line++
 			character = 0
-		} else {
-			character += encodedLength(r, encoding)
+			i += eolLen
+			continue
 		}
-		i += size
+
+		if encoding == EncodingUTF16 {
+			r, size := utf8.DecodeRuneInString(text[i:])
+			character += encodedLength(r, encoding)
+			i += size
+		} else {
+			character++
+			i++
+		}
 	}
 	return Position{Line: line, Character: character}
 }
 
 func ByteOffsetAtPosition(text string, target Position, encoding Encoding) int {
+	if target.Line < 0 {
+		return 0
+	}
+	if target.Character < 0 {
+		target.Character = 0
+	}
+
 	line := 0
 	character := 0
 	for i := 0; i < len(text); {
 		if line == target.Line && character >= target.Character {
 			return i
 		}
-		r, size := rune(text[i]), 1
-		if r >= 0x80 {
-			r, size = decodeRune(text[i:])
-		}
-		if r == '\n' {
+		if eolLen := lineEndingLength(text, i); eolLen > 0 {
 			if line == target.Line {
 				return i
 			}
 			line++
 			character = 0
-		} else {
-			character += encodedLength(r, encoding)
+			i += eolLen
+			continue
 		}
-		i += size
+
+		if encoding == EncodingUTF16 {
+			r, size := utf8.DecodeRuneInString(text[i:])
+			character += encodedLength(r, encoding)
+			i += size
+		} else {
+			character++
+			i++
+		}
 	}
 	return len(text)
 }
@@ -82,12 +103,16 @@ func encodedLength(r rune, encoding Encoding) int {
 	}
 }
 
-func decodeRune(text string) (rune, int) {
-	for i := 1; i <= len(text) && i <= 4; i++ {
-		r := []rune(text[:i])
-		if len(r) == 1 && string(r) == text[:i] {
-			return r[0], i
+func lineEndingLength(text string, offset int) int {
+	switch text[offset] {
+	case '\n':
+		return 1
+	case '\r':
+		if offset+1 < len(text) && text[offset+1] == '\n' {
+			return 2
 		}
+		return 1
+	default:
+		return 0
 	}
-	return rune(text[0]), 1
 }
