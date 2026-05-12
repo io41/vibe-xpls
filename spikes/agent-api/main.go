@@ -13,9 +13,9 @@ import (
 type envelope struct {
 	OK          bool             `json:"ok"`
 	Command     string           `json:"command"`
-	Data        any              `json:"data,omitempty"`
-	Diagnostics []diagnostic     `json:"diagnostics,omitempty"`
-	Errors      []responseError  `json:"errors,omitempty"`
+	Data        any              `json:"data"`
+	Diagnostics []diagnostic     `json:"diagnostics"`
+	Errors      []responseError  `json:"errors"`
 	Security    securityBoundary `json:"security"`
 }
 

@@ -67,6 +67,12 @@ func TestMaskedViewPreservesCoordinatesAndParsesYAML(t *testing.T) {
 	if got := source[mapped[0].Span.Start.Offset:mapped[0].Span.End.Offset]; got != "invalidLineWithoutColon" {
 		t.Fatalf("mapped YAML diagnostic span = %q, want invalidLineWithoutColon", got)
 	}
+	if got, want := mapped[0].Span.Start.Line, 17; got != want {
+		t.Fatalf("mapped YAML diagnostic line = %d, want %d", got, want)
+	}
+	if got, want := mapped[0].Span.Start.Column, 0; got != want {
+		t.Fatalf("mapped YAML diagnostic column = %d, want %d", got, want)
+	}
 }
 
 func TestDiagnosticsMapToOriginalTemplateAndYAMLPositions(t *testing.T) {
@@ -80,6 +86,12 @@ func TestDiagnosticsMapToOriginalTemplateAndYAMLPositions(t *testing.T) {
 	if got := source[yamlDiagnostic.Span.Start.Offset:yamlDiagnostic.Span.End.Offset]; got != "invalidLineWithoutColon" {
 		t.Fatalf("YAML diagnostic mapped to %q, want invalidLineWithoutColon", got)
 	}
+	if got, want := yamlDiagnostic.Span.Start.Line, 17; got != want {
+		t.Fatalf("YAML diagnostic line = %d, want %d", got, want)
+	}
+	if got, want := yamlDiagnostic.Span.Start.Column, 0; got != want {
+		t.Fatalf("YAML diagnostic column = %d, want %d", got, want)
+	}
 
 	templateDiagnostic := findDiagnostic(t, analysis.Diagnostics, "template", "requires an operand")
 	if !templateDiagnostic.InsideTemplate {
@@ -87,6 +99,12 @@ func TestDiagnosticsMapToOriginalTemplateAndYAMLPositions(t *testing.T) {
 	}
 	if got := source[templateDiagnostic.Span.Start.Offset:templateDiagnostic.Span.End.Offset]; got != "if" {
 		t.Fatalf("template diagnostic span = %q, want if", got)
+	}
+	if got, want := templateDiagnostic.Span.Start.Line, 19; got != want {
+		t.Fatalf("template diagnostic line = %d, want %d", got, want)
+	}
+	if got, want := templateDiagnostic.Span.Start.Column, 16; got != want {
+		t.Fatalf("template diagnostic column = %d, want %d", got, want)
 	}
 
 	action, ok := containingAction(analysis.Actions, templateDiagnostic.Span)
