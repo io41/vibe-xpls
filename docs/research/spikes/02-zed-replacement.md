@@ -2,7 +2,7 @@
 
 ## Summary
 
-This spike validates the local Zed extension replacement path without treating Upbound `xpls` as a compatibility contract. The useful contract is the Zed extension launcher shape: identify Crossplane package worktrees, attach the `Crossplane YAML` language server, and start a stdio server.
+This spike validates the Zed extension code path for selecting a local `vibe-xpls` binary without treating Upbound `xpls` as a compatibility contract. It does not validate the full Zed UI path yet. The useful contract is the Zed extension launcher shape: identify Crossplane package worktrees, attach the `Crossplane YAML` language server, and start a stdio server.
 
 The temporary Zed branch adds a `VIBE_XPLS_BIN` override so the extension can launch a local `vibe-xpls` binary when the variable is present, while keeping the existing `up xpls serve --verbose` fallback unchanged.
 
@@ -40,6 +40,14 @@ External commit:
 ```text
 ac1d8cb feat: allow vibe xpls binary override
 ```
+
+Final external repository state after this spike:
+
+```text
+## vibe-xpls-spike
+```
+
+The external repository is intentionally left on `vibe-xpls-spike` because the override was committed there and the next manual Zed run should use that branch. The branch was clean when recorded.
 
 Diff summary:
 
@@ -104,6 +112,14 @@ VIBE_XPLS_BIN=<vibe-xpls-lsp-harness>
 
 Then open a worktree with a valid root `crossplane.yaml` or `upbound.yaml` and confirm startup logs, diagnostics, hover, and completion.
 
+Unvalidated items:
+
+- Zed startup log line for the override command.
+- Actual diagnostics visible in the Zed UI.
+- Hover and completion through the Zed client.
+- Missing-binary behavior for `VIBE_XPLS_BIN`.
+- Worktree shell-environment propagation in a manually launched Zed session.
+
 ## Compatibility Findings
 
 - The extension can keep its existing `Crossplane YAML` language, grammar, and root detection.
@@ -113,4 +129,6 @@ Then open a worktree with a valid root `crossplane.yaml` or `upbound.yaml` and c
 
 ## Decision Impact
 
-The Zed replacement path is low-risk enough to remain a required first editor gate. `vibe-xpls` should expose a stdio LSP binary that the extension can launch directly. The extension should remain a thin launcher/highlighting layer, while Crossplane semantics live in the analyzer and LSP server.
+The Zed replacement path is promising but not fully proven. The code-path evidence is enough to keep Zed as the first editor gate, but the gate is still open until a manual Zed run confirms startup logs, diagnostics, hover, completion, and worktree environment propagation with `VIBE_XPLS_BIN`.
+
+`vibe-xpls` should expose a stdio LSP binary that the extension can launch directly. The extension should remain a thin launcher/highlighting layer, while Crossplane semantics live in the analyzer and LSP server.
