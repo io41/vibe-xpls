@@ -1,0 +1,9 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: {{ .Name }}
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.org/v1alpha1
+    kind: CompositeBucket
+  {{ .TemplatedKey }}: ignored
