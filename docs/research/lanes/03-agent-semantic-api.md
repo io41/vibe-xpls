@@ -75,14 +75,15 @@ Agent-facing commands must be conservative by default:
 - No package/schema downloads without a clear cache policy.
 - Structured JSON output only; avoid asking agents to parse human logs.
 - Source paths must be normalized to the workspace.
-- Render and validation commands must report external command, timeout, and environment details.
+- Render and validation commands must report sanitized execution metadata such as tool path, version, timeout, exit code, and allowed feature gates. They must not report raw environment variables or secret-bearing configuration.
+- First-scope `render` should be fixture-backed or simulated by default. Real `crossplane render`, Docker, function execution, package downloads, and cluster reads require explicit trusted-workspace and trusted-execution gates.
 - Any future `suggest-fix` operation should return proposed edits, not apply them by default.
 
 ## Recommendation
 
 Design `vibe-xpls` around a transport-neutral analyzer. Implement the first agent API as CLI commands returning structured JSON. Evaluate MCP after the analyzer, CLI, and security boundaries are proven.
 
-The first agent API spike should implement `list-compositions`, `find-schema`, `validate-workspace`, and `render`. Keep it read-only.
+The first agent API spike should implement `list-compositions`, `find-schema`, `validate-workspace`, and a fixture-backed or simulated `render`. Keep it read-only by default, and require explicit trust gates before any implementation invokes Docker, Crossplane functions, package downloads, or cluster reads.
 
 ## Confidence
 
@@ -90,7 +91,7 @@ High that agents need graph-shaped operations beyond LSP cursor methods.
 
 High that an analyzer-first design is the right way to avoid divergent LSP, CLI, and MCP semantics.
 
-Medium that MCP belongs in the first implementation scope. It is likely useful, but should not precede a stable analyzer contract.
+Medium that MCP belongs in the early roadmap. It is likely useful, but should not precede a stable analyzer contract.
 
 ## Evidence That Would Change This Recommendation
 

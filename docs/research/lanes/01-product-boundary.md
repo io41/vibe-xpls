@@ -1,8 +1,8 @@
 # Product Boundary Research
 ## Summary
-As of May 12, 2026, the best first-product boundary for `vibe-xpls` is a shared analyzer core with thin LSP, CLI, and MCP transports. That shape serves human editor workflows and AI agent workflows equally, while keeping Upbound `xpls` as a reference implementation rather than a contract.
+As of May 12, 2026, the best first-product boundary for `vibe-xpls` is a shared analyzer core with thin editor and CLI adapters first, plus room for an MCP adapter after the analyzer contract is stable. That shape serves human editor workflows and AI agent workflows equally, while keeping Upbound `xpls` as a reference implementation rather than a contract.
 
-The main reason is that Crossplane already exposes offline preview and validation flows, Zed already has strong editor and agent integration, and MCP already standardizes local and remote tool transports. The boundary should therefore be the semantic analyzer, not a single editor, a single validation command, or a single function niche.
+The main reason is that Crossplane already exposes offline preview and validation flows, Zed already has strong editor and agent integration, and MCP already standardizes local and remote tool transports. The boundary should therefore be the semantic analyzer and its stable contracts, not a single editor, a single validation command, or a single function niche.
 
 ## Sources
 - Crossplane CLI command reference: https://docs.crossplane.io/latest/cli/command-reference/
@@ -28,19 +28,19 @@ The main reason is that Crossplane already exposes offline preview and validatio
 - Evidence: Zed supports configuring language servers, launching binaries from settings, and enabling or disabling language server support per language.
 - Inference: a Zed-centered product would be attractive for Zed users, but it would overfit one editor and leave VS Code, CLI, and non-Zed MCP clients behind.
 - Evidence: LSP standardizes editor-to-language-server communication for features like completion, go to definition, references, and hover; MCP standardizes stdio and Streamable HTTP transports for tools.
-- Inference: the cleanest boundary is a transport-agnostic analyzer core with editor, CLI, and agent adapters on top.
+- Inference: the cleanest boundary is a transport-agnostic analyzer core with editor and CLI adapters first, and an MCP adapter once the agent-facing contracts and security boundaries are proven.
 - Evidence: Upbound `xpls` exposes a stdio JSON-RPC transport (`StdRWC`) and related server, dispatcher, and handler packages.
 - Inference: treat `xpls` as a reference and migration input, not as the product boundary. It is a useful implementation clue, not the shape of the first product.
 
 ## Alternatives
 - General Crossplane LSP: good fit for editor workflows, but too narrow if it excludes agent and CLI use cases, and too broad if it tries to absorb every analysis concern into the protocol layer.
 - Zed-centered replacement: strong for Zed-native human and agent workflows, but it hard-codes the first market to one editor and weakens portability.
-- Analyzer library with LSP/CLI/MCP transports: best fit for a shared semantic core, best match for both humans and agents, and easiest to reuse across future clients.
+- Analyzer library with staged adapters: best fit for a shared semantic core, best match for both humans and agents, and easiest to reuse across future clients without committing early to every transport.
 - Validation companion: quickest to ship, but it overlaps heavily with `crossplane beta validate` and does not materially expand the product boundary.
 - Function-specific tool: valuable for composition-function authors, but too narrow to be the first product line.
 
 ## Recommendation
-Build the analyzer library with LSP, CLI, and MCP transports as the first product boundary. Keep Zed integration as a consumer and showcase, not the core product. Keep validation as a first-class CLI and MCP capability. Keep function-specific helpers as one analyzer domain, not a separate product.
+Build the analyzer library with LSP and structured JSON CLI adapters as the first product boundary. Keep Zed integration as a consumer and showcase, not the core product. Keep validation as a first-class analyzer and CLI capability. Treat MCP as a likely follow-on adapter after the CLI contract and execution trust model are proven. Keep function-specific helpers as one analyzer domain, not a separate product.
 
 ## Confidence
 Medium-high. The source material is current and directly relevant, but the final product boundary still depends on user interviews and workflow telemetry that are not yet available.

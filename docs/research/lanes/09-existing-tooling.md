@@ -2,7 +2,7 @@
 
 ## Summary
 
-As of 2026-05-12, existing tooling should shape `vibe-xpls` but not constrain it as a compatibility clone. Upbound `xpls` and the Upbound VS Code extension prove there is already demand for Crossplane package diagnostics. The local Zed extension proves a concrete replacement path: launch a language server for `Crossplane YAML` worktrees and keep editor-side highlighting separate from server-side semantics.
+As of 2026-05-12, existing tooling should shape `vibe-xpls` but not constrain it as a compatibility clone. Upbound `xpls` and the Upbound VS Code extension show existing investment in Crossplane package diagnostics. The local Zed extension proves a concrete replacement path: launch a language server for `Crossplane YAML` worktrees and keep editor-side highlighting separate from server-side semantics.
 
 The strongest reuse lessons come from YAML Language Server, Helm LS, Terraform LS, CUE, and KCL: schema resolution, provider/version awareness, graceful degraded parsing, and domain-specific semantic layers matter more than a generic YAML parser alone.
 
