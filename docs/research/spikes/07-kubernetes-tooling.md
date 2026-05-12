@@ -43,10 +43,12 @@ npx yaml-language-server --help
 Result: failed with npm `ENOTFOUND` for `https://registry.npmjs.org/yaml-language-server`; npm logs could not be written under `<npm-log-dir>`.
 
 ```text
-npx kubeconform -h
+brew list kubeconform
 ```
 
-Result: failed with npm `ENOTFOUND` for `https://registry.npmjs.org/kubeconform`; npm logs could not be written under `<npm-log-dir>`.
+Result: `kubeconform` is not installed as a Homebrew package in this environment.
+
+The plan listed `npx kubeconform -h` as a candidate probe, but this report does not use that attempt as Kubeconform evidence. Kubeconform's official documentation presents it as a standalone binary and Homebrew-installable tool, so an npm registry failure would only prove npm package resolution failed, not that Kubeconform itself was meaningfully exercised.
 
 Local comparison point from Task 6:
 
@@ -95,4 +97,4 @@ The implementation direction should prioritize a Go-native analyzer with Crosspl
 
 This keeps Zed integration practical: `vibe-xpls` can coexist with Zed's YAML support while adding Crossplane-aware navigation, diagnostics, hovers, and commands that YAML LS cannot infer. It also keeps the analyzer usable outside Zed, which matters for CLI checks and AI agent workflows.
 
-Evidence confidence is high for the reuse decision because the evaluated tools explicitly focus on YAML schemas, Kubernetes OpenAPI validation, or server OpenAPI documentation, while the local Task 6 spike already shows a Go-native path for Crossplane-specific schema facts. Evidence confidence is medium for exact delegation boundaries because Kubeconform and YAML LS could not be installed locally in this restricted environment; future work should test source-mapped outputs and latency once network access or vendored binaries are available.
+Evidence confidence is high for the reuse decision because the evaluated tools explicitly focus on YAML schemas, Kubernetes OpenAPI validation, or server OpenAPI documentation, while the local Task 6 spike already shows a Go-native path for Crossplane-specific schema facts. Evidence confidence is medium for exact delegation boundaries because a local Kubeconform binary and YAML LS server were not available in this restricted environment; future work should test source-mapped outputs and latency once network access, Homebrew installation, or vendored binaries are available.

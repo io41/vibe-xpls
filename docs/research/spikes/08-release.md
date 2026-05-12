@@ -19,15 +19,19 @@ All releases should stay on `v0.X.X` until the project has months of real usage 
 
 ```text
 spikes/release/check-version.sh v0.0.1
+spikes/release/check-version.sh v0.1.2-rc.1
 ```
 
-Result: exit code 0 with no output.
+Result: both commands exited 0 with no output.
 
 ```text
 sh -c 'spikes/release/check-version.sh v1.0.0; test $? -ne 0'
+sh -c 'spikes/release/check-version.sh v0.1.2.3; test $? -ne 0'
+sh -c 'spikes/release/check-version.sh v0.1beta.2; test $? -ne 0'
+sh -c 'spikes/release/check-version.sh v0.1.2foo; test $? -ne 0'
 ```
 
-Result: exit code 0 from the wrapper, with the guard printing:
+Result: exit code 0 from each wrapper, with the guard printing:
 
 ```text
 release version must stay on v0.X.X before explicit pre-1.0 exit approval
@@ -35,9 +39,13 @@ release version must stay on v0.X.X before explicit pre-1.0 exit approval
 
 ## v0 Guard Result
 
-The guard is intentionally simple. It accepts `v0.[0-9]*.[0-9]*` and prerelease-style values matching `v0.[0-9]*.[0-9]*-*`, then rejects anything else.
+The guard accepts strict `v0.<minor>.<patch>` versions and optional prerelease-style suffixes, implemented as:
 
-This proves the repository can enforce the current release policy before any tag or publication step. The script must still be integrated into release automation before the first public release, for example as a required check before changelog generation, tag creation, GoReleaser execution, or release-please merge handling.
+```text
+^v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$
+```
+
+The guard rejects non-`v0` releases and malformed version strings such as extra numeric segments, embedded text in the minor position, and trailing text after the patch. This proves the spike can enforce the current release policy before any tag or publication step. The script must still be integrated into release automation before the first public release, for example as a required check before changelog generation, tag creation, GoReleaser execution, or release-please merge handling.
 
 ## Changelog Recommendation
 
