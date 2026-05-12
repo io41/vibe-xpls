@@ -1,0 +1,20 @@
+apiVersion: {{ .APIVersion }}
+kind: {{ .Kind }}
+metadata:
+  name: {{ .Name | quote }}
+  labels:
+    {{ .LabelKey }}: "enabled"
+spec:
+  tags:
+    - {{ .PrimaryTag }}
+    - "static-{{ .Suffix }}"
+  settings: |
+    literal before
+    templated line {{ .BlockAction }}
+    literal after
+---
+{{ .DocumentKey }}:
+  enabled: true
+invalidLineWithoutColon
+---
+badTemplate: {{ if }}

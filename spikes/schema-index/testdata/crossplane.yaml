@@ -1,0 +1,11 @@
+# xpls:doc field=spec.dependsOn.provider text=Provider package dependency declared by this configuration.
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: platform-buckets
+spec:
+  crossplane:
+    version: ">=v1.16.0"
+  dependsOn:
+    - provider: xpkg.upbound.io/upbound/provider-aws-s3
+      version: "v1.15.0"

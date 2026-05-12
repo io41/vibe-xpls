@@ -1,0 +1,42 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: compositebuckets.platform.example.org
+spec:
+  group: platform.example.org
+  names:
+    kind: CompositeBucket
+    plural: compositebuckets
+  claimNames:
+    kind: BucketClaim
+    plural: bucketclaims
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: CompositeBucket describes a platform S3 bucket.
+          properties:
+            spec:
+              type: object
+              description: Desired state for the composite bucket.
+              properties:
+                parameters:
+                  type: object
+                  description: Bucket parameters requested by the platform user.
+                  properties:
+                    region:
+                      type: string
+                      description: AWS region where the backing bucket should be created.
+                    versioning:
+                      type: boolean
+                      description: Enables object versioning on the backing bucket.
+            status:
+              type: object
+              description: Observed state for the composite bucket.
+              properties:
+                bucketName:
+                  type: string
+                  description: Observed provider bucket name.
