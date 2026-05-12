@@ -24,14 +24,57 @@ func TestMaskTemplateActionsPreservesLength(t *testing.T) {
 	}
 }
 
+func TestMaskTemplateActionsPreservesCRLF(t *testing.T) {
+	text := "{{ if .Enabled }}\r\nkind: Composition\r\n{{ end }}\r\n"
+
+	mixed := ParseMixedDocument(text)
+
+	if len(mixed.MaskedText) != len(text) {
+		t.Fatalf("masked length = %d, want %d", len(mixed.MaskedText), len(text))
+	}
+	for i := range text {
+		if (text[i] == '\r' || text[i] == '\n') && mixed.MaskedText[i] != text[i] {
+			t.Fatalf("line break at offset %d = %q, want %q", i, mixed.MaskedText[i], text[i])
+		}
+	}
+	if strings.Contains(mixed.MaskedText, "{{") || strings.Contains(mixed.MaskedText, "}}") {
+		t.Fatalf("masked text still contains template delimiter: %q", mixed.MaskedText)
+	}
+}
+
 func TestUnterminatedTemplateDiagnostic(t *testing.T) {
 	mixed := ParseMixedDocument("metadata:\n  name: {{ .Name\n")
 
 	if len(mixed.TemplateDiagnostics) != 1 {
 		t.Fatalf("template diagnostics = %d, want 1", len(mixed.TemplateDiagnostics))
 	}
+	if len(mixed.Actions) != 1 {
+		t.Fatalf("template actions = %d, want 1", len(mixed.Actions))
+	}
+	if mixed.Actions[0].Span != mixed.TemplateDiagnostics[0].Span {
+		t.Fatalf("action span = %#v, diagnostic span = %#v", mixed.Actions[0].Span, mixed.TemplateDiagnostics[0].Span)
+	}
 	if !strings.Contains(mixed.TemplateDiagnostics[0].Message, "missing closing delimiter") {
 		t.Fatalf("diagnostic = %#v", mixed.TemplateDiagnostics[0])
+	}
+}
+
+func TestQuotedTemplateDelimiterInsideString(t *testing.T) {
+	text := "metadata:\n  name: {{ printf \"}}\" }}\n"
+
+	mixed := ParseMixedDocument(text)
+
+	if len(mixed.TemplateDiagnostics) != 0 {
+		t.Fatalf("unexpected template diagnostics: %#v", mixed.TemplateDiagnostics)
+	}
+	if len(mixed.Actions) != 1 {
+		t.Fatalf("template actions = %d, want 1", len(mixed.Actions))
+	}
+	if mixed.Actions[0].Text != "{{ printf \"}}\" }}" {
+		t.Fatalf("action text = %q", mixed.Actions[0].Text)
+	}
+	if strings.Contains(mixed.MaskedText, "}}") {
+		t.Fatalf("masked text still contains closing delimiter: %q", mixed.MaskedText)
 	}
 }
 
@@ -53,6 +96,28 @@ func TestStablePathEligibility(t *testing.T) {
 	path, ok := doc.PathAtOffset(offset)
 	if !ok || path != "spec.compositeTypeRef.kind" {
 		t.Fatalf("path at offset = %q ok=%v, want spec.compositeTypeRef.kind", path, ok)
+	}
+}
+
+func TestStandaloneTemplateControlActionsDoNotProduceYAMLDiagnostics(t *testing.T) {
+	text := "{{ if .Enabled }}\napiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n{{ end }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	for _, diagnostic := range doc.Diagnostics {
+		if diagnostic.Source == "yaml" {
+			t.Fatalf("unexpected yaml diagnostic: %#v", diagnostic)
+		}
+	}
+	for _, path := range []string{"apiVersion", "kind"} {
+		if !doc.IsStablePath(path) {
+			t.Fatalf("expected %s to be stable", path)
+		}
+		offset := strings.Index(text, path+":")
+		got, ok := doc.PathAtOffset(offset)
+		if !ok || got != path {
+			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
+		}
 	}
 }
 
@@ -103,6 +168,78 @@ spec:
 	}
 }
 
+func TestMultiDocumentPathAtOffsetUsesOccurrences(t *testing.T) {
+	text := "apiVersion: first.example/v1\nkind: First\n---\napiVersion: second.example/v1\nkind: Second\n"
+
+	doc := ParseYAMLDocument(text)
+
+	first := strings.Index(text, "apiVersion")
+	second := strings.LastIndex(text, "apiVersion")
+	if first < 0 || second <= first {
+		t.Fatal("test setup: expected two apiVersion keys")
+	}
+	for _, offset := range []int{first, second} {
+		path, ok := doc.PathAtOffset(offset)
+		if !ok || path != "apiVersion" {
+			t.Fatalf("path at offset %d = %q ok=%v, want apiVersion", offset, path, ok)
+		}
+	}
+}
+
+func TestDuplicateKeyPathAtOffsetUsesOccurrences(t *testing.T) {
+	text := "metadata:\n  name: first\nmetadata:\n  name: second\n"
+
+	doc := ParseYAMLDocument(text)
+
+	first := strings.Index(text, "name:")
+	second := strings.LastIndex(text, "name:")
+	if first < 0 || second <= first {
+		t.Fatal("test setup: expected two name keys")
+	}
+	for _, offset := range []int{first, second} {
+		path, ok := doc.PathAtOffset(offset)
+		if !ok || path != "metadata.name" {
+			t.Fatalf("path at offset %d = %q ok=%v, want metadata.name", offset, path, ok)
+		}
+	}
+}
+
+func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
+	text := "spec:\n  kind: Bucket\n"
+
+	doc := ParseYAMLDocument(text)
+
+	keyStart := strings.Index(text, "kind")
+	valueStart := strings.Index(text, "Bucket")
+	path := "spec.kind"
+	if got := doc.KeySpans[path]; got != (Span{Start: keyStart, End: keyStart + len("kind")}) {
+		t.Fatalf("key span = %#v, want exact kind span", got)
+	}
+	if got := doc.ValueSpans[path]; got != (Span{Start: valueStart, End: valueStart + len("Bucket")}) {
+		t.Fatalf("value span = %#v, want exact Bucket span", got)
+	}
+	if got := doc.PathSpans[path]; got != (Span{Start: keyStart, End: valueStart + len("Bucket")}) {
+		t.Fatalf("path span = %#v, want key-through-value span", got)
+	}
+}
+
+func TestNullAndEmptyValuesRemainStable(t *testing.T) {
+	text := "spec:\n  empty:\n  explicitNull: null\n"
+
+	doc := ParseYAMLDocument(text)
+
+	for _, path := range []string{"spec.empty", "spec.explicitNull"} {
+		if !doc.IsStablePath(path) {
+			t.Fatalf("expected %s to be stable", path)
+		}
+		offset := strings.Index(text, strings.TrimPrefix(path, "spec.")+":")
+		got, ok := doc.PathAtOffset(offset)
+		if !ok || got != path {
+			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
+		}
+	}
+}
+
 func TestYAMLDiagnosticUsesParserSpan(t *testing.T) {
 	text := "apiVersion: v1\nspec: [unterminated\n"
 
@@ -123,5 +260,30 @@ func TestYAMLDiagnosticUsesParserSpan(t *testing.T) {
 	}
 	if yamlDiagnostic.Span.End <= yamlDiagnostic.Span.Start {
 		t.Fatalf("expected non-empty diagnostic span, got %#v", yamlDiagnostic)
+	}
+}
+
+func TestUnterminatedTemplateStillParsesEarlierYAML(t *testing.T) {
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n{{ if .Enabled\nmetadata:\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if len(doc.Mixed.TemplateDiagnostics) != 1 {
+		t.Fatalf("template diagnostics = %d, want 1", len(doc.Mixed.TemplateDiagnostics))
+	}
+	for _, diagnostic := range doc.Diagnostics {
+		if diagnostic.Source == "yaml" {
+			t.Fatalf("unexpected yaml diagnostic from unterminated action: %#v", diagnostic)
+		}
+	}
+	for _, path := range []string{"apiVersion", "kind"} {
+		if !doc.IsStablePath(path) {
+			t.Fatalf("expected %s to be stable", path)
+		}
+		offset := strings.Index(text, path+":")
+		got, ok := doc.PathAtOffset(offset)
+		if !ok || got != path {
+			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
+		}
 	}
 }

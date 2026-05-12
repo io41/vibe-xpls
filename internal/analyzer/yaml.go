@@ -19,6 +19,18 @@ type YAMLDocument struct {
 	KeySpans    map[string]Span
 	ValueSpans  map[string]Span
 	Diagnostics []Diagnostic
+
+	occurrences []pathOccurrence
+}
+
+type pathOccurrence struct {
+	Path        string
+	Stable      bool
+	PathSpan    Span
+	KeySpan     Span
+	KeySpanOK   bool
+	ValueSpan   Span
+	ValueSpanOK bool
 }
 
 func ParseYAMLDocument(text string) YAMLDocument {
@@ -32,11 +44,8 @@ func ParseYAMLDocument(text string) YAMLDocument {
 		ValueSpans:  map[string]Span{},
 		Diagnostics: append([]Diagnostic(nil), mixed.TemplateDiagnostics...),
 	}
-	if len(mixed.TemplateDiagnostics) > 0 {
-		return doc
-	}
 
-	file, err := parser.ParseBytes([]byte(mixed.MaskedText), 0)
+	file, err := parser.ParseBytes([]byte(mixed.MaskedText), 0, parser.AllowDuplicateMapKey())
 	if err != nil {
 		if diagnostic, ok := yamlDiagnosticFromError(err, mixed.RawText); ok && !doc.overlapsTemplateAction(diagnostic.Span) {
 			doc.Diagnostics = append(doc.Diagnostics, diagnostic)
@@ -68,14 +77,14 @@ func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
 	bestPath := ""
 	bestLen := math.MaxInt
 	bestDepth := -1
-	for path, span := range d.PathSpans {
-		if !d.IsStablePath(path) || !spanContains(span, offset) {
+	for _, occurrence := range d.occurrences {
+		if !occurrence.Stable || !spanContains(occurrence.PathSpan, offset) {
 			continue
 		}
-		spanLen := span.End - span.Start
-		depth := pathDepth(path)
+		spanLen := occurrence.PathSpan.End - occurrence.PathSpan.Start
+		depth := pathDepth(occurrence.Path)
 		if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
-			bestPath = path
+			bestPath = occurrence.Path
 			bestLen = spanLen
 			bestDepth = depth
 		}
@@ -132,15 +141,30 @@ func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathO
 	if path == "" {
 		return
 	}
-	d.StablePaths[path] = stable
-	if pathOK {
-		d.PathSpans[path] = pathSpan
-	} else if keyOK && valueOK {
-		d.PathSpans[path] = unionSpan(keySpan, valueSpan)
-	} else if keyOK {
-		d.PathSpans[path] = keySpan
-	} else if valueOK {
-		d.PathSpans[path] = valueSpan
+	if stable {
+		d.StablePaths[path] = true
+	} else if _, ok := d.StablePaths[path]; !ok {
+		d.StablePaths[path] = false
+	}
+	effectivePathSpan, effectivePathOK := pathSpan, pathOK
+	if !effectivePathOK && keyOK && valueOK {
+		effectivePathSpan, effectivePathOK = unionSpan(keySpan, valueSpan), true
+	} else if !effectivePathOK && keyOK {
+		effectivePathSpan, effectivePathOK = keySpan, true
+	} else if !effectivePathOK && valueOK {
+		effectivePathSpan, effectivePathOK = valueSpan, true
+	}
+	if effectivePathOK {
+		d.PathSpans[path] = effectivePathSpan
+		d.occurrences = append(d.occurrences, pathOccurrence{
+			Path:        path,
+			Stable:      stable,
+			PathSpan:    effectivePathSpan,
+			KeySpan:     keySpan,
+			KeySpanOK:   keyOK,
+			ValueSpan:   valueSpan,
+			ValueSpanOK: valueOK,
+		})
 	}
 	if keyOK {
 		d.KeySpans[path] = keySpan
@@ -368,11 +392,14 @@ func tokenTextWidth(tk *token.Token) int {
 	if tk == nil {
 		return 0
 	}
+	if tk.Value != "" {
+		return len(tk.Value)
+	}
 	origin := strings.TrimRight(tk.Origin, " \t\r\n")
 	if origin != "" {
 		return len(origin)
 	}
-	return len(tk.Value)
+	return 0
 }
 
 func (d YAMLDocument) overlapsTemplateAction(span Span) bool {
