@@ -16,6 +16,26 @@ This is one vertical product slice, not a collection of independent products. It
 
 The plan starts with parser selection because the design requires that decision before product code. After that, each task leaves runnable, testable code and a small commit.
 
+## External Review Corrections
+
+Claude Code reviewed this plan with `claude-opus-4-7` and max effort on 2026-05-13. The review found several implementation gaps that block the approved acceptance criteria. These corrections are part of the plan and override any narrower code snippets in later tasks.
+
+Required corrections before execution is considered complete:
+
+- **Workspace schema discovery:** add a dedicated task after the schema model that scans package roots for XRDs and provider CRDs, extracts `spec.versions[].schema.openAPIV3Schema`, records provenance, and reports conflicts on the offending schema files. Tests must cover a workspace XRD, a provider CRD, and a duplicate Crossplane core schema.
+- **Real YAML path traversal:** replace the line-oriented `forEachMappingLine` strategy with a `goccy/go-yaml` parser/AST walk. It must handle mapping nodes and sequence nodes, including Composition paths such as `spec.pipeline[0].step`, `spec.pipeline[0].functionRef.name`, and `spec.pipeline[0].input`. The parser facade must expose stable paths, value spans, and key spans from the raw document.
+- **Diagnostic range mapping:** LSP diagnostics must convert analyzer `Span` byte offsets into protocol ranges using the negotiated position encoding. A malformed YAML fixture must prove diagnostics on a later line are not reported at `(0,0)-(0,1)`.
+- **Position encoding negotiation:** initialize must inspect `capabilities.general.positionEncodings`, choose `utf-8` when offered and otherwise `utf-16`, return `positionEncoding` in server capabilities, and use that encoding for diagnostics, hover, and completion.
+- **Generation fencing:** document generations must be meaningful in analyzer and LSP tests. Hover/completion requests should capture the document generation used for offset/path resolution and return an empty response when the document generation changes before response construction. Diagnostics must include the generation that produced them and stale diagnostic publications must be dropped.
+- **Workspace scan caps:** package and schema scanning must enforce `MaxYAMLFiles` and `MaxYAMLBytes`, return bounded diagnostics or debug status when caps are hit, and include a test that forces the cap.
+- **Package-scoped schema indexes:** multi-package workspaces must use a schema index per package root. Hover and completion must resolve through the package containing the document so schemas from package A do not appear in package B.
+- **No-root activation cascade:** implement the activation signals from the spec: ancestor package marker, documented Zed/Crossplane filename classification, Crossplane core `apiVersion`, and Crossplane document kind/shape. Tests must cover activation and deactivation clearing diagnostics.
+- **YAML error spans:** parser errors must produce source spans from parser token positions when available. They must not default to `(0,0)` once a parser position exists.
+- **Limits defaulting:** zero fields in `Limits` must be defaulted field-by-field rather than replacing the entire caller-provided struct.
+- **Symlinked workspace paths:** path safety must resolve the longest existing prefix of a path before comparing against the workspace realpath so logical paths under symlinked parents are not falsely rejected.
+- **Zed extension verification:** the Zed validation task must record the `zed-up-xpls` commit and verify that `VIBE_XPLS_BIN` is still wired into the launch path before manual validation starts.
+- **Pinned dependencies:** use explicit parser dependency versions recorded in the parser decision and commit them through `go.mod`/`go.sum`.
+
 ## File Structure
 
 - Create: `docs/research/decisions/parser-milestone-01.md` - records the parser decision for this milestone.
@@ -96,6 +116,11 @@ Use `github.com/goccy/go-yaml` behind an internal parser facade for the first ru
 
 Keep `go.yaml.in/yaml/v4` as a compatibility reference and fallback candidate, but do not expose either parser package outside `internal/analyzer/yaml.go`.
 
+Pin parser dependencies for repeatable implementation:
+
+- `github.com/goccy/go-yaml v1.19.2`
+- `go.yaml.in/yaml/v4 v4.0.0-rc.4`
+
 ## Reasoning
 
 The approved design requires source-aware YAML structure, mixed YAML/template masking, malformed-input resilience, hover/completion over stable YAML paths, and clear position conversion. `docs/research/lanes/05-yaml-template-parsing.md` identifies `goccy/go-yaml` as the strongest primary candidate because it exposes parser, lexer, AST, comment, and source-aware helpers.
@@ -156,8 +181,8 @@ Run:
 
 ```bash
 go mod init github.com/io41/vibe-xpls
-go get github.com/goccy/go-yaml@latest
-go get go.yaml.in/yaml/v4@latest
+go get github.com/goccy/go-yaml@v1.19.2
+go get go.yaml.in/yaml/v4@v4.0.0-rc.4
 ```
 
 Expected: `go.mod` and `go.sum` exist.
