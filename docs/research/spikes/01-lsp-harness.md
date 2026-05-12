@@ -4,7 +4,7 @@
 
 This spike proves that `vibe-xpls` can run a small, dependency-free Go LSP harness over `Content-Length` framed JSON-RPC messages. It is intentionally not production architecture. The goal is to validate the minimum protocol loop needed before evaluating larger LSP framework choices.
 
-The harness stores opened documents, publishes deterministic diagnostics when a document contains `xpls-spike-error`, answers hover and completion requests, and shuts down cleanly.
+The harness stores opened documents, publishes deterministic diagnostics when a document contains `xpls-spike-error`, answers hover and completion requests, and shuts down cleanly. Tests cover both in-process handler behavior and a subprocess `go run .` stdio exchange with hand-written LSP frames.
 
 ## Commands Run
 
@@ -25,7 +25,7 @@ The failure was in the test helper that decoded output frames. It used `bufio.Re
 Successful output after the fix:
 
 ```text
-ok  	github.com/io41/vibe-xpls/spikes/lsp-harness	0.437s
+ok  	github.com/io41/vibe-xpls/spikes/lsp-harness	...
 ```
 
 ## Protocol Features Proven
@@ -39,13 +39,14 @@ ok  	github.com/io41/vibe-xpls/spikes/lsp-harness	0.437s
 - `textDocument/completion` returns deterministic completion items.
 - `shutdown` returns a JSON-RPC response.
 - `exit` terminates the server loop.
+- A subprocess `go run .` invocation can read hand-written `Content-Length` frames from stdin and emit framed JSON-RPC output on stdout.
 
 ## Limitations
 
 - The server is a spike and has no incremental text edit support.
 - It uses hand-written JSON-RPC framing rather than a selected framework.
 - Diagnostics, hover, and completion are deterministic fixtures, not Crossplane semantics.
-- There is no real editor integration in this spike; Zed replacement is covered by the next spike.
+- There is no real editor integration in this spike; Zed replacement is covered by the next spike. The subprocess test reduces framing risk but does not prove Zed compatibility.
 - There is no external command execution, rendering, schema lookup, or workspace indexing.
 
 ## Evidence for Later Decisions
