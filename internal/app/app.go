@@ -16,6 +16,10 @@ type Runners struct {
 }
 
 func Run(args []string, stdout io.Writer, stderr io.Writer, runners Runners) int {
+	return RunWithIO(args, nil, stdout, stderr, runners)
+}
+
+func RunWithIO(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, runners Runners) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "missing command: use serve, debug, or --version")
 		return 2
@@ -30,7 +34,7 @@ func Run(args []string, stdout io.Writer, stderr io.Writer, runners Runners) int
 			fmt.Fprintln(stderr, "serve command is unavailable")
 			return 2
 		}
-		return runners.Serve(nil, stdout, stderr)
+		return runners.Serve(stdin, stdout, stderr)
 	case "debug":
 		if runners.Debug == nil {
 			fmt.Fprintln(stderr, "debug command is unavailable")
