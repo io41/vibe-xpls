@@ -8,6 +8,8 @@ The recommended shape is `vibe-xpls` as a Go-native Crossplane semantic analyzer
 
 The strongest remaining blockers before production implementation are manual Zed UI validation, production parser selection, real workspace indexing performance, concrete trust UX, and broader user validation.
 
+Proof level matters: the LSP harness, YAML/template mapping, schema index, and agent API are narrow runnable spikes, not production-proven implementations. They validate direction and risk, but the next design document must keep fixture-backed evidence separate from evidence gathered in real workspaces and editor sessions.
+
 ## Recommended Product Boundary
 
 Build a shared analyzer library first, with:
@@ -43,6 +45,8 @@ Do not include live-cluster discovery, default Docker render, default package do
 | Agents | Structured JSON CLI first; MCP after contracts and trust gates stabilize | `docs/research/decisions/gate-05-agent-surface.md`, `docs/research/lanes/03-agent-semantic-api.md`, `docs/research/spikes/06-agent-api.md` |
 | Release discipline | Start at `v0.0.1`, stay `v0.X.X`, use `git-cliff` first | `docs/research/decisions/gate-06-release-discipline.md`, `docs/research/lanes/10-release-phase-gates.md`, `docs/research/spikes/08-release.md` |
 | Go/no-go | GO for next brainstorming/design; NO-GO for product implementation | `docs/research/decisions/gate-07-go-no-go.md` |
+
+The evidence table names decisions, not production readiness. `docs/research/decisions/gate-07-go-no-go.md` is the controlling interpretation: use the evidence for the next brainstorming/design phase, then require stronger parser, Zed, indexing, trust, and user-validation evidence before product implementation.
 
 ## Alternatives Rejected
 
@@ -114,6 +118,14 @@ Privileged operations need explicit trust gates:
 - Live-cluster discovery.
 - Agent-triggered execution or writes.
 
+Reliability and security acceptance criteria for the next design phase:
+
+- Normalize all workspace and filesystem-template paths; reject traversal outside the workspace or package root and define symlink behavior.
+- Store schema and package caches with provenance, content identity where available, retrieval time, trust level, and an explicit refresh policy.
+- Sanitize diagnostics and JSON outputs so they do not expose raw environment variables, kubeconfig data, registry credentials, or secret-bearing file content.
+- Apply timeouts and cancellation to parsing, indexing, external commands, downloads, and cluster calls.
+- Add regression fixtures for malformed YAML, unterminated templates, template path traversal, huge documents, stale diagnostics, and external command timeouts.
+
 Diagnostics should degrade when evidence is unavailable instead of silently crossing trust boundaries.
 
 ## Open Risks
@@ -124,6 +136,7 @@ Diagnostics should degrade when evidence is unavailable instead of silently cros
 - Local-first schema lookup may be weak when repositories do not check in provider CRDs or resolved package metadata.
 - Trust gates need concrete UX across CLI, Zed, and future MCP clients.
 - Fixture-backed render may mislead agents unless authority metadata stays visible and stable.
+- Current parser, schema index, LSP, Zed, and agent API conclusions are spike-level evidence; production design must not present them as real-workspace proof until validated beyond fixtures.
 - User validation is still needed to confirm which Crossplane workflows matter most.
 
 ## Inputs for the Next Brainstorming Session
@@ -135,6 +148,8 @@ Use this research as the starting point for the real `vibe-xpls` brainstorming s
 - Define the minimum Zed manual validation script for `VIBE_XPLS_BIN`.
 - Specify schema source precedence, conflict reporting, and cache policy.
 - Define trust gates and user-visible status for render, validate, downloads, and cluster discovery.
+- Preserve proof levels in the design document: label fixture-backed spikes, code-path proofs, manual editor evidence, real-workspace evidence, and production-ready conclusions separately.
+- Add acceptance criteria for path normalization, workspace escape rejection, symlink policy, cache provenance, cache refresh, output sanitization, timeout/cancellation, malformed-input resilience, and stale-diagnostic clearing.
 - Design the first agent API contract from the spike envelope.
 - Decide the first `v0.0.1` changelog and release dry-run path.
 - Convert open risks into acceptance criteria before product implementation begins.
