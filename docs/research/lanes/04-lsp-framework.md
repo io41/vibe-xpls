@@ -17,7 +17,7 @@ Among the Go options, `go-lsp` is the strongest full framework if we want a batt
 - go.lsp.dev/protocol package page: https://pkg.go.dev/go.lsp.dev/protocol
 - go.lsp.dev/jsonrpc2 package page: https://pkg.go.dev/go.lsp.dev/jsonrpc2
 - go-language-server/protocol repo: https://github.com/go-language-server/protocol
-- sourcegraph/go-lsp archive note: https://github.com/sourcegraph/sourcegraph-go
+- Sourcegraph Go code-intelligence archive note: https://github.com/sourcegraph/sourcegraph-go
 - sourcegraph/jsonrpc2 package page: https://pkg.go.dev/github.com/sourcegraph/jsonrpc2
 - VS Code LSP node stack: https://github.com/microsoft/vscode-languageserver-node
 - tower-lsp repo: https://github.com/ebkalderon/tower-lsp
@@ -36,17 +36,17 @@ Among the Go options, `go-lsp` is the strongest full framework if we want a batt
 ## Prototype Criteria
 
 - Prove the analyzer can stay independent of the transport by implementing one thin LSP adapter layer only.
-- Cover `initialize`, `didOpen`, `didChange`, `didSave`, `hover`, `definition`, `references`, `rename`, `semanticTokens/full`, and `workspace/executeCommand` before adding anything editor-specific.
+- Cover `initialize`, `didOpen`, `didChange`, `didSave`, diagnostics, `hover`, and `completion` in the first LSP harness. Add definition/references only after the basic adapter is stable, and defer `workspace/executeCommand`, rename, and semantic tokens until the analyzer and command security model are proven.
 - Verify document synchronization in both full and incremental modes against fixture-backed tests.
 - Add a harness that can exercise server handlers without a live editor, or prove that the chosen framework already gives us that with acceptable ergonomics.
 - Measure cold start, incremental update latency, and memory growth on a realistic workspace so we can spot any framework-induced overhead.
-- Confirm compatibility with at least one mainstream editor client and one agent-oriented client before widening scope.
+- Confirm Zed compatibility as the first editor acceptance gate through `<zed-up-xpls-repo>`. Keep agent validation at the analyzer/structured-CLI layer first rather than treating an agent-oriented LSP client as a first-scope gate.
 
 ## Recommendation
 
-Use `go.lsp.dev/protocol` plus `go.lsp.dev/jsonrpc2` as the initial server substrate, with a small custom adapter around the analyzer core.
+Treat `go.lsp.dev/protocol` plus `go.lsp.dev/jsonrpc2` as the leading thin-adapter spike candidate, with a small custom adapter around the analyzer core.
 
-That choice best matches the approved direction: the analyzer owns the semantics, the protocol layer only translates requests and responses, and we avoid baking product behavior into a framework. Keep `go-lsp` as the fallback if the prototype shows we need a richer Go-native framework with built-in test tooling and debug UI. Do not start from `glsp` or the legacy Sourcegraph packages unless the current plan fails on missing protocol coverage.
+That choice best matches the approved direction if the spike confirms the 3.17 gaps and boilerplate are manageable: the analyzer owns the semantics, the protocol layer only translates requests and responses, and product behavior stays out of the framework. Keep `go-lsp` as the fallback if the prototype shows we need a richer Go-native framework with built-in test tooling and debug UI. Do not start from `glsp` or the legacy Sourcegraph packages unless the current plan fails on missing protocol coverage.
 
 ## Confidence
 
