@@ -27,12 +27,19 @@ type PackageRoot struct {
 	Marker string
 }
 
+var markerPriority = map[string]int{
+	"crossplane.yaml": 0,
+	"crossplane.yml":  1,
+	"upbound.yaml":    2,
+	"upbound.yml":     3,
+}
+
 func DetectWorkspace(root string) (Workspace, error) {
 	cleanRoot, err := filepath.Abs(root)
 	if err != nil {
 		return Workspace{}, err
 	}
-	var roots []PackageRoot
+	rootsByDir := map[string]PackageRoot{}
 	err = filepath.WalkDir(cleanRoot, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -45,15 +52,28 @@ func DetectWorkspace(root string) (Workspace, error) {
 			return nil
 		}
 		name := entry.Name()
-		if name == "crossplane.yaml" || name == "crossplane.yml" || name == "upbound.yaml" || name == "upbound.yml" {
-			roots = append(roots, PackageRoot{Root: filepath.Dir(path), Marker: name})
+		if _, ok := markerPriority[name]; ok {
+			dir := filepath.Dir(path)
+			root := PackageRoot{Root: dir, Marker: name}
+			if existing, ok := rootsByDir[dir]; !ok || markerLess(root.Marker, existing.Marker) {
+				rootsByDir[dir] = root
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		return Workspace{}, err
 	}
-	sort.Slice(roots, func(i, j int) bool { return roots[i].Root < roots[j].Root })
+	roots := make([]PackageRoot, 0, len(rootsByDir))
+	for _, root := range rootsByDir {
+		roots = append(roots, root)
+	}
+	sort.Slice(roots, func(i, j int) bool {
+		if roots[i].Root != roots[j].Root {
+			return roots[i].Root < roots[j].Root
+		}
+		return markerLess(roots[i].Marker, roots[j].Marker)
+	})
 	return Workspace{Root: cleanRoot, Shape: classifyWorkspace(cleanRoot, roots), PackageRoots: roots}, nil
 }
 
@@ -68,6 +88,18 @@ func classifyWorkspace(root string, roots []PackageRoot) WorkspaceShape {
 		return WorkspaceRootPackage
 	}
 	return WorkspaceNestedPackage
+}
+
+func markerLess(left string, right string) bool {
+	leftPriority, leftOK := markerPriority[left]
+	rightPriority, rightOK := markerPriority[right]
+	if leftOK && rightOK {
+		return leftPriority < rightPriority
+	}
+	if leftOK != rightOK {
+		return leftOK
+	}
+	return left < right
 }
 
 func (w Workspace) PackageForFile(path string) (PackageRoot, bool) {
