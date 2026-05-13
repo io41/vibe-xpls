@@ -235,6 +235,42 @@ func TestPathOccurrenceAtOffsetUsesLocalValues(t *testing.T) {
 	}
 }
 
+func TestRootValueForOccurrenceUsesOccurrenceDocument(t *testing.T) {
+	text := "apiVersion: first.example/v1\nkind: First\nmetadata:\n  name: one\n---\napiVersion: second.example/v1\nkind: Second\nmetadata:\n  name: two\n"
+
+	doc := ParseYAMLDocument(text)
+
+	for _, tc := range []struct {
+		needle     string
+		apiVersion string
+		kind       string
+		document   int
+	}{
+		{needle: "name: one", apiVersion: "first.example/v1", kind: "First", document: 0},
+		{needle: "name: two", apiVersion: "second.example/v1", kind: "Second", document: 1},
+	} {
+		offset := strings.Index(text, tc.needle)
+		if offset < 0 {
+			t.Fatalf("test setup: %q not found", tc.needle)
+		}
+		occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+		if !ok {
+			t.Fatalf("occurrence at %q not found", tc.needle)
+		}
+		if occurrence.DocumentIndex != tc.document {
+			t.Fatalf("document index for %q = %d, want %d", tc.needle, occurrence.DocumentIndex, tc.document)
+		}
+		apiVersion, ok := doc.RootValueForOccurrence(occurrence, "apiVersion")
+		if !ok || apiVersion != tc.apiVersion {
+			t.Fatalf("apiVersion for %q = %q ok=%v, want %q", tc.needle, apiVersion, ok, tc.apiVersion)
+		}
+		kind, ok := doc.RootValueForOccurrence(occurrence, "kind")
+		if !ok || kind != tc.kind {
+			t.Fatalf("kind for %q = %q ok=%v, want %q", tc.needle, kind, ok, tc.kind)
+		}
+	}
+}
+
 func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	text := "spec:\n  kind: Bucket\n"
 
@@ -345,6 +381,30 @@ func TestTemplateScalarValueIsNotStable(t *testing.T) {
 	}
 }
 
+func TestPathOccurrenceAtOffsetReturnsUnstableTemplateScalarChild(t *testing.T) {
+	text := "metadata:\n  name: {{ .Name }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	offset := strings.Index(text, "name")
+	if offset < 0 {
+		t.Fatal("test setup: name key not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at templated scalar child key")
+	}
+	if occurrence.Path != "metadata.name" {
+		t.Fatalf("occurrence path = %q, want metadata.name", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected metadata.name occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at unstable child key = %q, want no stable path", path)
+	}
+}
+
 func TestUnterminatedInlineTemplateScalarValueIsNotStable(t *testing.T) {
 	text := "metadata:\n  name: {{ .Name\n"
 
@@ -408,6 +468,30 @@ func TestStandaloneOutputActionUnderEmptyValueIsNotStable(t *testing.T) {
 	path, ok := doc.PathAtOffset(offset)
 	if ok {
 		t.Fatalf("path inside standalone output action = %q, want no path", path)
+	}
+}
+
+func TestPathOccurrenceAtOffsetReturnsUnstableStandaloneOutputChild(t *testing.T) {
+	text := "spec:\n  field:\n    {{ .Value }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	offset := strings.Index(text, "field")
+	if offset < 0 {
+		t.Fatal("test setup: field key not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at standalone output child key")
+	}
+	if occurrence.Path != "spec.field" {
+		t.Fatalf("occurrence path = %q, want spec.field", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected spec.field occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at unstable child key = %q, want no stable path", path)
 	}
 }
 

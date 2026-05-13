@@ -26,15 +26,16 @@ type YAMLDocument struct {
 }
 
 type PathOccurrence struct {
-	Path        string
-	Stable      bool
-	PathSpan    Span
-	KeySpan     Span
-	KeySpanOK   bool
-	ValueSpan   Span
-	ValueSpanOK bool
-	Value       string
-	ValueOK     bool
+	Path          string
+	DocumentIndex int
+	Stable        bool
+	PathSpan      Span
+	KeySpan       Span
+	KeySpanOK     bool
+	ValueSpan     Span
+	ValueSpanOK   bool
+	Value         string
+	ValueOK       bool
 }
 
 func ParseYAMLDocument(text string) YAMLDocument {
@@ -73,11 +74,11 @@ func parseYAMLText(text string) (*ast.File, error) {
 }
 
 func (d *YAMLDocument) walkFile(file *ast.File) {
-	for _, yamlDoc := range file.Docs {
+	for documentIndex, yamlDoc := range file.Docs {
 		if yamlDoc == nil || yamlDoc.Body == nil {
 			continue
 		}
-		d.walkNode(yamlDoc.Body, "", true)
+		d.walkNode(yamlDoc.Body, "", true, documentIndex)
 	}
 }
 
@@ -99,7 +100,7 @@ func (d YAMLDocument) IsStablePath(path string) bool {
 
 func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
 	occurrence, ok := d.PathOccurrenceAtOffset(offset)
-	if !ok {
+	if !ok || !occurrence.Stable {
 		return "", false
 	}
 	return occurrence.Path, true
@@ -117,7 +118,7 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 	bestLen := math.MaxInt
 	bestDepth := -1
 	for _, occurrence := range d.occurrences {
-		if !occurrence.Stable || !spanContains(occurrence.PathSpan, offset) {
+		if !spanContains(occurrence.PathSpan, offset) {
 			continue
 		}
 		spanLen := occurrence.PathSpan.End - occurrence.PathSpan.Start
@@ -134,11 +135,35 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 	return best, true
 }
 
-func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool) {
+func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path string) (string, bool) {
+	if occurrence.Path == "" || path == "" {
+		return "", false
+	}
+	var best PathOccurrence
+	bestOK := false
+	for _, candidate := range d.occurrences {
+		if candidate.DocumentIndex != occurrence.DocumentIndex || candidate.Path != path || !candidate.Stable || !candidate.ValueOK {
+			continue
+		}
+		if candidate.PathSpan.Start > occurrence.PathSpan.Start {
+			continue
+		}
+		if !bestOK || candidate.PathSpan.Start > best.PathSpan.Start {
+			best = candidate
+			bestOK = true
+		}
+	}
+	if !bestOK {
+		return "", false
+	}
+	return best.Value, true
+}
+
+func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documentIndex int) {
 	switch n := node.(type) {
 	case *ast.MappingNode:
 		for _, entry := range n.Values {
-			d.walkMappingValue(entry, path, stable)
+			d.walkMappingValue(entry, path, stable, documentIndex)
 		}
 	case *ast.SequenceNode:
 		for idx, value := range n.Values {
@@ -151,15 +176,15 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool) {
 				occurrenceValue = ""
 				occurrenceValueOK = false
 			}
-			d.recordPath(elementPath, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
-			d.walkNode(value, elementPath, elementStable)
+			d.recordPath(elementPath, documentIndex, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
+			d.walkNode(value, elementPath, elementStable, documentIndex)
 		}
 	case *ast.MappingValueNode:
-		d.walkMappingValue(n, path, stable)
+		d.walkMappingValue(n, path, stable, documentIndex)
 	}
 }
 
-func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath string, parentStable bool) {
+func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath string, parentStable bool, documentIndex int) {
 	if entry == nil || entry.Key == nil {
 		return
 	}
@@ -192,11 +217,11 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	if !occurrenceValueOK {
 		occurrenceValue = ""
 	}
-	d.recordPath(path, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
+	d.recordPath(path, documentIndex, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
 	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
 		d.Values[path] = scalar
 	}
-	d.walkNode(entry.Value, path, stable)
+	d.walkNode(entry.Value, path, stable, documentIndex)
 }
 
 func (d YAMLDocument) scalarValueOverlapsTemplate(entry *ast.MappingValueNode, scalar string, valueSpan Span, valueOK bool, entrySpan Span, entryOK bool) bool {
@@ -220,7 +245,7 @@ func (d YAMLDocument) nilValueHasExplicitSameLineToken(entry *ast.MappingValueNo
 	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) && valueSpan.Start >= colonSpan.End
 }
 
-func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool, value string, valueTextOK bool) {
+func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool, value string, valueTextOK bool) {
 	if path == "" {
 		return
 	}
@@ -240,15 +265,16 @@ func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathO
 	if effectivePathOK {
 		d.PathSpans[path] = effectivePathSpan
 		d.occurrences = append(d.occurrences, PathOccurrence{
-			Path:        path,
-			Stable:      stable,
-			PathSpan:    effectivePathSpan,
-			KeySpan:     keySpan,
-			KeySpanOK:   keyOK,
-			ValueSpan:   valueSpan,
-			ValueSpanOK: valueOK,
-			Value:       value,
-			ValueOK:     valueTextOK,
+			Path:          path,
+			DocumentIndex: documentIndex,
+			Stable:        stable,
+			PathSpan:      effectivePathSpan,
+			KeySpan:       keySpan,
+			KeySpanOK:     keyOK,
+			ValueSpan:     valueSpan,
+			ValueSpanOK:   valueOK,
+			Value:         value,
+			ValueOK:       valueTextOK,
 		})
 	}
 	if keyOK {
