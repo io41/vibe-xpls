@@ -16,14 +16,11 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Completion{}
 	}
-	if parentPath != "" && !parsed.IsStablePath(parentPath) {
-		return Completion{}
-	}
-	apiVersion, kind, ok := rootGVKForPath(parsed, parentPath)
+	root, ok := rootContextForCompletionParent(parsed, parentPath)
 	if !ok {
 		return Completion{}
 	}
-	return completionFromSchema(a.schemas, apiVersion, kind, parentPath)
+	return completionFromSchema(a.schemas, root.apiVersion, root.kind, parentPath)
 }
 
 func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
@@ -48,6 +45,25 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		return Completion{}
 	}
 	return completionFromSchema(a.schemas, apiVersion, kind, parentPath)
+}
+
+func rootContextForCompletionParent(parsed YAMLDocument, parentPath string) (rootContext, bool) {
+	if parentPath == "" {
+		return singleStableRootContext(parsed)
+	}
+	if pathExists(parsed, parentPath) {
+		return rootContextForExistingPath(parsed, parentPath)
+	}
+	return singleStableRootContext(parsed)
+}
+
+func pathExists(parsed YAMLDocument, path string) bool {
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath string) Completion {

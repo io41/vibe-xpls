@@ -12,14 +12,14 @@ type Hover struct {
 
 func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 	_, parsed, ok := a.currentYAMLDocument(uri)
-	if !ok || !a.documentActive(uri, parsed) || !parsed.IsStablePath(fieldPath) {
+	if !ok || !a.documentActive(uri, parsed) {
 		return Hover{}, false
 	}
-	apiVersion, kind, ok := rootGVKForPath(parsed, fieldPath)
+	root, ok := rootContextForExistingPath(parsed, fieldPath)
 	if !ok {
 		return Hover{}, false
 	}
-	field, ok := a.schemas.FieldDocumentation(apiVersion, kind, fieldPath)
+	field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, fieldPath)
 	if !ok {
 		return Hover{}, false
 	}
@@ -51,20 +51,66 @@ func hoverFromField(field FieldDoc) Hover {
 	return Hover{Markdown: fmt.Sprintf("**%s**\n\n%s", hoverTitle(field.Path), field.Description)}
 }
 
-func rootGVKForPath(parsed YAMLDocument, fieldPath string) (string, string, bool) {
+type rootContext struct {
+	apiVersion string
+	kind       string
+}
+
+func rootContextForExistingPath(parsed YAMLDocument, fieldPath string) (rootContext, bool) {
+	var root rootContext
+	haveRoot := false
+	matched := false
 	for _, occurrence := range parsed.occurrences {
-		if occurrence.Path != fieldPath || !occurrence.Stable {
+		if occurrence.Path != fieldPath {
 			continue
 		}
-		apiVersion, apiOK := parsed.RootValueForOccurrence(occurrence, "apiVersion")
-		kind, kindOK := parsed.RootValueForOccurrence(occurrence, "kind")
-		if apiOK && kindOK {
-			return apiVersion, kind, true
+		matched = true
+		if !occurrence.Stable {
+			return rootContext{}, false
 		}
+		next, ok := rootContextForOccurrence(parsed, occurrence)
+		if !ok {
+			return rootContext{}, false
+		}
+		if haveRoot && next != root {
+			return rootContext{}, false
+		}
+		root = next
+		haveRoot = true
 	}
-	apiVersion, apiOK := parsed.Values["apiVersion"]
-	kind, kindOK := parsed.Values["kind"]
-	return apiVersion, kind, apiOK && kindOK
+	if !matched || !haveRoot {
+		return rootContext{}, false
+	}
+	return root, true
+}
+
+func singleStableRootContext(parsed YAMLDocument) (rootContext, bool) {
+	seenDocuments := map[int]struct{}{}
+	var roots []rootContext
+	for _, occurrence := range parsed.occurrences {
+		if _, seen := seenDocuments[occurrence.DocumentIndex]; seen {
+			continue
+		}
+		seenDocuments[occurrence.DocumentIndex] = struct{}{}
+		root, ok := rootContextForOccurrence(parsed, occurrence)
+		if !ok {
+			return rootContext{}, false
+		}
+		roots = append(roots, root)
+	}
+	if len(roots) != 1 {
+		return rootContext{}, false
+	}
+	return roots[0], true
+}
+
+func rootContextForOccurrence(parsed YAMLDocument, occurrence PathOccurrence) (rootContext, bool) {
+	apiVersion, apiOK := parsed.RootValueForOccurrence(occurrence, "apiVersion")
+	kind, kindOK := parsed.RootValueForOccurrence(occurrence, "kind")
+	if !apiOK || !kindOK || apiVersion == "" || kind == "" {
+		return rootContext{}, false
+	}
+	return rootContext{apiVersion: apiVersion, kind: kind}, true
 }
 
 func hoverTitle(path string) string {

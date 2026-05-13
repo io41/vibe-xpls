@@ -32,6 +32,22 @@ func TestAnalyzerDiagnosticsHoverAndCompletion(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionUsesSchemaParentThatDoesNotExistYet(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-in-progress.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.compositeTypeRef")
+	if !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("completion missing kind for absent schema parent: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -45,6 +61,59 @@ func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	completion := a.Completion(uri, "spec.forProvider")
 	if len(completion.Items) != 0 {
 		t.Fatalf("unknown provider schema should not invent completions: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerPathOnlyHoverIsAmbiguousAcrossRootContexts(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "multi-doc.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: composition-demo\n---\napiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: configuration-demo\n"
+	a.OpenDocument(uri, text)
+
+	if hover, ok := a.Hover(uri, "metadata.name"); ok {
+		t.Fatalf("path-only hover should be ambiguous, got %#v", hover)
+	}
+	if completion := a.Completion(uri, "metadata"); len(completion.Items) != 0 {
+		t.Fatalf("path-only completion should be ambiguous, got %#v", completion.Items)
+	}
+
+	compositionOffset := strings.Index(text, "composition-demo")
+	if compositionOffset < 0 {
+		t.Fatal("test setup: composition name not found")
+	}
+	hover, ok := a.HoverAtOffset(uri, compositionOffset)
+	if !ok || !strings.Contains(hover.Markdown, "Composition") {
+		t.Fatalf("composition hover = %#v ok=%v, want Composition-specific hover", hover, ok)
+	}
+	configurationOffset := strings.Index(text, "configuration-demo")
+	if configurationOffset < 0 {
+		t.Fatal("test setup: configuration name not found")
+	}
+	hover, ok = a.HoverAtOffset(uri, configurationOffset)
+	if !ok || !strings.Contains(hover.Markdown, "Configuration") {
+		t.Fatalf("configuration hover = %#v ok=%v, want Configuration-specific hover", hover, ok)
+	}
+}
+
+func TestAnalyzerPathOnlyRootContextRejectsTemplateDerivedDuplicateRoot(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "duplicate-root-template.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\napiVersion: {{ .APIVersion }}\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n"
+	a.OpenDocument(uri, text)
+
+	if hover, ok := a.Hover(uri, "spec.compositeTypeRef.kind"); ok {
+		t.Fatalf("path-only hover should reject unstable duplicate root context, got %#v", hover)
+	}
+	if completion := a.Completion(uri, "spec.compositeTypeRef"); len(completion.Items) != 0 {
+		t.Fatalf("path-only completion should reject unstable duplicate root context, got %#v", completion.Items)
 	}
 }
 
