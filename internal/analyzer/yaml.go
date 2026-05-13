@@ -171,14 +171,17 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documen
 			d.walkMappingValue(entry, path, stable, documentIndex)
 		}
 	case *ast.SequenceNode:
+		priorRangeDerivedElement := false
 		for idx, value := range n.Values {
 			elementPath := fmt.Sprintf("%s[%d]", path, idx)
 			entrySpan, entryOK := d.sequenceEntrySpan(n, idx)
 			valueSpan, valueOK := d.nodeSpan(value)
+			rangeDerivedElement := d.spanEnclosedByStandaloneRange(entrySpan, entryOK)
 			elementStable := stable &&
 				!d.overlapsKnownSpan(entrySpan, entryOK) &&
 				!d.overlapsKnownSpan(valueSpan, valueOK) &&
-				!d.spanEnclosedByStandaloneRange(entrySpan, entryOK)
+				!rangeDerivedElement &&
+				!priorRangeDerivedElement
 			occurrenceValue, occurrenceValueOK := scalarValue(value)
 			if !elementStable || !valueOK || d.overlapsTemplateAction(valueSpan) {
 				occurrenceValue = ""
@@ -186,6 +189,9 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documen
 			}
 			d.recordPath(elementPath, documentIndex, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK, Span{}, false)
 			d.walkNode(value, elementPath, elementStable, documentIndex)
+			if rangeDerivedElement {
+				priorRangeDerivedElement = true
+			}
 		}
 	case *ast.MappingValueNode:
 		d.walkMappingValue(n, path, stable, documentIndex)
@@ -758,6 +764,7 @@ func (d YAMLDocument) spanEnclosedByStandaloneRange(span Span, ok bool) bool {
 			continue
 		}
 		depth := 1
+	nextOpener:
 		for _, next := range d.Mixed.Actions[i+1:] {
 			if !next.Standalone || !next.Control {
 				continue
@@ -771,7 +778,7 @@ func (d YAMLDocument) spanEnclosedByStandaloneRange(span Span, ok bool) bool {
 					if next.Span.Start >= span.End {
 						return true
 					}
-					break
+					break nextOpener
 				}
 			}
 		}

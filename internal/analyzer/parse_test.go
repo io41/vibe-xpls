@@ -657,6 +657,41 @@ func TestSequenceElementInsideStandaloneRangeIsNotStable(t *testing.T) {
 	}
 }
 
+func TestSequenceElementAfterStandaloneRangeHasUnstableIndex(t *testing.T) {
+	text := "items:\n  {{ range .Items }}\n  - name: dynamic\n  {{ end }}\n  - name: after\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("items") {
+		t.Fatal("expected parent items path to remain stable")
+	}
+	for _, path := range []string{"items[1]", "items[1].name"} {
+		if doc.IsStablePath(path) {
+			t.Fatalf("expected post-range %s path to be unstable", path)
+		}
+	}
+	if value, ok := doc.Values["items[1].name"]; ok {
+		t.Fatalf("post-range sequence child value recorded as %q", value)
+	}
+	offset := strings.LastIndex(text, "after")
+	if offset < 0 {
+		t.Fatal("test setup: after value not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at post-range sequence child")
+	}
+	if occurrence.Path != "items[1].name" {
+		t.Fatalf("occurrence path = %q, want items[1].name", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected post-range sequence child occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at post-range sequence child = %q, want no stable path", path)
+	}
+}
+
 func TestMappingEntryInsideStandaloneRangeIsNotStable(t *testing.T) {
 	text := "labels:\n  {{ range .Labels }}\n  app: static\n  {{ end }}\n"
 
@@ -687,6 +722,39 @@ func TestMappingEntryInsideStandaloneRangeIsNotStable(t *testing.T) {
 	}
 	if path, ok := doc.PathAtOffset(offset); ok {
 		t.Fatalf("path at range-derived mapping entry = %q, want no stable path", path)
+	}
+}
+
+func TestMappingEntryBetweenIndependentStandaloneRangesIsStable(t *testing.T) {
+	text := "labels:\n  {{ range .Before }}\n  before: dynamic\n  {{ end }}\n  stable: value\n  {{ range .After }}\n  after: dynamic\n  {{ end }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("labels") {
+		t.Fatal("expected parent labels path to remain stable")
+	}
+	if !doc.IsStablePath("labels.stable") {
+		t.Fatal("expected mapping entry between independent ranges to remain stable")
+	}
+	if value, ok := doc.Values["labels.stable"]; !ok || value != "value" {
+		t.Fatalf("labels.stable value = %q ok=%v, want value", value, ok)
+	}
+	offset := strings.Index(text, "value")
+	if offset < 0 {
+		t.Fatal("test setup: stable value not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at stable mapping entry between ranges")
+	}
+	if occurrence.Path != "labels.stable" {
+		t.Fatalf("occurrence path = %q, want labels.stable", occurrence.Path)
+	}
+	if !occurrence.Stable {
+		t.Fatal("expected mapping entry between ranges occurrence to be stable")
+	}
+	if path, ok := doc.PathAtOffset(offset); !ok || path != "labels.stable" {
+		t.Fatalf("path at stable mapping entry = %q ok=%v, want labels.stable", path, ok)
 	}
 }
 
