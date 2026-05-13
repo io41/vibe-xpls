@@ -204,6 +204,37 @@ func TestDuplicateKeyPathAtOffsetUsesOccurrences(t *testing.T) {
 	}
 }
 
+func TestPathOccurrenceAtOffsetUsesLocalValues(t *testing.T) {
+	text := "apiVersion: first.example/v1\n---\napiVersion: second.example/v1\n"
+
+	doc := ParseYAMLDocument(text)
+
+	for _, tc := range []struct {
+		value string
+	}{
+		{value: "first.example/v1"},
+		{value: "second.example/v1"},
+	} {
+		valueStart := strings.Index(text, tc.value)
+		if valueStart < 0 {
+			t.Fatalf("test setup: value %q not found", tc.value)
+		}
+		occurrence, ok := doc.PathOccurrenceAtOffset(valueStart)
+		if !ok {
+			t.Fatalf("occurrence at %q not found", tc.value)
+		}
+		if occurrence.Path != "apiVersion" {
+			t.Fatalf("occurrence path = %q, want apiVersion", occurrence.Path)
+		}
+		if !occurrence.ValueOK || occurrence.Value != tc.value {
+			t.Fatalf("occurrence value = %q ok=%v, want %q", occurrence.Value, occurrence.ValueOK, tc.value)
+		}
+		if got := occurrence.ValueSpan; got != (Span{Start: valueStart, End: valueStart + len(tc.value)}) {
+			t.Fatalf("occurrence value span = %#v, want exact local value span", got)
+		}
+	}
+}
+
 func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	text := "spec:\n  kind: Bucket\n"
 
@@ -220,6 +251,24 @@ func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	}
 	if got := doc.PathSpans[path]; got != (Span{Start: keyStart, End: valueStart + len("Bucket")}) {
 		t.Fatalf("path span = %#v, want key-through-value span", got)
+	}
+}
+
+func TestKeySpanExcludesWhitespaceBeforeColon(t *testing.T) {
+	text := "field : value\n"
+
+	doc := ParseYAMLDocument(text)
+
+	want := Span{Start: 0, End: len("field")}
+	if got := doc.KeySpans["field"]; got != want {
+		t.Fatalf("key span = %#v, want %#v", got, want)
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(strings.Index(text, "field"))
+	if !ok {
+		t.Fatal("expected occurrence at field key")
+	}
+	if occurrence.KeySpan != want {
+		t.Fatalf("occurrence key span = %#v, want %#v", occurrence.KeySpan, want)
 	}
 }
 
@@ -403,6 +452,40 @@ func TestYAMLDiagnosticUsesParserSpan(t *testing.T) {
 	}
 	if yamlDiagnostic.Span.End <= yamlDiagnostic.Span.Start {
 		t.Fatalf("expected non-empty diagnostic span, got %#v", yamlDiagnostic)
+	}
+}
+
+func TestScannerInvalidTokenDiagnosticUsesTokenSpan(t *testing.T) {
+	text := "apiVersion: v1\nbad: @value\n"
+
+	doc := ParseYAMLDocument(text)
+
+	var yamlDiagnostic Diagnostic
+	for _, diagnostic := range doc.Diagnostics {
+		if diagnostic.Source == "yaml" {
+			yamlDiagnostic = diagnostic
+			break
+		}
+	}
+	if yamlDiagnostic.Source == "" {
+		t.Fatalf("expected yaml diagnostic, got %#v", doc.Diagnostics)
+	}
+	if yamlDiagnostic.Span.Start == 0 && yamlDiagnostic.Span.End == 0 {
+		t.Fatalf("expected scanner token-backed non-zero span, got %#v", yamlDiagnostic)
+	}
+	invalidStart := strings.Index(text, "@")
+	if invalidStart < 0 {
+		t.Fatal("test setup: invalid token not found")
+	}
+	if yamlDiagnostic.Span.Start != invalidStart {
+		t.Fatalf("diagnostic start = %d, want invalid token offset %d", yamlDiagnostic.Span.Start, invalidStart)
+	}
+	if !doc.IsStablePath("apiVersion") {
+		t.Fatal("expected earlier apiVersion path to remain stable after prefix recovery")
+	}
+	path, ok := doc.PathAtOffset(strings.Index(text, "apiVersion"))
+	if !ok || path != "apiVersion" {
+		t.Fatalf("path at apiVersion = %q ok=%v, want apiVersion", path, ok)
 	}
 }
 

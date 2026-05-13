@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/scanner"
 	"github.com/goccy/go-yaml/token"
 )
 
@@ -20,10 +22,10 @@ type YAMLDocument struct {
 	ValueSpans  map[string]Span
 	Diagnostics []Diagnostic
 
-	occurrences []pathOccurrence
+	occurrences []PathOccurrence
 }
 
-type pathOccurrence struct {
+type PathOccurrence struct {
 	Path        string
 	Stable      bool
 	PathSpan    Span
@@ -31,6 +33,8 @@ type pathOccurrence struct {
 	KeySpanOK   bool
 	ValueSpan   Span
 	ValueSpanOK bool
+	Value       string
+	ValueOK     bool
 }
 
 func ParseYAMLDocument(text string) YAMLDocument {
@@ -61,7 +65,11 @@ func ParseYAMLDocument(text string) YAMLDocument {
 }
 
 func parseYAMLText(text string) (*ast.File, error) {
-	return parser.ParseBytes([]byte(text), 0, parser.AllowDuplicateMapKey())
+	tokens := lexer.Tokenize(text)
+	if tk := tokens.InvalidToken(); tk != nil {
+		return nil, scanner.ErrInvalidToken(tk)
+	}
+	return parser.Parse(tokens, 0, parser.AllowDuplicateMapKey())
 }
 
 func (d *YAMLDocument) walkFile(file *ast.File) {
@@ -90,14 +98,22 @@ func (d YAMLDocument) IsStablePath(path string) bool {
 }
 
 func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
-	if offset < 0 || offset >= len(d.Mixed.RawText) {
+	occurrence, ok := d.PathOccurrenceAtOffset(offset)
+	if !ok {
 		return "", false
+	}
+	return occurrence.Path, true
+}
+
+func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) {
+	if offset < 0 || offset >= len(d.Mixed.RawText) {
+		return PathOccurrence{}, false
 	}
 	if d.offsetInTemplateAction(offset) {
-		return "", false
+		return PathOccurrence{}, false
 	}
 
-	bestPath := ""
+	var best PathOccurrence
 	bestLen := math.MaxInt
 	bestDepth := -1
 	for _, occurrence := range d.occurrences {
@@ -107,15 +123,15 @@ func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
 		spanLen := occurrence.PathSpan.End - occurrence.PathSpan.Start
 		depth := pathDepth(occurrence.Path)
 		if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
-			bestPath = occurrence.Path
+			best = occurrence
 			bestLen = spanLen
 			bestDepth = depth
 		}
 	}
-	if bestPath == "" {
-		return "", false
+	if best.Path == "" {
+		return PathOccurrence{}, false
 	}
-	return bestPath, true
+	return best, true
 }
 
 func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool) {
@@ -130,7 +146,12 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool) {
 			entrySpan, entryOK := d.sequenceEntrySpan(n, idx)
 			valueSpan, valueOK := d.nodeSpan(value)
 			elementStable := stable && !d.overlapsKnownSpan(entrySpan, entryOK) && !d.overlapsKnownSpan(valueSpan, valueOK)
-			d.recordPath(elementPath, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK)
+			occurrenceValue, occurrenceValueOK := scalarValue(value)
+			if !elementStable || !valueOK || d.overlapsTemplateAction(valueSpan) {
+				occurrenceValue = ""
+				occurrenceValueOK = false
+			}
+			d.recordPath(elementPath, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
 			d.walkNode(value, elementPath, elementStable)
 		}
 	case *ast.MappingValueNode:
@@ -167,7 +188,11 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 		stable = false
 	}
 
-	d.recordPath(path, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK)
+	occurrenceValue, occurrenceValueOK := scalar, stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan)
+	if !occurrenceValueOK {
+		occurrenceValue = ""
+	}
+	d.recordPath(path, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
 	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
 		d.Values[path] = scalar
 	}
@@ -195,7 +220,7 @@ func (d YAMLDocument) nilValueHasExplicitSameLineToken(entry *ast.MappingValueNo
 	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) && valueSpan.Start >= colonSpan.End
 }
 
-func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool) {
+func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool, value string, valueTextOK bool) {
 	if path == "" {
 		return
 	}
@@ -214,7 +239,7 @@ func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathO
 	}
 	if effectivePathOK {
 		d.PathSpans[path] = effectivePathSpan
-		d.occurrences = append(d.occurrences, pathOccurrence{
+		d.occurrences = append(d.occurrences, PathOccurrence{
 			Path:        path,
 			Stable:      stable,
 			PathSpan:    effectivePathSpan,
@@ -222,6 +247,8 @@ func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathO
 			KeySpanOK:   keyOK,
 			ValueSpan:   valueSpan,
 			ValueSpanOK: valueOK,
+			Value:       value,
+			ValueOK:     valueTextOK,
 		})
 	}
 	if keyOK {
@@ -468,6 +495,11 @@ func yamlDiagnosticFromError(err error, text string) (Diagnostic, bool) {
 		diagnostic.Span = spanFromToken(yamlErr.GetToken(), text)
 		return diagnostic, true
 	}
+	var invalidTokenErr *scanner.InvalidTokenError
+	if errors.As(err, &invalidTokenErr) {
+		diagnostic.Span = spanFromToken(invalidTokenErr.Token, text)
+		return diagnostic, true
+	}
 	diagnostic.Span = Span{Start: 0, End: 0}
 	return diagnostic, true
 }
@@ -527,7 +559,11 @@ func mappingKeySourceWidth(origin string) (int, bool) {
 		c := origin[i]
 		if quote == 0 {
 			if c == ':' {
-				return i, true
+				end := i
+				for end > 0 && (origin[end-1] == ' ' || origin[end-1] == '\t') {
+					end--
+				}
+				return end, true
 			}
 			if c == '"' || c == '\'' || c == '`' {
 				quote = c
