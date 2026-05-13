@@ -12,6 +12,12 @@ type Completion struct {
 type CompletionItem struct {
 	Label         string
 	Documentation string
+	TextEdit      *CompletionTextEdit
+}
+
+type CompletionTextEdit struct {
+	Replace Span
+	NewText string
 }
 
 func (a *Analyzer) Completion(uri, parentPath string) Completion {
@@ -43,13 +49,22 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if context.parentPath != "" && !parsed.IsStablePath(context.parentPath) {
 		return Completion{}
 	}
-	return filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, context.parentPath), context.prefix)
+	completion := filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, context.parentPath), context.prefix)
+	for i := range completion.Items {
+		completion.Items[i].TextEdit = &CompletionTextEdit{
+			Replace: context.replace,
+			NewText: context.indent + completion.Items[i].Label + ":",
+		}
+	}
+	return completion
 }
 
 type completionContext struct {
 	parentPath     string
 	prefix         string
 	rootOccurrence PathOccurrence
+	replace        Span
+	indent         string
 }
 
 func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, bool) {
@@ -103,6 +118,8 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 		parentPath:     parentPath,
 		prefix:         prefix,
 		rootOccurrence: rootOccurrence,
+		replace:        Span{Start: lineStart, End: offset},
+		indent:         text[lineStart:indentEnd],
 	}, true
 }
 

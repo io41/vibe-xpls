@@ -121,8 +121,14 @@ type completionList struct {
 }
 
 type completionItem struct {
-	Label         string `json:"label"`
-	Documentation string `json:"documentation,omitempty"`
+	Label         string    `json:"label"`
+	Documentation string    `json:"documentation,omitempty"`
+	TextEdit      *textEdit `json:"textEdit,omitempty"`
+}
+
+type textEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
 }
 
 type diagnostic struct {
@@ -278,7 +284,14 @@ func (s *Server) handleCompletion(msg Message) error {
 	}
 	items := make([]completionItem, 0, len(completion.Items))
 	for _, item := range completion.Items {
-		items = append(items, completionItem{Label: item.Label, Documentation: item.Documentation})
+		out := completionItem{Label: item.Label, Documentation: item.Documentation}
+		if item.TextEdit != nil {
+			out.TextEdit = &textEdit{
+				Range:   s.rangeFromSpan(snapshot.Text, item.TextEdit.Replace),
+				NewText: item.TextEdit.NewText,
+			}
+		}
+		items = append(items, out)
 	}
 	return s.respond(msg.ID, completionList{IsIncomplete: false, Items: items}, nil)
 }

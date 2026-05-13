@@ -77,6 +77,13 @@ Record Zed log excerpts, fixture paths, and screenshots or manual observations h
 
 Do not record environment variables, kubeconfig content, registry credentials, tokens, passwords, private key material, or secret-bearing file contents.
 
+### Completion Acceptance Notes
+
+- Completion acceptance must be tested, not only suggestion visibility.
+- Root-level key completion: with a partial root key such as `s` after `metadata.name`, accepting `spec` inserts `spec:` at column 0.
+- Nested key completion: with a partial nested key such as `k` under `spec.compositeTypeRef`, accepting `kind` inserts `kind:` at the child-key indentation.
+- Completion remains plain text; snippet placeholders and automatic child-line insertion are not part of this milestone.
+
 ### Manual Validation Status
 
 Manual Zed validation is partially complete. Launch, root package attachment, nested package attachment, no-root quietness, diagnostics, diagnostic clearing, missing-binary behavior, hover, and the corrected `composition.yaml` file-type mapping were observed. Completion is visible but buggy, and multi-package schema isolation remains human-pending.

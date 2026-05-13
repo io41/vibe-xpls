@@ -213,6 +213,39 @@ func TestHoverAndCompletionUseNegotiatedUTF8Positions(t *testing.T) {
 	}
 }
 
+func TestCompletionItemsIncludePlainTextEdits(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-edit.yaml"))
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: root-composition\ns"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "spec")
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "spec:" {
+		t.Fatalf("newText = %#v, want spec:", edit["newText"])
+	}
+	if _, ok := item["insertTextFormat"]; ok {
+		t.Fatalf("completion should not use snippets: %#v", item)
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(4) || start["character"] != float64(0) || end["line"] != float64(4) || end["character"] != float64(1) {
+		t.Fatalf("textEdit range = %#v, want line 4 char 0..1", rng)
+	}
+}
+
 func TestDiagnosticsMapAnalyzerSpansToLaterLineRanges(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "malformed.yaml"))
@@ -462,6 +495,18 @@ func itemsContainLabel(items []any, label string) bool {
 		}
 	}
 	return false
+}
+
+func completionItemByLabelForTest(t *testing.T, items []any, label string) map[string]any {
+	t.Helper()
+	for _, raw := range items {
+		item := asMap(t, raw)
+		if item["label"] == label {
+			return item
+		}
+	}
+	t.Fatalf("completion item %q not found in %#v", label, items)
+	return nil
 }
 
 func sameID(got any, want int) bool {
