@@ -100,7 +100,7 @@ func (d YAMLDocument) IsStablePath(path string) bool {
 
 func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
 	occurrence, ok := d.PathOccurrenceAtOffset(offset)
-	if !ok || !occurrence.Stable {
+	if !ok || !occurrence.Stable || d.offsetInTemplateAction(offset) {
 		return "", false
 	}
 	return occurrence.Path, true
@@ -108,9 +108,6 @@ func (d YAMLDocument) PathAtOffset(offset int) (string, bool) {
 
 func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) {
 	if offset < 0 || offset >= len(d.Mixed.RawText) {
-		return PathOccurrence{}, false
-	}
-	if d.offsetInTemplateAction(offset) {
 		return PathOccurrence{}, false
 	}
 
@@ -167,7 +164,10 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documen
 			elementPath := fmt.Sprintf("%s[%d]", path, idx)
 			entrySpan, entryOK := d.sequenceEntrySpan(n, idx)
 			valueSpan, valueOK := d.nodeSpan(value)
-			elementStable := stable && !d.overlapsKnownSpan(entrySpan, entryOK) && !d.overlapsKnownSpan(valueSpan, valueOK)
+			elementStable := stable &&
+				!d.overlapsKnownSpan(entrySpan, entryOK) &&
+				!d.overlapsKnownSpan(valueSpan, valueOK) &&
+				!d.spanEnclosedByStandaloneRange(entrySpan, entryOK)
 			occurrenceValue, occurrenceValueOK := scalarValue(value)
 			if !elementStable || !valueOK || d.overlapsTemplateAction(valueSpan) {
 				occurrenceValue = ""
@@ -676,6 +676,36 @@ func (d YAMLDocument) mappingValueChildRegionOverlapsStandaloneOutput(entry *ast
 	for _, action := range d.Mixed.Actions {
 		if action.Standalone && !action.Control && spansOverlap(region, action.Span) {
 			return true
+		}
+	}
+	return false
+}
+
+func (d YAMLDocument) spanEnclosedByStandaloneRange(span Span, ok bool) bool {
+	if !ok {
+		return false
+	}
+	for i, action := range d.Mixed.Actions {
+		if !action.Standalone || templateActionKeyword(action.Text) != "range" || action.Span.End > span.Start {
+			continue
+		}
+		depth := 1
+		for _, next := range d.Mixed.Actions[i+1:] {
+			if !next.Standalone || !next.Control {
+				continue
+			}
+			switch templateActionKeyword(next.Text) {
+			case "if", "range", "with":
+				depth++
+			case "end":
+				depth--
+				if depth == 0 {
+					if next.Span.Start >= span.End {
+						return true
+					}
+					break
+				}
+			}
 		}
 	}
 	return false

@@ -426,6 +426,24 @@ func TestPathOccurrenceAtOffsetReturnsUnstableTemplateScalarChild(t *testing.T) 
 	if path, ok := doc.PathAtOffset(offset); ok {
 		t.Fatalf("path at unstable child key = %q, want no stable path", path)
 	}
+
+	templateOffset := strings.Index(text, "{{ .Name }}")
+	if templateOffset < 0 {
+		t.Fatal("test setup: template action not found")
+	}
+	occurrence, ok = doc.PathOccurrenceAtOffset(templateOffset)
+	if !ok {
+		t.Fatal("expected occurrence inside templated scalar value")
+	}
+	if occurrence.Path != "metadata.name" {
+		t.Fatalf("occurrence inside template path = %q, want metadata.name", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected occurrence inside template to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(templateOffset); ok {
+		t.Fatalf("path inside template action = %q, want no stable path", path)
+	}
 }
 
 func TestUnterminatedInlineTemplateScalarValueIsNotStable(t *testing.T) {
@@ -536,6 +554,36 @@ func TestTemplateSequenceElementIsNotStable(t *testing.T) {
 	}
 	if !doc.IsStablePath("kind") {
 		t.Fatal("expected plain sibling path to remain stable")
+	}
+}
+
+func TestSequenceElementInsideStandaloneRangeIsNotStable(t *testing.T) {
+	text := "items:\n  {{ range .Items }}\n  - static\n  {{ end }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("items") {
+		t.Fatal("expected parent items path to remain stable")
+	}
+	if doc.IsStablePath("items[0]") {
+		t.Fatal("expected sequence item inside standalone range to be unstable")
+	}
+	offset := strings.Index(text, "static")
+	if offset < 0 {
+		t.Fatal("test setup: static value not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at range-derived sequence item")
+	}
+	if occurrence.Path != "items[0]" {
+		t.Fatalf("occurrence path = %q, want items[0]", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected range-derived sequence item occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at range-derived sequence item = %q, want no stable path", path)
 	}
 }
 

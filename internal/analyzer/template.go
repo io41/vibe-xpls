@@ -77,20 +77,26 @@ func annotateTemplateActions(text string, actions []TemplateAction) {
 }
 
 func templateActionIsControl(text string) bool {
-	if len(text) < 4 || !strings.HasPrefix(text, "{{") || !strings.HasSuffix(text, "}}") {
-		return false
-	}
-	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(text[2:len(text)-2]), "-"), "-"))
-	fields := strings.Fields(strings.TrimSpace(body))
-	if len(fields) == 0 {
-		return false
-	}
-	switch fields[0] {
+	switch templateActionKeyword(text) {
 	case "if", "range", "with", "else", "end":
 		return true
 	default:
 		return false
 	}
+}
+
+func templateActionKeyword(text string) string {
+	if len(text) < 4 || !strings.HasPrefix(text, "{{") || !strings.HasSuffix(text, "}}") {
+		return ""
+	}
+	body := strings.TrimSpace(text[2 : len(text)-2])
+	body = strings.TrimSpace(strings.TrimPrefix(body, "-"))
+	body = strings.TrimSpace(strings.TrimSuffix(body, "-"))
+	fields := strings.Fields(body)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 func findTemplateActionEnd(text string, scan int) (int, bool) {
