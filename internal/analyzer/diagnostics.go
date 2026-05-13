@@ -227,6 +227,9 @@ func sequenceItemValue(line string) (string, int, bool) {
 		return "", 0, false
 	}
 	trimmed := line[indent:]
+	if strings.TrimSpace(trimmed) == "-" {
+		return "", indent, true
+	}
 	if !strings.HasPrefix(trimmed, "- ") {
 		return "", 0, false
 	}
