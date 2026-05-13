@@ -777,11 +777,17 @@ func (d YAMLDocument) sequenceRegionHasCompletedStandaloneRangeBefore(region Spa
 	if !regionOK || !entryOK {
 		return false
 	}
+	entryLineStart := lineStartForOffset(d.Mixed.RawText, entrySpan.Start)
+	entryIndent := lineIndent(d.Mixed.RawText, entryLineStart)
 	for i, action := range d.Mixed.Actions {
 		if !action.Standalone || templateActionKeyword(action.Text) != "range" {
 			continue
 		}
 		if action.Span.Start < region.Start || action.Span.End > region.End {
+			continue
+		}
+		actionLineStart := lineStartForOffset(d.Mixed.RawText, action.Span.Start)
+		if lineIndent(d.Mixed.RawText, actionLineStart) != entryIndent {
 			continue
 		}
 		end, ok := d.matchingStandaloneControlEnd(i)

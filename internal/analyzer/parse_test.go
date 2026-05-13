@@ -727,6 +727,41 @@ func TestSequenceElementAfterTemplateOutputRangeHasUnstableIndex(t *testing.T) {
 	}
 }
 
+func TestNestedStandaloneRangeDoesNotPoisonSiblingSequenceIndex(t *testing.T) {
+	text := "items:\n  - name: first\n    generated:\n      {{ range .Generated }}\n      {{ . }}\n      {{ end }}\n  - name: second\n"
+
+	doc := ParseYAMLDocument(text)
+
+	for _, path := range []string{"items", "items[1]", "items[1].name"} {
+		if !doc.IsStablePath(path) {
+			t.Fatalf("expected %s to remain stable", path)
+		}
+	}
+	if value, ok := doc.Values["items[1].name"]; !ok || value != "second" {
+		t.Fatalf("items[1].name value = %q ok=%v, want second", value, ok)
+	}
+	offset := strings.LastIndex(text, "second")
+	if offset < 0 {
+		t.Fatal("test setup: second value not found")
+	}
+	if path, ok := doc.PathAtOffset(offset); !ok || path != "items[1].name" {
+		t.Fatalf("path at second = %q ok=%v, want items[1].name", path, ok)
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at second")
+	}
+	if occurrence.Path != "items[1].name" || !occurrence.Stable {
+		t.Fatalf("occurrence at second = %#v, want stable items[1].name", occurrence)
+	}
+	if doc.IsStablePath("items[0].generated") {
+		t.Fatal("expected nested range-derived path to be unstable")
+	}
+	if value, ok := doc.Values["items[0].generated"]; ok {
+		t.Fatalf("nested range-derived value recorded as %q", value)
+	}
+}
+
 func TestMappingEntryInsideStandaloneRangeIsNotStable(t *testing.T) {
 	text := "labels:\n  {{ range .Labels }}\n  app: static\n  {{ end }}\n"
 
