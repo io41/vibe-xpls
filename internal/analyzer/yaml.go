@@ -155,6 +155,9 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	if scalarOK && d.scalarValueOverlapsTemplate(entry, scalar, valueSpan, valueOK, entrySpan, entryOK) {
 		stable = false
 	}
+	if nilScalarValue(entry.Value) && d.mappingValueLineOverlapsTemplate(entry) {
+		stable = false
+	}
 
 	d.recordPath(path, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK)
 	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
@@ -240,7 +243,16 @@ func scalarValue(node ast.Node) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return fmt.Sprint(scalar.GetValue()), true
+	value := scalar.GetValue()
+	if value == nil {
+		return "", false
+	}
+	return fmt.Sprint(value), true
+}
+
+func nilScalarValue(node ast.Node) bool {
+	scalar, ok := node.(ast.ScalarNode)
+	return ok && scalar.GetValue() == nil
 }
 
 func joinYAMLPath(parent, key string) string {
@@ -290,6 +302,8 @@ func (d YAMLDocument) nodeSpan(node ast.Node) (Span, bool) {
 		return d.sequenceSpan(n)
 	case *ast.SequenceEntryNode:
 		return d.sequenceEntryNodeSpan(n)
+	case *ast.LiteralNode:
+		return d.literalSpan(n)
 	default:
 		return d.tokenSpan(node.GetToken())
 	}
@@ -359,6 +373,30 @@ func (d YAMLDocument) sequenceEntryNodeSpan(node *ast.SequenceEntryNode) (Span, 
 	default:
 		return Span{}, false
 	}
+}
+
+func (d YAMLDocument) literalSpan(node *ast.LiteralNode) (Span, bool) {
+	markerSpan, ok := d.tokenSpan(node.GetToken())
+	if !ok {
+		return Span{}, false
+	}
+	markerLineStart := lineStartForOffset(d.Mixed.RawText, markerSpan.Start)
+	markerIndent := lineIndent(d.Mixed.RawText, markerLineStart)
+	end := lineEndIncludingNewline(d.Mixed.RawText, markerSpan.Start)
+	for lineStart := end; lineStart < len(d.Mixed.RawText); {
+		lineEnd := lineEndIncludingNewline(d.Mixed.RawText, lineStart)
+		if isBlankLine(d.Mixed.RawText[lineStart:lineEnd]) {
+			end = lineEnd
+			lineStart = lineEnd
+			continue
+		}
+		if lineIndent(d.Mixed.RawText, lineStart) <= markerIndent {
+			break
+		}
+		end = lineEnd
+		lineStart = lineEnd
+	}
+	return Span{Start: markerSpan.Start, End: end}, true
 }
 
 func (d YAMLDocument) keyNodeSpan(key ast.MapKeyNode) (Span, bool) {
@@ -602,4 +640,44 @@ func lineContentEndForOffset(text string, offset int) int {
 		offset--
 	}
 	return offset
+}
+
+func lineEndIncludingNewline(text string, offset int) int {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(text) {
+		offset = len(text)
+	}
+	for offset < len(text) {
+		offset++
+		if text[offset-1] == '\n' {
+			break
+		}
+	}
+	return offset
+}
+
+func lineIndent(text string, lineStart int) int {
+	indent := 0
+	for lineStart+indent < len(text) {
+		switch text[lineStart+indent] {
+		case ' ', '\t':
+			indent++
+		default:
+			return indent
+		}
+	}
+	return indent
+}
+
+func isBlankLine(text string) bool {
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case ' ', '\t', '\r', '\n':
+		default:
+			return false
+		}
+	}
+	return true
 }

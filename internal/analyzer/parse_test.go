@@ -248,13 +248,16 @@ func TestQuotedValueSpansUseRawSource(t *testing.T) {
 }
 
 func TestNullAndEmptyValuesRemainStable(t *testing.T) {
-	text := "spec:\n  empty:\n  explicitNull: null\n"
+	text := "spec:\n  empty:\n  explicitNull: null\n  tilde: ~\n"
 
 	doc := ParseYAMLDocument(text)
 
-	for _, path := range []string{"spec.empty", "spec.explicitNull"} {
+	for _, path := range []string{"spec.empty", "spec.explicitNull", "spec.tilde"} {
 		if !doc.IsStablePath(path) {
 			t.Fatalf("expected %s to be stable", path)
+		}
+		if value, ok := doc.Values[path]; ok {
+			t.Fatalf("%s recorded as value %q, want omitted from Values", path, value)
 		}
 		offset := strings.Index(text, strings.TrimPrefix(path, "spec.")+":")
 		got, ok := doc.PathAtOffset(offset)
@@ -306,6 +309,27 @@ func TestUnterminatedInlineTemplateScalarValueIsNotStable(t *testing.T) {
 	path, ok := doc.PathAtOffset(offset)
 	if ok {
 		t.Fatalf("path inside unterminated template action = %q, want no path", path)
+	}
+}
+
+func TestTemplateInBlockScalarValueIsNotStable(t *testing.T) {
+	text := "spec:\n  inline: |\n    apiVersion: {{ .APIVersion }}\n    kind: Bucket\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("spec") {
+		t.Fatal("expected parent spec path to remain stable")
+	}
+	if doc.IsStablePath("spec.inline") {
+		t.Fatal("expected block scalar template value path to be unstable")
+	}
+	if value, ok := doc.Values["spec.inline"]; ok {
+		t.Fatalf("block scalar template value recorded as %q", value)
+	}
+	offset := strings.Index(text, "{{ .APIVersion }}")
+	path, ok := doc.PathAtOffset(offset)
+	if ok {
+		t.Fatalf("path inside block scalar template action = %q, want no path", path)
 	}
 }
 
