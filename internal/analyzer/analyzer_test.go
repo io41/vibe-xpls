@@ -230,6 +230,36 @@ func TestNoRootBlockScalarShapeTextDoesNotActivateDiagnostics(t *testing.T) {
 	}
 }
 
+func TestNoRootSequenceBlockScalarShapeTextDoesNotActivateDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec:\n- |\n  compositeTypeRef: not real YAML shape\nbroken: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("sequence block scalar shape text should not activate no-root diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestNoRootSequenceMappingShapeDoesNotActivateDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec:\n- name: item\n  compositeTypeRef:\n    kind: CompositeBucket\nbroken: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("sequence mapping shape should not activate no-root diagnostics, got %#v", diagnostics)
+	}
+}
+
 func TestNoRootDocumentSeparatorCommentResetsBoundedSniffState(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

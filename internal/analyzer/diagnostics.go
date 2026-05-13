@@ -130,12 +130,23 @@ func hasBoundedCrossplaneRootSignal(text string) bool {
 	signals := boundedDocumentRootSignals{shapePaths: map[string]struct{}{}}
 	var stack []sniffPathEntry
 	blockScalarParentIndent := -1
+	sequenceItemParentIndent := -1
 	for lineStart, lines := 0, 0; lineStart < len(text) && lines < rootSignalSniffLines; lines++ {
 		lineEnd := lineStart
 		for lineEnd < len(text) && text[lineEnd] != '\n' {
 			lineEnd++
 		}
 		line := strings.TrimSuffix(text[lineStart:lineEnd], "\r")
+		if sequenceItemParentIndent >= 0 {
+			if strings.TrimSpace(line) == "" || leadingSpaces(line) > sequenceItemParentIndent {
+				if lineEnd == len(text) {
+					break
+				}
+				lineStart = lineEnd + 1
+				continue
+			}
+			sequenceItemParentIndent = -1
+		}
 		if blockScalarParentIndent >= 0 {
 			if strings.TrimSpace(line) == "" || leadingSpaces(line) > blockScalarParentIndent {
 				if lineEnd == len(text) {
@@ -152,6 +163,7 @@ func hasBoundedCrossplaneRootSignal(text string) bool {
 			}
 			signals = boundedDocumentRootSignals{shapePaths: map[string]struct{}{}}
 			stack = nil
+			sequenceItemParentIndent = -1
 			lineStart = lineEnd + 1
 			continue
 		}
@@ -160,6 +172,17 @@ func hasBoundedCrossplaneRootSignal(text string) bool {
 		}
 		if value, ok := rootLevelScalarLineValue(line, "kind"); ok {
 			signals.kind = value
+		}
+		if value, indent, ok := sequenceItemValue(line); ok {
+			sequenceItemParentIndent = indent
+			if isBlockScalarHeader(value) {
+				blockScalarParentIndent = indent
+			}
+			if lineEnd == len(text) {
+				break
+			}
+			lineStart = lineEnd + 1
+			continue
 		}
 		if path, value, indent, ok := sniffMappingPath(line, &stack); ok {
 			signals.shapePaths[path] = struct{}{}
@@ -192,6 +215,22 @@ func (s boundedDocumentRootSignals) hasKindShapeSignal() bool {
 func isDocumentSeparatorLine(line string) bool {
 	trimmed := strings.TrimSpace(stripInlineComment(line))
 	return trimmed == "---" || trimmed == "..."
+}
+
+func sequenceItemValue(line string) (string, int, bool) {
+	trimmedLine := strings.TrimSpace(line)
+	if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+		return "", 0, false
+	}
+	indent := leadingSpaces(line)
+	if indent < len(line) && line[indent] == '\t' {
+		return "", 0, false
+	}
+	trimmed := line[indent:]
+	if !strings.HasPrefix(trimmed, "- ") {
+		return "", 0, false
+	}
+	return strings.TrimSpace(trimmed[2:]), indent, true
 }
 
 type sniffPathEntry struct {
