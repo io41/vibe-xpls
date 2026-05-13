@@ -200,6 +200,36 @@ func TestNoRootCompositionKindWithShapeActivatesDiagnostics(t *testing.T) {
 	}
 }
 
+func TestNoRootCompositionShapeLineDiagnosticActivatesDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec:\n  compositeTypeRef: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) == 0 {
+		t.Fatal("Composition kind with malformed shape line should activate diagnostics")
+	}
+}
+
+func TestNoRootXRDShapeLineDiagnosticActivatesDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: CompositeResourceDefinition\nspec:\n  group: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) == 0 {
+		t.Fatal("XRD kind with malformed shape line should activate diagnostics")
+	}
+}
+
 func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})

@@ -26,7 +26,9 @@ func (a *Analyzer) Diagnostics(uri string) []Diagnostic {
 	}
 	parsed := ParseYAMLDocument(doc.Text)
 	if !a.documentActive(uri, parsed) {
-		return nil
+		if len(parsed.Diagnostics) == 0 || !hasBoundedCrossplaneRootSignal(doc.Text) {
+			return nil
+		}
 	}
 	diagnostics := make([]Diagnostic, 0, len(parsed.Diagnostics))
 	for _, diagnostic := range parsed.Diagnostics {
