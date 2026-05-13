@@ -86,7 +86,7 @@ func rootContextForExistingPath(parsed YAMLDocument, fieldPath string) (rootCont
 
 func singleStableRootContext(parsed YAMLDocument) (rootContext, bool) {
 	seenDocuments := map[int]struct{}{}
-	var roots []rootContext
+	uniqueRoots := map[rootContext]struct{}{}
 	for _, occurrence := range parsed.occurrences {
 		if _, seen := seenDocuments[occurrence.DocumentIndex]; seen {
 			continue
@@ -96,12 +96,15 @@ func singleStableRootContext(parsed YAMLDocument) (rootContext, bool) {
 		if !ok {
 			return rootContext{}, false
 		}
-		roots = append(roots, root)
+		uniqueRoots[root] = struct{}{}
 	}
-	if len(roots) != 1 {
+	if len(uniqueRoots) != 1 {
 		return rootContext{}, false
 	}
-	return roots[0], true
+	for root := range uniqueRoots {
+		return root, true
+	}
+	return rootContext{}, false
 }
 
 func rootContextForOccurrence(parsed YAMLDocument, occurrence PathOccurrence) (rootContext, bool) {

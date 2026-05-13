@@ -48,6 +48,22 @@ func TestAnalyzerCompletionUsesSchemaParentThatDoesNotExistYet(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionUsesSameRootContextAcrossDocuments(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "multi-composition-in-progress.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n---\napiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.compositeTypeRef")
+	if !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("completion missing kind for shared multi-doc root context: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -150,6 +166,25 @@ func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	diagnostics := a.Diagnostics(uri)
 	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "size limit") {
 		t.Fatalf("expected size limit diagnostic, got %#v", diagnostics)
+	}
+}
+
+func TestAnalyzerDiagnosticsRespectMaxDiagnosticsPerDoc(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDiagnosticsPerDoc: 1}})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "capped-diagnostics.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nbad: @value\nmetadata:\n  name: {{ .Name\n"
+	if got := len(ParseYAMLDocument(text).Diagnostics); got < 2 {
+		t.Fatalf("test setup expected at least 2 diagnostics before cap, got %d", got)
+	}
+	a.OpenDocument(uri, text)
+
+	diagnostics := a.Diagnostics(uri)
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v, want exactly 1 due to cap", diagnostics)
 	}
 }
 
