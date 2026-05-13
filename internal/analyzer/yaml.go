@@ -218,7 +218,10 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 		lookupSpan = templateLookupSpan
 		lookupOK = true
 	}
-	stable := parentStable && keyOK && !d.overlapsTemplateAction(keySpan)
+	stable := parentStable &&
+		keyOK &&
+		!d.overlapsTemplateAction(keySpan) &&
+		!d.spanEnclosedByStandaloneRange(entrySpan, entryOK)
 	scalar, scalarOK := scalarValue(entry.Value)
 	if scalarOK && d.scalarValueOverlapsTemplate(entry, scalar, valueSpan, valueOK, entrySpan, entryOK) {
 		stable = false

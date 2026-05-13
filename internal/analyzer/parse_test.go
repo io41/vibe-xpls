@@ -657,6 +657,39 @@ func TestSequenceElementInsideStandaloneRangeIsNotStable(t *testing.T) {
 	}
 }
 
+func TestMappingEntryInsideStandaloneRangeIsNotStable(t *testing.T) {
+	text := "labels:\n  {{ range .Labels }}\n  app: static\n  {{ end }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("labels") {
+		t.Fatal("expected parent labels path to remain stable")
+	}
+	if doc.IsStablePath("labels.app") {
+		t.Fatal("expected mapping entry inside standalone range to be unstable")
+	}
+	if value, ok := doc.Values["labels.app"]; ok {
+		t.Fatalf("range-derived mapping value recorded as %q", value)
+	}
+	offset := strings.Index(text, "static")
+	if offset < 0 {
+		t.Fatal("test setup: static value not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at range-derived mapping entry")
+	}
+	if occurrence.Path != "labels.app" {
+		t.Fatalf("occurrence path = %q, want labels.app", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected range-derived mapping entry occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at range-derived mapping entry = %q, want no stable path", path)
+	}
+}
+
 func TestYAMLDiagnosticUsesParserSpan(t *testing.T) {
 	text := "apiVersion: v1\nspec: [unterminated\n"
 
