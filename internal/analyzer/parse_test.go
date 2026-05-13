@@ -464,6 +464,16 @@ func TestUnterminatedInlineTemplateScalarValueIsNotStable(t *testing.T) {
 		t.Fatalf("unterminated template scalar value recorded as %q", value)
 	}
 	offset := strings.Index(text, "{{ .Name")
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence inside unterminated template action")
+	}
+	if occurrence.Path != "metadata.name" {
+		t.Fatalf("occurrence inside unterminated template path = %q, want metadata.name", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected occurrence inside unterminated template to be unstable")
+	}
 	path, ok := doc.PathAtOffset(offset)
 	if ok {
 		t.Fatalf("path inside unterminated template action = %q, want no path", path)
@@ -533,6 +543,24 @@ func TestPathOccurrenceAtOffsetReturnsUnstableStandaloneOutputChild(t *testing.T
 	}
 	if path, ok := doc.PathAtOffset(offset); ok {
 		t.Fatalf("path at unstable child key = %q, want no stable path", path)
+	}
+
+	templateOffset := strings.Index(text, "{{ .Value }}")
+	if templateOffset < 0 {
+		t.Fatal("test setup: template action not found")
+	}
+	occurrence, ok = doc.PathOccurrenceAtOffset(templateOffset)
+	if !ok {
+		t.Fatal("expected occurrence inside standalone output action")
+	}
+	if occurrence.Path != "spec.field" {
+		t.Fatalf("occurrence inside standalone output action = %q, want spec.field", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected occurrence inside standalone output action to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(templateOffset); ok {
+		t.Fatalf("path inside standalone output action = %q, want no stable path", path)
 	}
 }
 

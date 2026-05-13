@@ -36,6 +36,9 @@ type PathOccurrence struct {
 	ValueSpanOK   bool
 	Value         string
 	ValueOK       bool
+
+	lookupSpan   Span
+	lookupSpanOK bool
 }
 
 func ParseYAMLDocument(text string) YAMLDocument {
@@ -115,10 +118,18 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 	bestLen := math.MaxInt
 	bestDepth := -1
 	for _, occurrence := range d.occurrences {
-		if !spanContains(occurrence.PathSpan, offset) {
+		lookupSpan := occurrence.PathSpan
+		if occurrence.lookupSpanOK {
+			lookupSpan = occurrence.lookupSpan
+		}
+		if !spanContains(lookupSpan, offset) {
 			continue
 		}
-		spanLen := occurrence.PathSpan.End - occurrence.PathSpan.Start
+		rankSpan := lookupSpan
+		if spanContains(occurrence.PathSpan, offset) {
+			rankSpan = occurrence.PathSpan
+		}
+		spanLen := rankSpan.End - rankSpan.Start
 		depth := pathDepth(occurrence.Path)
 		if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
 			best = occurrence
@@ -173,7 +184,7 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documen
 				occurrenceValue = ""
 				occurrenceValueOK = false
 			}
-			d.recordPath(elementPath, documentIndex, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
+			d.recordPath(elementPath, documentIndex, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK, Span{}, false)
 			d.walkNode(value, elementPath, elementStable, documentIndex)
 		}
 	case *ast.MappingValueNode:
@@ -195,11 +206,17 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	nilScalar := nilScalarValue(entry.Value)
 	emptyNilScalar := nilScalar && !d.nilValueHasExplicitSameLineToken(entry, valueSpan, valueOK)
 	entrySpan, entryOK := d.mappingValueSpan(entry)
+	lookupSpan := Span{}
+	lookupOK := false
 	if emptyNilScalar {
 		valueSpan = Span{}
 		valueOK = false
 		entrySpan = keySpan
 		entryOK = keyOK
+	}
+	if templateLookupSpan, templateLookupOK := d.mappingValueTemplateLookupSpan(entry, keySpan, keyOK); templateLookupOK {
+		lookupSpan = templateLookupSpan
+		lookupOK = true
 	}
 	stable := parentStable && keyOK && !d.overlapsTemplateAction(keySpan)
 	scalar, scalarOK := scalarValue(entry.Value)
@@ -214,7 +231,7 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	if !occurrenceValueOK {
 		occurrenceValue = ""
 	}
-	d.recordPath(path, documentIndex, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK, occurrenceValue, occurrenceValueOK)
+	d.recordPath(path, documentIndex, stable, entrySpan, entryOK, keySpan, keyOK, valueSpan, valueOK, occurrenceValue, occurrenceValueOK, lookupSpan, lookupOK)
 	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
 		d.Values[path] = scalar
 	}
@@ -242,7 +259,43 @@ func (d YAMLDocument) nilValueHasExplicitSameLineToken(entry *ast.MappingValueNo
 	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) && valueSpan.Start >= colonSpan.End
 }
 
-func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool, value string, valueTextOK bool) {
+func (d YAMLDocument) mappingValueTemplateLookupSpan(entry *ast.MappingValueNode, keySpan Span, keyOK bool) (Span, bool) {
+	if entry == nil {
+		return Span{}, false
+	}
+	lookupSpan := Span{}
+	lookupOK := false
+	if keyOK {
+		lookupSpan = keySpan
+		lookupOK = true
+	}
+	foundTemplateValue := false
+	if colonSpan, ok := d.tokenSpan(entry.Start); ok {
+		valueLine := Span{Start: colonSpan.End, End: lineContentEndForOffset(d.Mixed.RawText, colonSpan.End)}
+		for _, action := range d.Mixed.Actions {
+			if spansOverlap(valueLine, action.Span) {
+				lookupSpan, lookupOK = unionOptionalSpan(lookupSpan, lookupOK, action.Span, true)
+				foundTemplateValue = true
+			}
+		}
+	}
+	if nilScalarValue(entry.Value) {
+		if childRegion, ok := d.mappingValueChildRegionSpan(entry); ok {
+			for _, action := range d.Mixed.Actions {
+				if action.Standalone && !action.Control && spansOverlap(childRegion, action.Span) {
+					lookupSpan, lookupOK = unionOptionalSpan(lookupSpan, lookupOK, action.Span, true)
+					foundTemplateValue = true
+				}
+			}
+		}
+	}
+	if !foundTemplateValue {
+		return Span{}, false
+	}
+	return lookupSpan, lookupOK
+}
+
+func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool, value string, valueTextOK bool, lookupSpan Span, lookupOK bool) {
 	if path == "" {
 		return
 	}
@@ -260,6 +313,10 @@ func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, p
 		effectivePathSpan, effectivePathOK = valueSpan, true
 	}
 	if effectivePathOK {
+		if !lookupOK {
+			lookupSpan = effectivePathSpan
+			lookupOK = true
+		}
 		d.PathSpans[path] = effectivePathSpan
 		d.occurrences = append(d.occurrences, PathOccurrence{
 			Path:          path,
@@ -272,6 +329,8 @@ func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, p
 			ValueSpanOK:   valueOK,
 			Value:         value,
 			ValueOK:       valueTextOK,
+			lookupSpan:    lookupSpan,
+			lookupSpanOK:  lookupOK,
 		})
 	}
 	if keyOK {
@@ -645,12 +704,25 @@ func (d YAMLDocument) mappingValueLineOverlapsTemplate(entry *ast.MappingValueNo
 }
 
 func (d YAMLDocument) mappingValueChildRegionOverlapsStandaloneOutput(entry *ast.MappingValueNode) bool {
-	if entry == nil || entry.Key == nil {
+	region, ok := d.mappingValueChildRegionSpan(entry)
+	if !ok {
 		return false
+	}
+	for _, action := range d.Mixed.Actions {
+		if action.Standalone && !action.Control && spansOverlap(region, action.Span) {
+			return true
+		}
+	}
+	return false
+}
+
+func (d YAMLDocument) mappingValueChildRegionSpan(entry *ast.MappingValueNode) (Span, bool) {
+	if entry == nil || entry.Key == nil {
+		return Span{}, false
 	}
 	keySpan, ok := d.keyNodeSpan(entry.Key)
 	if !ok {
-		return false
+		return Span{}, false
 	}
 	keyLineStart := lineStartForOffset(d.Mixed.RawText, keySpan.Start)
 	keyIndent := lineIndent(d.Mixed.RawText, keyLineStart)
@@ -670,15 +742,9 @@ func (d YAMLDocument) mappingValueChildRegionOverlapsStandaloneOutput(entry *ast
 		lineStart = lineEnd
 	}
 	if regionEnd <= regionStart {
-		return false
+		return Span{}, false
 	}
-	region := Span{Start: regionStart, End: regionEnd}
-	for _, action := range d.Mixed.Actions {
-		if action.Standalone && !action.Control && spansOverlap(region, action.Span) {
-			return true
-		}
-	}
-	return false
+	return Span{Start: regionStart, End: regionEnd}, true
 }
 
 func (d YAMLDocument) spanEnclosedByStandaloneRange(span Span, ok bool) bool {
