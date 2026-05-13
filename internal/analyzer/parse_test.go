@@ -265,6 +265,14 @@ func TestNullAndEmptyValuesRemainStable(t *testing.T) {
 			t.Fatalf("path at %s = %q ok=%v, want %s", path, got, ok, path)
 		}
 	}
+
+	beforeExplicitNull := strings.Index(text, "\n  explicitNull")
+	if beforeExplicitNull < 0 {
+		t.Fatal("test setup: explicitNull line not found")
+	}
+	if got, ok := doc.PathAtOffset(beforeExplicitNull + 1); ok && got == "spec.empty" {
+		t.Fatalf("whitespace before explicitNull resolved to %s", got)
+	}
 }
 
 func TestTemplateScalarValueIsNotStable(t *testing.T) {
@@ -330,6 +338,27 @@ func TestTemplateInBlockScalarValueIsNotStable(t *testing.T) {
 	path, ok := doc.PathAtOffset(offset)
 	if ok {
 		t.Fatalf("path inside block scalar template action = %q, want no path", path)
+	}
+}
+
+func TestStandaloneOutputActionUnderEmptyValueIsNotStable(t *testing.T) {
+	text := "spec:\n  field:\n    {{ .Value }}\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("spec") {
+		t.Fatal("expected parent spec path to remain stable")
+	}
+	if doc.IsStablePath("spec.field") {
+		t.Fatal("expected standalone output action value path to be unstable")
+	}
+	if value, ok := doc.Values["spec.field"]; ok {
+		t.Fatalf("standalone output action value recorded as %q", value)
+	}
+	offset := strings.Index(text, "{{ .Value }}")
+	path, ok := doc.PathAtOffset(offset)
+	if ok {
+		t.Fatalf("path inside standalone output action = %q, want no path", path)
 	}
 }
 

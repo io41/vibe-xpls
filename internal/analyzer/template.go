@@ -11,6 +11,8 @@ type TemplateAction struct {
 	Text         string
 	Span         Span
 	Unterminated bool
+	Standalone   bool
+	Control      bool
 }
 
 type Diagnostic struct {
@@ -30,6 +32,7 @@ type MixedDocument struct {
 
 func ParseMixedDocument(text string) MixedDocument {
 	actions, diagnostics := findTemplateActions(text)
+	annotateTemplateActions(text, actions)
 	return MixedDocument{
 		RawText:             text,
 		MaskedText:          maskTemplateActions(text, actions),
@@ -62,6 +65,32 @@ func findTemplateActions(text string) ([]TemplateAction, []Diagnostic) {
 		scan = end
 	}
 	return actions, diagnostics
+}
+
+func annotateTemplateActions(text string, actions []TemplateAction) {
+	for i := range actions {
+		if _, _, ok := standaloneTemplateLine(text, actions[i].Span); ok {
+			actions[i].Standalone = true
+			actions[i].Control = templateActionIsControl(actions[i].Text)
+		}
+	}
+}
+
+func templateActionIsControl(text string) bool {
+	if len(text) < 4 || !strings.HasPrefix(text, "{{") || !strings.HasSuffix(text, "}}") {
+		return false
+	}
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(text[2:len(text)-2]), "-"), "-"))
+	fields := strings.Fields(strings.TrimSpace(body))
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
+	case "if", "range", "with", "else", "end":
+		return true
+	default:
+		return false
+	}
 }
 
 func findTemplateActionEnd(text string, scan int) (int, bool) {

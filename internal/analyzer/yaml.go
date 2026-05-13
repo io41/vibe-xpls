@@ -149,13 +149,21 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	path := joinYAMLPath(parentPath, key)
 	keySpan, keyOK := d.keyNodeSpan(entry.Key)
 	valueSpan, valueOK := d.nodeSpan(entry.Value)
+	nilScalar := nilScalarValue(entry.Value)
+	emptyNilScalar := nilScalar && !d.nilValueHasExplicitSameLineToken(entry, valueSpan, valueOK)
 	entrySpan, entryOK := d.mappingValueSpan(entry)
+	if emptyNilScalar {
+		valueSpan = Span{}
+		valueOK = false
+		entrySpan = keySpan
+		entryOK = keyOK
+	}
 	stable := parentStable && keyOK && !d.overlapsTemplateAction(keySpan)
 	scalar, scalarOK := scalarValue(entry.Value)
 	if scalarOK && d.scalarValueOverlapsTemplate(entry, scalar, valueSpan, valueOK, entrySpan, entryOK) {
 		stable = false
 	}
-	if nilScalarValue(entry.Value) && d.mappingValueLineOverlapsTemplate(entry) {
+	if nilScalar && (d.mappingValueLineOverlapsTemplate(entry) || d.mappingValueChildRegionOverlapsStandaloneOutput(entry)) {
 		stable = false
 	}
 
@@ -174,6 +182,17 @@ func (d YAMLDocument) scalarValueOverlapsTemplate(entry *ast.MappingValueNode, s
 		return true
 	}
 	return false
+}
+
+func (d YAMLDocument) nilValueHasExplicitSameLineToken(entry *ast.MappingValueNode, valueSpan Span, valueOK bool) bool {
+	if !valueOK {
+		return false
+	}
+	colonSpan, ok := d.tokenSpan(entry.Start)
+	if !ok {
+		return false
+	}
+	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) && valueSpan.Start >= colonSpan.End
 }
 
 func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool) {
@@ -560,6 +579,43 @@ func (d YAMLDocument) mappingValueLineOverlapsTemplate(entry *ast.MappingValueNo
 	valueLine := Span{Start: colonSpan.End, End: lineContentEndForOffset(d.Mixed.RawText, colonSpan.End)}
 	for _, action := range d.Mixed.Actions {
 		if spansOverlap(valueLine, action.Span) {
+			return true
+		}
+	}
+	return false
+}
+
+func (d YAMLDocument) mappingValueChildRegionOverlapsStandaloneOutput(entry *ast.MappingValueNode) bool {
+	if entry == nil || entry.Key == nil {
+		return false
+	}
+	keySpan, ok := d.keyNodeSpan(entry.Key)
+	if !ok {
+		return false
+	}
+	keyLineStart := lineStartForOffset(d.Mixed.RawText, keySpan.Start)
+	keyIndent := lineIndent(d.Mixed.RawText, keyLineStart)
+	regionStart := lineEndIncludingNewline(d.Mixed.RawText, keySpan.Start)
+	regionEnd := regionStart
+	for lineStart := regionStart; lineStart < len(d.Mixed.RawText); {
+		lineEnd := lineEndIncludingNewline(d.Mixed.RawText, lineStart)
+		if isBlankLine(d.Mixed.RawText[lineStart:lineEnd]) {
+			regionEnd = lineEnd
+			lineStart = lineEnd
+			continue
+		}
+		if lineIndent(d.Mixed.RawText, lineStart) <= keyIndent {
+			break
+		}
+		regionEnd = lineEnd
+		lineStart = lineEnd
+	}
+	if regionEnd <= regionStart {
+		return false
+	}
+	region := Span{Start: regionStart, End: regionEnd}
+	for _, action := range d.Mixed.Actions {
+		if action.Standalone && !action.Control && spansOverlap(region, action.Span) {
 			return true
 		}
 	}
