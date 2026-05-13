@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const maxMessageSize = 8 * 1024 * 1024
+
 func ReadMessage(r *bufio.Reader) (Message, error) {
 	length := -1
 	for {
@@ -32,6 +34,9 @@ func ReadMessage(r *bufio.Reader) (Message, error) {
 			}
 			if parsed < 0 {
 				return Message{}, fmt.Errorf("invalid Content-Length %d", parsed)
+			}
+			if parsed > maxMessageSize {
+				return Message{}, fmt.Errorf("Content-Length %d exceeds maximum %d", parsed, maxMessageSize)
 			}
 			length = parsed
 		}

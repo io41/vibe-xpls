@@ -7,7 +7,7 @@ type Message struct {
 	ID      any             `json:"id,omitempty"`
 	Method  string          `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	Result  any             `json:"result,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *ResponseError  `json:"error,omitempty"`
 }
 
