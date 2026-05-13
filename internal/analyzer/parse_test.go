@@ -271,6 +271,29 @@ func TestRootValueForOccurrenceUsesOccurrenceDocument(t *testing.T) {
 	}
 }
 
+func TestRootValueForOccurrenceFindsLaterRootValueInSameDocument(t *testing.T) {
+	text := "apiVersion: apiextensions.crossplane.io/v1\nmetadata:\n  name: demo\nkind: Composition\n"
+
+	doc := ParseYAMLDocument(text)
+
+	offset := strings.Index(text, "name: demo")
+	if offset < 0 {
+		t.Fatal("test setup: metadata.name not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at metadata.name")
+	}
+	apiVersion, ok := doc.RootValueForOccurrence(occurrence, "apiVersion")
+	if !ok || apiVersion != "apiextensions.crossplane.io/v1" {
+		t.Fatalf("apiVersion = %q ok=%v, want apiextensions.crossplane.io/v1", apiVersion, ok)
+	}
+	kind, ok := doc.RootValueForOccurrence(occurrence, "kind")
+	if !ok || kind != "Composition" {
+		t.Fatalf("kind = %q ok=%v, want Composition", kind, ok)
+	}
+}
+
 func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	text := "spec:\n  kind: Bucket\n"
 

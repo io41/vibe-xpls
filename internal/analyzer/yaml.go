@@ -145,9 +145,6 @@ func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path str
 		if candidate.DocumentIndex != occurrence.DocumentIndex || candidate.Path != path || !candidate.Stable || !candidate.ValueOK {
 			continue
 		}
-		if candidate.PathSpan.Start > occurrence.PathSpan.Start {
-			continue
-		}
 		if !bestOK || candidate.PathSpan.Start > best.PathSpan.Start {
 			best = candidate
 			bestOK = true
