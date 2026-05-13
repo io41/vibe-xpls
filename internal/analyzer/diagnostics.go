@@ -72,15 +72,16 @@ func hasCrossplaneRootSignal(parsed YAMLDocument) bool {
 		if !occurrence.Stable || !occurrence.ValueOK {
 			continue
 		}
-		switch occurrence.Path {
-		case "apiVersion":
-			if isCrossplaneCoreAPIVersion(occurrence.Value) {
-				return true
-			}
-		case "kind":
-			if isCrossplaneDocumentKind(occurrence.Value) {
-				return true
-			}
+		if occurrence.Path == "apiVersion" && isCrossplaneCoreAPIVersion(occurrence.Value) {
+			return true
+		}
+	}
+	for _, occurrence := range parsed.occurrences {
+		if !occurrence.Stable || !occurrence.ValueOK || occurrence.Path != "kind" {
+			continue
+		}
+		if hasCrossplaneShapeForKind(parsed, occurrence.DocumentIndex, occurrence.Value) {
+			return true
 		}
 	}
 	return false
@@ -91,37 +92,146 @@ func isCrossplaneCoreAPIVersion(apiVersion string) bool {
 	return ok && (group == "crossplane.io" || strings.HasSuffix(group, ".crossplane.io"))
 }
 
-func isCrossplaneDocumentKind(kind string) bool {
+func hasCrossplaneShapeForKind(parsed YAMLDocument, documentIndex int, kind string) bool {
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.DocumentIndex != documentIndex || !occurrence.Stable {
+			continue
+		}
+		if isCrossplaneShapePathForKind(kind, occurrence.Path) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCrossplaneShapePathForKind(kind string, path string) bool {
 	switch kind {
-	case "Composition", "CompositeResourceDefinition", "Configuration":
-		return true
+	case "Composition":
+		return pathMatchesOrDescendsFrom(path, "spec.compositeTypeRef")
+	case "CompositeResourceDefinition":
+		return pathMatchesOrDescendsFrom(path, "spec.group") || pathMatchesOrDescendsFrom(path, "spec.names")
+	case "Configuration":
+		return pathMatchesOrDescendsFrom(path, "spec.dependsOn")
 	default:
 		return false
 	}
+}
+
+func pathMatchesOrDescendsFrom(path, parent string) bool {
+	return path == parent || strings.HasPrefix(path, parent+".") || strings.HasPrefix(path, parent+"[")
 }
 
 func hasBoundedCrossplaneRootSignal(text string) bool {
 	if len(text) > rootSignalSniffBytes {
 		text = text[:rootSignalSniffBytes]
 	}
+	signals := boundedDocumentRootSignals{shapePaths: map[string]struct{}{}}
+	var stack []sniffPathEntry
 	for lineStart, lines := 0, 0; lineStart < len(text) && lines < rootSignalSniffLines; lines++ {
 		lineEnd := lineStart
 		for lineEnd < len(text) && text[lineEnd] != '\n' {
 			lineEnd++
 		}
 		line := strings.TrimSuffix(text[lineStart:lineEnd], "\r")
+		if isDocumentSeparatorLine(line) {
+			if signals.hasKindShapeSignal() {
+				return true
+			}
+			signals = boundedDocumentRootSignals{shapePaths: map[string]struct{}{}}
+			stack = nil
+			lineStart = lineEnd + 1
+			continue
+		}
 		if value, ok := rootLevelScalarLineValue(line, "apiVersion"); ok && isCrossplaneCoreAPIVersion(value) {
 			return true
 		}
-		if value, ok := rootLevelScalarLineValue(line, "kind"); ok && isCrossplaneDocumentKind(value) {
-			return true
+		if value, ok := rootLevelScalarLineValue(line, "kind"); ok {
+			signals.kind = value
+		}
+		if path, ok := sniffMappingPath(line, &stack); ok {
+			signals.shapePaths[path] = struct{}{}
 		}
 		if lineEnd == len(text) {
 			break
 		}
 		lineStart = lineEnd + 1
 	}
+	return signals.hasKindShapeSignal()
+}
+
+type boundedDocumentRootSignals struct {
+	kind       string
+	shapePaths map[string]struct{}
+}
+
+func (s boundedDocumentRootSignals) hasKindShapeSignal() bool {
+	for path := range s.shapePaths {
+		if isCrossplaneShapePathForKind(s.kind, path) {
+			return true
+		}
+	}
 	return false
+}
+
+func isDocumentSeparatorLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return trimmed == "---" || trimmed == "..."
+}
+
+type sniffPathEntry struct {
+	indent int
+	path   string
+}
+
+func sniffMappingPath(line string, stack *[]sniffPathEntry) (string, bool) {
+	trimmedLine := strings.TrimSpace(line)
+	if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+		return "", false
+	}
+	indent := leadingSpaces(line)
+	if indent < len(line) && line[indent] == '\t' {
+		return "", false
+	}
+	trimmed := line[indent:]
+	if strings.HasPrefix(trimmed, "- ") {
+		return "", false
+	}
+	key, value, ok := splitSimpleMappingLine(trimmed)
+	if !ok {
+		return "", false
+	}
+	for len(*stack) > 0 && indent <= (*stack)[len(*stack)-1].indent {
+		*stack = (*stack)[:len(*stack)-1]
+	}
+	path := key
+	if len(*stack) > 0 {
+		path = (*stack)[len(*stack)-1].path + "." + key
+	}
+	if strings.TrimSpace(stripInlineComment(value)) == "" {
+		*stack = append(*stack, sniffPathEntry{indent: indent, path: path})
+	}
+	return path, true
+}
+
+func leadingSpaces(line string) int {
+	for i := 0; i < len(line); i++ {
+		if line[i] != ' ' {
+			return i
+		}
+	}
+	return len(line)
+}
+
+func splitSimpleMappingLine(line string) (string, string, bool) {
+	key, value, ok := strings.Cut(line, ":")
+	if !ok {
+		return "", "", false
+	}
+	key = strings.TrimSpace(key)
+	if key == "" || strings.ContainsAny(key, "{}[]&*!,|>%'\"") {
+		return "", "", false
+	}
+	return key, value, true
 }
 
 func rootLevelScalarLineValue(line, key string) (string, bool) {

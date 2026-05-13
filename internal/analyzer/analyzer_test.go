@@ -170,6 +170,36 @@ func TestNoRootOrdinaryCustomResourceDefinitionStaysQuiet(t *testing.T) {
 	}
 }
 
+func TestNoRootCompositionKindWithoutShapeStaysQuiet(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("ordinary no-root Composition-shaped name without shape should stay quiet, got %#v", diagnostics)
+	}
+}
+
+func TestNoRootCompositionKindWithShapeActivatesDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\nbroken: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) == 0 {
+		t.Fatal("Composition kind with stable Composition shape should activate diagnostics")
+	}
+}
+
 func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
@@ -181,6 +211,36 @@ func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	diagnostics := a.Diagnostics(uri)
 	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "size limit") {
 		t.Fatalf("expected size limit diagnostic, got %#v", diagnostics)
+	}
+}
+
+func TestHugeNoRootCompositionKindWithoutShapeStaysQuiet(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	a.OpenDocument(uri, "apiVersion: example.io/v1\nkind: Composition\n"+strings.Repeat("a", 64))
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("oversized no-root Composition kind without shape should stay quiet, got %#v", diagnostics)
+	}
+}
+
+func TestHugeNoRootCompositionKindWithShapeReportsSizeLimit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n" + strings.Repeat("a", 64)
+	a.OpenDocument(uri, text)
+
+	diagnostics := a.Diagnostics(uri)
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "size limit") {
+		t.Fatalf("expected size limit diagnostic for oversized Composition kind with shape, got %#v", diagnostics)
 	}
 }
 
