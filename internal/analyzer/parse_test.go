@@ -294,6 +294,48 @@ func TestRootValueForOccurrenceFindsLaterRootValueInSameDocument(t *testing.T) {
 	}
 }
 
+func TestDuplicateRootTemplateValueWinsAggregateSemantics(t *testing.T) {
+	text := "apiVersion: stable/v1\napiVersion: {{ .APIVersion }}\nmetadata:\n  name: demo\n"
+
+	doc := ParseYAMLDocument(text)
+
+	templateOffset := strings.Index(text, "{{ .APIVersion }}")
+	if templateOffset < 0 {
+		t.Fatal("test setup: template apiVersion not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(templateOffset)
+	if !ok {
+		t.Fatal("expected occurrence at duplicate template apiVersion")
+	}
+	if occurrence.Path != "apiVersion" {
+		t.Fatalf("occurrence path = %q, want apiVersion", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected later template-derived apiVersion occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(templateOffset); ok {
+		t.Fatalf("path at template-derived duplicate = %q, want no stable path", path)
+	}
+	if doc.IsStablePath("apiVersion") {
+		t.Fatal("expected aggregate apiVersion stability to follow later unstable duplicate")
+	}
+	if value, ok := doc.Values["apiVersion"]; ok {
+		t.Fatalf("stale aggregate apiVersion value = %q, want omitted", value)
+	}
+
+	metadataOffset := strings.Index(text, "name: demo")
+	if metadataOffset < 0 {
+		t.Fatal("test setup: metadata.name not found")
+	}
+	metadataOccurrence, ok := doc.PathOccurrenceAtOffset(metadataOffset)
+	if !ok {
+		t.Fatal("expected occurrence at metadata.name")
+	}
+	if value, ok := doc.RootValueForOccurrence(metadataOccurrence, "apiVersion"); ok {
+		t.Fatalf("root apiVersion for metadata.name = %q, want no value", value)
+	}
+}
+
 func TestSimplePathSpansUseExactByteOffsets(t *testing.T) {
 	text := "spec:\n  kind: Bucket\n"
 

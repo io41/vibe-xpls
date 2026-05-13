@@ -150,7 +150,7 @@ func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path str
 	var best PathOccurrence
 	bestOK := false
 	for _, candidate := range d.occurrences {
-		if candidate.DocumentIndex != occurrence.DocumentIndex || candidate.Path != path || !candidate.Stable || !candidate.ValueOK {
+		if candidate.DocumentIndex != occurrence.DocumentIndex || candidate.Path != path {
 			continue
 		}
 		if !bestOK || candidate.PathSpan.Start > best.PathSpan.Start {
@@ -158,7 +158,7 @@ func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path str
 			bestOK = true
 		}
 	}
-	if !bestOK {
+	if !bestOK || !best.Stable || !best.ValueOK {
 		return "", false
 	}
 	return best.Value, true
@@ -299,10 +299,9 @@ func (d *YAMLDocument) recordPath(path string, documentIndex int, stable bool, p
 	if path == "" {
 		return
 	}
-	if stable {
-		d.StablePaths[path] = true
-	} else if _, ok := d.StablePaths[path]; !ok {
-		d.StablePaths[path] = false
+	d.StablePaths[path] = stable
+	if !stable || !valueTextOK {
+		delete(d.Values, path)
 	}
 	effectivePathSpan, effectivePathOK := pathSpan, pathOK
 	if !effectivePathOK && keyOK && valueOK {
