@@ -80,9 +80,13 @@ Full manual Zed validation remains human-pending. The automated and log-only che
 Local observations on 2026-05-13:
 
 - `zed --version` returned `Zed 1.1.8 - <zed-app>`.
-- Launch attempt: `VIBE_XPLS_BIN=<vibe-xpls-binary> zed <vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` exited 0.
-- Zed log evidence after that launch showed the fixture opening and the stock YAML language server starting:
+- Launch attempt for an ordinary `.yaml` file: `VIBE_XPLS_BIN=<vibe-xpls-binary> zed <vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` exited 0.
+- Zed log evidence after that launch showed the fixture opening and the stock YAML language server starting. This is expected without a user `file_types` mapping because `api/composition.yaml` is not one of the extension's built-in `Crossplane YAML` suffixes:
   - `2026-05-13T06:29:59+02:00 INFO  [worktree] inserting parent git repo for this worktree: "internal/analyzer/testdata/workspaces/root/api/composition.yaml"`
   - `2026-05-13T06:30:00+02:00 INFO  [lsp] starting language server process. binary path: "<homebrew-bin-dir>/node", working directory: "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api", args: ["<zed-data-dir>/languages/yaml-language-server/node_modules/yaml-language-server/bin/yaml-language-server", "--stdio"]`
-- The Zed log did not show `<vibe-xpls-binary>`, `VIBE_XPLS_BIN`, `up xpls`, or `up-xpls` starting during this attempt. Therefore the `Zed launches <vibe-xpls-binary>` checkbox is not marked complete.
+- Launch attempt for the built-in Crossplane suffix with the package directory as the workspace: `VIBE_XPLS_BIN=<vibe-xpls-binary> zed --new <vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root <vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/crossplane.yaml` exited 0.
+- Zed log evidence after that launch reached the `up-xpls` language server path but stopped before launching because this fixture worktree was not trusted in the local Zed UI:
+  - `2026-05-13T06:33:35+02:00 INFO  [project::trusted_worktrees] Worktree "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root" is not trusted`
+  - `2026-05-13T06:33:35+02:00 INFO  [project::lsp_store] Waiting for worktree "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root" to be trusted, before starting language server up-xpls`
+- The Zed log did not show `<vibe-xpls-binary>` starting during these attempts. Therefore the `Zed launches <vibe-xpls-binary>` checkbox is not marked complete.
 - No diagnostics, diagnostic clearing, hover, completion, root/nested/multi-package attach, no-root quietness, or `.yaml` file-type mapping behavior was visually observed.
