@@ -64,6 +64,117 @@ func TestAnalyzerCompletionUsesSameRootContextAcrossDocuments(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetUsesMappingKeyContext(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-context.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("blank child-key completion missing kind: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-prefix.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    k"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("partial child-key completion missing kind: %#v", completion.Items)
+	}
+	if containsCompletion(completion.Items, "apiVersion") {
+		t.Fatalf("partial child-key completion was not prefix-filtered: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDoesNotCompleteScalarValues(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-value.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n"
+	a.OpenDocument(uri, text)
+
+	valueOffset := strings.Index(text, "CompositeBucket") + len("CompositeBucket")
+	if completion := a.CompletionAtOffset(uri, valueOffset); len(completion.Items) != 0 {
+		t.Fatalf("scalar value completion = %#v, want none", completion.Items)
+	}
+	apiVersionOffset := strings.Index(text, "crossplane.io") + len("crossplane")
+	if completion := a.CompletionAtOffset(uri, apiVersionOffset); len(completion.Items) != 0 {
+		t.Fatalf("apiVersion value completion = %#v, want none", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDoesNotCompleteBlockScalarValues(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-block-scalar.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: |\n    "
+	a.OpenDocument(uri, text)
+
+	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
+		t.Fatalf("block scalar completion = %#v, want none", completion.Items)
+	}
+
+	a.ChangeDocument(uri, "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: |\n")
+	if completion := a.CompletionAtOffset(uri, len("apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: |\n")); len(completion.Items) != 0 {
+		t.Fatalf("blank block scalar completion = %#v, want none", completion.Items)
+	}
+
+	text = "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: |\n    ---\n    "
+	a.ChangeDocument(uri, text)
+	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
+		t.Fatalf("block scalar separator text completion = %#v, want none", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDoesNotCrossDocumentBeforeRootContext(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-new-document.yaml")
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\n---\n"
+	a.OpenDocument(uri, text)
+
+	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
+		t.Fatalf("new document without root context completion = %#v, want none", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDoesNotCompleteAfterParentColon(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-parent-colon.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:"
+	a.OpenDocument(uri, text)
+
+	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
+		t.Fatalf("parent-colon completion = %#v, want none", completion.Items)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

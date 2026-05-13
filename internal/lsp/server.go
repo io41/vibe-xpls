@@ -202,7 +202,7 @@ func (s *Server) handleInitialize(msg Message) error {
 		Capabilities: serverCapabilities{
 			TextDocumentSync:   1,
 			HoverProvider:      true,
-			CompletionProvider: completionOptions{TriggerCharacters: []string{".", ":", "\n"}},
+			CompletionProvider: completionOptions{TriggerCharacters: []string{"\n"}},
 			PositionEncoding:   string(s.positionEncoding),
 		},
 		ServerInfo: serverInfo{Name: "vibe-xpls", Version: app.Version},

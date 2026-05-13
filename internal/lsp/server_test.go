@@ -47,9 +47,11 @@ func TestInitializeAdvertisesCapabilitiesAndNegotiatesPositionEncoding(t *testin
 				t.Fatalf("textDocumentSync = %v, want full sync", capabilities["textDocumentSync"])
 			}
 			completion := asMap(t, capabilities["completionProvider"])
-			if !containsString(asSlice(t, completion["triggerCharacters"]), ".") ||
-				!containsString(asSlice(t, completion["triggerCharacters"]), ":") {
-				t.Fatalf("triggerCharacters = %#v, want common YAML triggers", completion["triggerCharacters"])
+			triggers := asSlice(t, completion["triggerCharacters"])
+			if containsString(triggers, ".") ||
+				containsString(triggers, ":") ||
+				!containsString(triggers, "\n") {
+				t.Fatalf("triggerCharacters = %#v, want newline key-context trigger without dot or colon", completion["triggerCharacters"])
 			}
 			info := asMap(t, result["serverInfo"])
 			if info["name"] != "vibe-xpls" || info["version"] != "v0.0.1" {
@@ -147,7 +149,7 @@ func TestDidClosePublishesEmptyDiagnostics(t *testing.T) {
 func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "composition.yaml"))
-	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n"
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n    "
 
 	messages := runServerFrames(t,
 		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
@@ -160,7 +162,7 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 		}),
 		requestFrame(t, 3, "textDocument/completion", map[string]any{
 			"textDocument": map[string]any{"uri": uri},
-			"position":     positionAtSubstring(t, text, "compositeTypeRef", source.EncodingUTF16),
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
 		}),
 	)
 
@@ -178,7 +180,7 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 func TestHoverAndCompletionUseNegotiatedUTF8Positions(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "utf8.yaml"))
-	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata: { emoji: 😀, name: demo }\nspec: { emoji: 😀, compositeTypeRef: {} }\n"
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    k\nmetadata:\n  name: demo\n  emoji: \"😀\"\n"
 
 	messages := runServerFrames(t,
 		requestFrame(t, 1, "initialize", map[string]any{
@@ -196,7 +198,7 @@ func TestHoverAndCompletionUseNegotiatedUTF8Positions(t *testing.T) {
 		}),
 		requestFrame(t, 3, "textDocument/completion", map[string]any{
 			"textDocument": map[string]any{"uri": uri},
-			"position":     positionAtSubstring(t, text, "compositeTypeRef", source.EncodingUTF8),
+			"position":     positionAtOffset(t, text, strings.Index(text, "    k")+len("    k"), source.EncodingUTF8),
 		}),
 	)
 
@@ -481,6 +483,12 @@ func positionAtSubstring(t *testing.T, text string, needle string, encoding sour
 	if offset < 0 {
 		t.Fatalf("substring %q not found", needle)
 	}
+	position := source.PositionAtByteOffset(text, offset, encoding)
+	return map[string]any{"line": position.Line, "character": position.Character}
+}
+
+func positionAtOffset(t *testing.T, text string, offset int, encoding source.Encoding) map[string]any {
+	t.Helper()
 	position := source.PositionAtByteOffset(text, offset, encoding)
 	return map[string]any{"line": position.Line, "character": position.Character}
 }
