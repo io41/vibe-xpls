@@ -74,8 +74,11 @@ The LSP server handles transport concerns only:
 - LSP position encoding negotiation, defaulting to UTF-16 and using UTF-8 when the client advertises support through LSP 3.17 `general.positionEncodings`.
 - Conversion between protocol positions and analyzer byte offsets in the raw source.
 - Formatting analyzer results into LSP diagnostics, hover responses, and completion items.
+- Formatting YAML key completions with explicit LSP text edits when label-only insertion would be ambiguous. Completion labels stay concise, such as `spec` or `kind`, but accepted edits insert valid YAML key text at the analyzer-determined indentation, such as `spec:` or `    kind:`.
 
 The analyzer's canonical source positions are byte offsets in raw document text. Rune indexes are an implementation detail of conversion routines, not part of the LSP contract.
+
+Completion text edits are a correctness requirement for this milestone, not a snippet feature. The first milestone should not insert snippet placeholders, automatic child-line templates, or extra newlines. It should only replace the current YAML key prefix and indentation with the intended key text so accepting a completion preserves valid YAML structure in Zed.
 
 The debug CLI is another adapter over the same analyzer. Its output may be JSON so tests can assert on it, but it is internal and non-contractual. It should help inspect package detection, diagnostics, schema lookup, hover, and completion against fixture paths without launching Zed.
 
@@ -193,6 +196,7 @@ Analyzer tests cover core behavior without LSP or Zed:
 - No-root activation toggling and diagnostic clearing when activation disappears.
 - Hover at a known `apiVersion`, `kind`, or schema path returns indexed OpenAPI documentation when available and a clear absence when no documentation is indexed.
 - Completion at known schema paths suggests indexed fields and does not invent field completions for unknown provider schemas.
+- Completion context exposes enough source range information for the LSP adapter to replace the current YAML key prefix and indentation when accepting a completion.
 - Document and workspace generation fencing.
 - Stale diagnostic clearing behavior.
 - Huge-document downgrade behavior.
@@ -211,6 +215,7 @@ Protocol tests cover:
 - Publish diagnostics.
 - Hover.
 - Completion.
+- Completion text edits for YAML keys, including root-key prefix replacement and nested-key indentation.
 - UTF-16 default position handling and UTF-8 handling when negotiated with a supporting client.
 - Stale diagnostic clearing.
 - Pull-model stale hover and completion behavior.
@@ -232,6 +237,7 @@ Required checks:
 - Diagnostics appear and clear correctly.
 - Hover works visibly.
 - Completion works visibly.
+- Accepting a completion inserts the completed YAML key at the correct indentation.
 - Stale diagnostics do not survive valid edits or document close.
 
 Tests alone are not sufficient. The research found Zed attach and UI behavior to be unresolved, so this manual checklist is a release gate for the milestone.
@@ -264,7 +270,7 @@ Implementation planning must include an explicit parser-selection task before pr
 The first runnable milestone is complete only when all of these are true:
 
 - Analyzer fixture tests pass for package detection, schema lookup, schema precedence, diagnostics, hover, completion, mixed YAML/template basics, no-root activation, bounded-resource behavior, path safety, and stale generation behavior.
-- LSP protocol tests pass for document sync, diagnostics, hover, completion, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
+- LSP protocol tests pass for document sync, diagnostics, hover, completion, completion text edits, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
 - Manual Zed validation passes through `VIBE_XPLS_BIN` for root, nested, multi-package, and no-root workspaces.
 - No external execution, Docker, downloads, cluster reads, kubeconfig reads, or workspace writes occur during normal editor behavior.
 - The debug CLI remains internal and non-contractual.

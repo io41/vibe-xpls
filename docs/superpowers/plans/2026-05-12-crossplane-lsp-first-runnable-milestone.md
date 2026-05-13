@@ -30,6 +30,7 @@ Required corrections before execution is considered complete:
 - **Workspace scan caps:** package and schema scanning must enforce `MaxYAMLFiles` and `MaxYAMLBytes`, return bounded diagnostics or debug status when caps are hit, and include a test that forces the cap.
 - **Package-scoped schema indexes:** multi-package workspaces must use a schema index per package root. Hover and completion must resolve through the package containing the document so schemas from package A do not appear in package B.
 - **No-root activation cascade:** implement the activation signals from the spec: ancestor package marker, documented Zed/Crossplane filename classification, Crossplane core `apiVersion`, and Crossplane document kind/shape. Tests must cover activation and deactivation clearing diagnostics.
+- **Completion acceptance edits:** LSP completion items for YAML keys must include explicit text edits so accepting a completion preserves valid YAML indentation. Labels remain concise (`spec`, `kind`), but the edit inserts YAML key syntax such as `spec:` or `    kind:`. Snippet placeholders, automatic child lines, and extra newline insertion are out of scope for this milestone.
 - **YAML error spans:** parser errors must produce source spans from parser token positions when available. They must not default to `(0,0)` once a parser position exists.
 - **Limits defaulting:** zero fields in `Limits` must be defaulted field-by-field rather than replacing the entire caller-provided struct.
 - **Symlinked workspace paths:** path safety must resolve the longest existing prefix of a path before comparing against the workspace realpath so logical paths under symlinked parents are not falsely rejected.
@@ -2683,6 +2684,286 @@ git commit -m "feat: serve analyzer over lsp"
 
 Expected: commit succeeds.
 
+## Task 12A: Completion Text Edit Acceptance
+
+**Files:**
+- Modify: `internal/analyzer/completion.go`
+- Modify: `internal/analyzer/analyzer_test.go`
+- Modify: `internal/lsp/server.go`
+- Modify: `internal/lsp/server_test.go`
+- Modify: `docs/research/validations/2026-05-12-zed-first-runnable.md`
+
+- [ ] **Step 1: Add analyzer completion edit tests**
+
+Append tests to `internal/analyzer/analyzer_test.go` that prove cursor-based completions carry an edit range and YAML key text.
+
+```go
+func TestAnalyzerCompletionAtOffsetIncludesRootKeyEdit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-root-edit.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: root-composition\ns"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "spec")
+	if !ok {
+		t.Fatalf("completion missing spec: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("spec completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "spec:" {
+		t.Fatalf("new text = %q, want spec:", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: strings.LastIndex(text, "\n") + 1, End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetIncludesNestedKeyEdit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-nested-edit.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    k"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "kind")
+	if !ok {
+		t.Fatalf("completion missing kind: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("kind completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "    kind:" {
+		t.Fatalf("new text = %q, want indented kind key", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: strings.LastIndex(text, "\n") + 1, End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
+func completionItemByLabel(items []CompletionItem, label string) (CompletionItem, bool) {
+	for _, item := range items {
+		if item.Label == label {
+			return item, true
+		}
+	}
+	return CompletionItem{}, false
+}
+```
+
+- [ ] **Step 2: Run analyzer tests and confirm failure**
+
+Run:
+
+```bash
+go test ./internal/analyzer -run 'TestAnalyzerCompletionAtOffsetIncludes.*KeyEdit'
+```
+
+Expected: FAIL because `CompletionItem` does not yet carry a text edit.
+
+- [ ] **Step 3: Add analyzer text edit metadata**
+
+Modify `internal/analyzer/completion.go` so cursor-based completion items carry the replacement span and plain YAML key text. Keep path-based `Completion(uri, parentPath)` label-only because it has no cursor range.
+
+```go
+type CompletionItem struct {
+	Label         string
+	Documentation string
+	TextEdit      *CompletionTextEdit
+}
+
+type CompletionTextEdit struct {
+	Replace Span
+	NewText string
+}
+```
+
+Update `completionContext` to retain the line replacement span and indentation:
+
+```go
+type completionContext struct {
+	parentPath     string
+	prefix         string
+	rootOccurrence PathOccurrence
+	replace        Span
+	indent         string
+}
+```
+
+In `completionContextAtOffset`, set the replacement span to the current key prefix, including leading indentation:
+
+```go
+return completionContext{
+	parentPath:     parentPath,
+	prefix:         prefix,
+	rootOccurrence: rootOccurrence,
+	replace:        Span{Start: lineStart, End: offset},
+	indent:         text[lineStart:indentEnd],
+}, true
+```
+
+After building and prefix-filtering schema completion items in `CompletionAtOffset`, attach the edit:
+
+```go
+completion := filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, context.parentPath), context.prefix)
+for i := range completion.Items {
+	completion.Items[i].TextEdit = &CompletionTextEdit{
+		Replace: context.replace,
+		NewText: context.indent + completion.Items[i].Label + ":",
+	}
+}
+return completion
+```
+
+- [ ] **Step 4: Verify analyzer edit tests**
+
+Run:
+
+```bash
+go test ./internal/analyzer -run 'TestAnalyzerCompletionAtOffsetIncludes.*KeyEdit|TestAnalyzerCompletionAtOffsetUsesMappingKeyContext|TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey'
+```
+
+Expected: tests PASS.
+
+- [ ] **Step 5: Add LSP completion text edit tests**
+
+Add an LSP test to `internal/lsp/server_test.go` that verifies the protocol payload includes an explicit `textEdit` and no snippet fields.
+
+```go
+func TestCompletionItemsIncludePlainTextEdits(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-edit.yaml"))
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: root-composition\ns"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "spec")
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "spec:" {
+		t.Fatalf("newText = %#v, want spec:", edit["newText"])
+	}
+	if _, ok := item["insertTextFormat"]; ok {
+		t.Fatalf("completion should not use snippets: %#v", item)
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(4) || start["character"] != float64(0) || end["line"] != float64(4) || end["character"] != float64(1) {
+		t.Fatalf("textEdit range = %#v, want line 4 char 0..1", rng)
+	}
+}
+
+func completionItemByLabelForTest(t *testing.T, items []any, label string) map[string]any {
+	t.Helper()
+	for _, raw := range items {
+		item := asMap(t, raw)
+		if item["label"] == label {
+			return item
+		}
+	}
+	t.Fatalf("completion item %q not found in %#v", label, items)
+	return nil
+}
+```
+
+- [ ] **Step 6: Run LSP test and confirm failure**
+
+Run:
+
+```bash
+go test ./internal/lsp -run TestCompletionItemsIncludePlainTextEdits
+```
+
+Expected: FAIL because the LSP adapter does not yet serialize `textEdit`.
+
+- [ ] **Step 7: Serialize LSP text edits**
+
+Modify `internal/lsp/server.go` to add protocol structs:
+
+```go
+type completionItem struct {
+	Label         string    `json:"label"`
+	Documentation string    `json:"documentation,omitempty"`
+	TextEdit      *textEdit `json:"textEdit,omitempty"`
+}
+
+type textEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+```
+
+When converting analyzer completion items, map analyzer byte spans through the existing `rangeFromSpan` helper and the negotiated position encoding:
+
+```go
+items := make([]completionItem, 0, len(completion.Items))
+for _, item := range completion.Items {
+	out := completionItem{Label: item.Label, Documentation: item.Documentation}
+	if item.TextEdit != nil {
+		out.TextEdit = &textEdit{
+			Range:   s.rangeFromSpan(snapshot.Text, item.TextEdit.Replace),
+			NewText: item.TextEdit.NewText,
+		}
+	}
+	items = append(items, out)
+}
+```
+
+Do not add `insertTextFormat`, snippet placeholders, or extra newline insertion in this milestone.
+
+- [ ] **Step 8: Verify completion text edits**
+
+Run:
+
+```bash
+go test ./internal/analyzer -run 'TestAnalyzerCompletionAtOffsetIncludes.*KeyEdit|TestAnalyzerCompletionAtOffsetUsesMappingKeyContext|TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey'
+go test ./internal/lsp -run 'TestCompletionItemsIncludePlainTextEdits|TestHoverAndCompletionUseAnalyzer|TestHoverAndCompletionUseNegotiatedUTF8Positions'
+go test ./...
+```
+
+Expected: tests PASS.
+
+- [ ] **Step 9: Update Zed validation artifact**
+
+Modify `docs/research/validations/2026-05-12-zed-first-runnable.md` so the completion validation notes include:
+
+```markdown
+- Completion acceptance must be tested, not only suggestion visibility.
+- Root-level key completion: with a partial root key such as `s` after `metadata.name`, accepting `spec` inserts `spec:` at column 0.
+- Nested key completion: with a partial nested key such as `k` under `spec.compositeTypeRef`, accepting `kind` inserts `kind:` at the child-key indentation.
+- Completion remains plain text; snippet placeholders and automatic child-line insertion are not part of this milestone.
+```
+
+- [ ] **Step 10: Commit**
+
+Run:
+
+```bash
+git add internal/analyzer/completion.go internal/analyzer/analyzer_test.go internal/lsp/server.go internal/lsp/server_test.go docs/research/validations/2026-05-12-zed-first-runnable.md
+git commit -m "fix: add completion text edits"
+```
+
+Expected: commit succeeds.
+
 ## Task 13: Zed Manual Validation Artifact
 
 **Files:**
@@ -2733,6 +3014,7 @@ Create `docs/research/validations/2026-05-12-zed-first-runnable.md`:
 - [ ] Diagnostics clear after document close.
 - [ ] Hover works visibly.
 - [ ] Completion works visibly.
+- [ ] Accepting completion inserts the completed YAML key at the correct indentation.
 
 ## Evidence Notes
 
@@ -2821,7 +3103,7 @@ Expected: commit succeeds.
 - [ ] `go test ./...` passes.
 - [ ] `go run ./cmd/vibe-xpls --version` prints `vibe-xpls v0.0.1`.
 - [ ] Analyzer fixture tests cover package detection, schema lookup, schema precedence, diagnostics, hover, completion, mixed YAML/template basics, no-root activation, bounded-resource behavior, path safety, and stale generation behavior.
-- [ ] LSP tests cover document sync, diagnostics, hover, completion, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
+- [ ] LSP tests cover document sync, diagnostics, hover, completion, completion text edits, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
 - [ ] Manual Zed validation evidence is recorded.
 - [ ] No normal editor path invokes external Crossplane execution, Docker, downloads, cluster reads, kubeconfig reads, or workspace writes.
 - [ ] Debug CLI output remains marked `internal-debug`.
