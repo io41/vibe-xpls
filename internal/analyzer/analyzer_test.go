@@ -215,6 +215,36 @@ func TestNoRootCompositionShapeLineDiagnosticActivatesDiagnostics(t *testing.T) 
 	}
 }
 
+func TestNoRootBlockScalarShapeTextDoesNotActivateDiagnostics(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\ndata: |\n  spec:\n    compositeTypeRef: not real YAML shape\nbroken: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("block scalar shape text should not activate no-root diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestNoRootDocumentSeparatorCommentResetsBoundedSniffState(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: example.io/v1\nkind: Composition\n--- # second document\nspec:\n  compositeTypeRef:\nbroken: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("document separator with comment should prevent cross-document kind/shape activation, got %#v", diagnostics)
+	}
+}
+
 func TestNoRootXRDShapeLineDiagnosticActivatesDiagnostics(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

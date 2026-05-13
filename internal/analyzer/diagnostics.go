@@ -129,12 +129,23 @@ func hasBoundedCrossplaneRootSignal(text string) bool {
 	}
 	signals := boundedDocumentRootSignals{shapePaths: map[string]struct{}{}}
 	var stack []sniffPathEntry
+	blockScalarParentIndent := -1
 	for lineStart, lines := 0, 0; lineStart < len(text) && lines < rootSignalSniffLines; lines++ {
 		lineEnd := lineStart
 		for lineEnd < len(text) && text[lineEnd] != '\n' {
 			lineEnd++
 		}
 		line := strings.TrimSuffix(text[lineStart:lineEnd], "\r")
+		if blockScalarParentIndent >= 0 {
+			if strings.TrimSpace(line) == "" || leadingSpaces(line) > blockScalarParentIndent {
+				if lineEnd == len(text) {
+					break
+				}
+				lineStart = lineEnd + 1
+				continue
+			}
+			blockScalarParentIndent = -1
+		}
 		if isDocumentSeparatorLine(line) {
 			if signals.hasKindShapeSignal() {
 				return true
@@ -150,8 +161,11 @@ func hasBoundedCrossplaneRootSignal(text string) bool {
 		if value, ok := rootLevelScalarLineValue(line, "kind"); ok {
 			signals.kind = value
 		}
-		if path, ok := sniffMappingPath(line, &stack); ok {
+		if path, value, indent, ok := sniffMappingPath(line, &stack); ok {
 			signals.shapePaths[path] = struct{}{}
+			if isBlockScalarHeader(value) {
+				blockScalarParentIndent = indent
+			}
 		}
 		if lineEnd == len(text) {
 			break
@@ -176,7 +190,7 @@ func (s boundedDocumentRootSignals) hasKindShapeSignal() bool {
 }
 
 func isDocumentSeparatorLine(line string) bool {
-	trimmed := strings.TrimSpace(line)
+	trimmed := strings.TrimSpace(stripInlineComment(line))
 	return trimmed == "---" || trimmed == "..."
 }
 
@@ -185,22 +199,22 @@ type sniffPathEntry struct {
 	path   string
 }
 
-func sniffMappingPath(line string, stack *[]sniffPathEntry) (string, bool) {
+func sniffMappingPath(line string, stack *[]sniffPathEntry) (string, string, int, bool) {
 	trimmedLine := strings.TrimSpace(line)
 	if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
-		return "", false
+		return "", "", 0, false
 	}
 	indent := leadingSpaces(line)
 	if indent < len(line) && line[indent] == '\t' {
-		return "", false
+		return "", "", 0, false
 	}
 	trimmed := line[indent:]
 	if strings.HasPrefix(trimmed, "- ") {
-		return "", false
+		return "", "", 0, false
 	}
 	key, value, ok := splitSimpleMappingLine(trimmed)
 	if !ok {
-		return "", false
+		return "", "", 0, false
 	}
 	for len(*stack) > 0 && indent <= (*stack)[len(*stack)-1].indent {
 		*stack = (*stack)[:len(*stack)-1]
@@ -212,7 +226,7 @@ func sniffMappingPath(line string, stack *[]sniffPathEntry) (string, bool) {
 	if strings.TrimSpace(stripInlineComment(value)) == "" {
 		*stack = append(*stack, sniffPathEntry{indent: indent, path: path})
 	}
-	return path, true
+	return path, value, indent, true
 }
 
 func leadingSpaces(line string) int {
@@ -234,6 +248,20 @@ func splitSimpleMappingLine(line string) (string, string, bool) {
 		return "", "", false
 	}
 	return key, value, true
+}
+
+func isBlockScalarHeader(value string) bool {
+	value = strings.TrimSpace(stripInlineComment(value))
+	if value == "" || (value[0] != '|' && value[0] != '>') {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		c := value[i]
+		if c != '+' && c != '-' && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func rootLevelScalarLineValue(line, key string) (string, bool) {
