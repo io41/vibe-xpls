@@ -48,6 +48,26 @@ func TestAnalyzerCompletionUsesSchemaParentThatDoesNotExistYet(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionPathBasedItemsHaveNilTextEdit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "path-completion-label-only.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.compositeTypeRef")
+	item, ok := completionItemByLabel(completion.Items, "kind")
+	if !ok {
+		t.Fatalf("completion missing kind: %#v", completion.Items)
+	}
+	if item.TextEdit != nil {
+		t.Fatalf("path-based completion text edit = %#v, want nil", item.TextEdit)
+	}
+}
+
 func TestAnalyzerCompletionUsesSameRootContextAcrossDocuments(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -96,6 +116,46 @@ func TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey(t *testing.T) {
 	}
 	if containsCompletion(completion.Items, "apiVersion") {
 		t.Fatalf("partial child-key completion was not prefix-filtered: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetSuppressesTextEditBeforeExistingColon(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-existing-colon.yaml")
+
+	tests := []struct {
+		name   string
+		text   string
+		needle string
+	}{
+		{
+			name:   "cursor before colon",
+			text:   "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    k: CompositeBucket\n",
+			needle: "k:",
+		},
+		{
+			name:   "cursor before key tail and colon",
+			text:   "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    ki: CompositeBucket\n",
+			needle: "ki:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a.ChangeDocument(uri, tt.text)
+			cursor := strings.Index(tt.text, tt.needle)
+			if cursor < 0 {
+				t.Fatalf("test setup: %q not found", tt.needle)
+			}
+			cursor += len("k")
+			if completion := a.CompletionAtOffset(uri, cursor); len(completion.Items) != 0 {
+				t.Fatalf("completion before existing colon = %#v, want none", completion.Items)
+			}
+		})
 	}
 }
 

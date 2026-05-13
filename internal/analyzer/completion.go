@@ -100,7 +100,7 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 	keyCandidate := rawPrefix
 	afterCursor := text[offset:lineEnd]
 	if colon := strings.Index(afterCursor, ":"); colon >= 0 {
-		keyCandidate += afterCursor[:colon]
+		return completionContext{}, false
 	} else if strings.TrimSpace(afterCursor) != "" {
 		return completionContext{}, false
 	}

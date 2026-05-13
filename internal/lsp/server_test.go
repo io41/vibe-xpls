@@ -246,6 +246,41 @@ func TestCompletionItemsIncludePlainTextEdits(t *testing.T) {
 	}
 }
 
+func TestCompletionTextEditPreservesZeroWidthInsertionRange(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-blank-line-edit.yaml"))
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n\nmetadata:\n  name: root-composition\n"
+	blankLineOffset := strings.Index(text, "\n\n")
+	if blankLineOffset < 0 {
+		t.Fatal("test setup: blank line not found")
+	}
+	blankLineOffset++
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, blankLineOffset, source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "spec")
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "spec:" {
+		t.Fatalf("newText = %#v, want spec:", edit["newText"])
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(2) || start["character"] != float64(0) || end["line"] != float64(2) || end["character"] != float64(0) {
+		t.Fatalf("zero-width textEdit range = %#v, want line 2 char 0..0", rng)
+	}
+}
+
 func TestDiagnosticsMapAnalyzerSpansToLaterLineRanges(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "malformed.yaml"))

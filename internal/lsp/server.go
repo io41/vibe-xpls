@@ -287,7 +287,7 @@ func (s *Server) handleCompletion(msg Message) error {
 		out := completionItem{Label: item.Label, Documentation: item.Documentation}
 		if item.TextEdit != nil {
 			out.TextEdit = &textEdit{
-				Range:   s.rangeFromSpan(snapshot.Text, item.TextEdit.Replace),
+				Range:   s.rangeFromTextEditSpan(snapshot.Text, item.TextEdit.Replace),
 				NewText: item.TextEdit.NewText,
 			}
 		}
@@ -414,6 +414,21 @@ func (s *Server) rangeFromSpan(text string, span analyzer.Span) Range {
 			endPosition.Character++
 		}
 	}
+	return Range{
+		Start: Position{Line: startPosition.Line, Character: startPosition.Character},
+		End:   Position{Line: endPosition.Line, Character: endPosition.Character},
+	}
+}
+
+func (s *Server) rangeFromTextEditSpan(text string, span analyzer.Span) Range {
+	start := clampOffset(span.Start, len(text))
+	end := clampOffset(span.End, len(text))
+	if end < start {
+		end = start
+	}
+
+	startPosition := source.PositionAtByteOffset(text, start, s.positionEncoding)
+	endPosition := source.PositionAtByteOffset(text, end, s.positionEncoding)
 	return Range{
 		Start: Position{Line: startPosition.Line, Character: startPosition.Character},
 		End:   Position{Line: endPosition.Line, Character: endPosition.Character},
