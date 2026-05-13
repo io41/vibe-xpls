@@ -81,7 +81,7 @@ func (d *YAMLDocument) walkFile(file *ast.File) {
 		if yamlDoc == nil || yamlDoc.Body == nil {
 			continue
 		}
-		d.walkNode(yamlDoc.Body, "", true, documentIndex)
+		d.walkNode(yamlDoc.Body, "", true, documentIndex, Span{}, false)
 	}
 }
 
@@ -164,7 +164,7 @@ func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path str
 	return best.Value, true
 }
 
-func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documentIndex int) {
+func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documentIndex int, sequenceRegion Span, sequenceRegionOK bool) {
 	switch n := node.(type) {
 	case *ast.MappingNode:
 		for _, entry := range n.Values {
@@ -177,18 +177,19 @@ func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documen
 			entrySpan, entryOK := d.sequenceEntrySpan(n, idx)
 			valueSpan, valueOK := d.nodeSpan(value)
 			rangeDerivedElement := d.spanEnclosedByStandaloneRange(entrySpan, entryOK)
+			priorStandaloneRange := priorRangeDerivedElement || d.sequenceRegionHasCompletedStandaloneRangeBefore(sequenceRegion, sequenceRegionOK, entrySpan, entryOK)
 			elementStable := stable &&
 				!d.overlapsKnownSpan(entrySpan, entryOK) &&
 				!d.overlapsKnownSpan(valueSpan, valueOK) &&
 				!rangeDerivedElement &&
-				!priorRangeDerivedElement
+				!priorStandaloneRange
 			occurrenceValue, occurrenceValueOK := scalarValue(value)
 			if !elementStable || !valueOK || d.overlapsTemplateAction(valueSpan) {
 				occurrenceValue = ""
 				occurrenceValueOK = false
 			}
 			d.recordPath(elementPath, documentIndex, elementStable, entrySpan, entryOK, Span{}, false, valueSpan, valueOK, occurrenceValue, occurrenceValueOK, Span{}, false)
-			d.walkNode(value, elementPath, elementStable, documentIndex)
+			d.walkNode(value, elementPath, elementStable, documentIndex, Span{}, false)
 			if rangeDerivedElement {
 				priorRangeDerivedElement = true
 			}
@@ -244,7 +245,8 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	if stable && scalarOK && valueOK && !d.overlapsTemplateAction(valueSpan) {
 		d.Values[path] = scalar
 	}
-	d.walkNode(entry.Value, path, stable, documentIndex)
+	childRegion, childRegionOK := d.mappingValueChildRegionSpan(entry)
+	d.walkNode(entry.Value, path, stable, documentIndex, childRegion, childRegionOK)
 }
 
 func (d YAMLDocument) scalarValueOverlapsTemplate(entry *ast.MappingValueNode, scalar string, valueSpan Span, valueOK bool, entrySpan Span, entryOK bool) bool {
@@ -763,27 +765,53 @@ func (d YAMLDocument) spanEnclosedByStandaloneRange(span Span, ok bool) bool {
 		if !action.Standalone || templateActionKeyword(action.Text) != "range" || action.Span.End > span.Start {
 			continue
 		}
-		depth := 1
-	nextOpener:
-		for _, next := range d.Mixed.Actions[i+1:] {
-			if !next.Standalone || !next.Control {
-				continue
-			}
-			switch templateActionKeyword(next.Text) {
-			case "if", "range", "with":
-				depth++
-			case "end":
-				depth--
-				if depth == 0 {
-					if next.Span.Start >= span.End {
-						return true
-					}
-					break nextOpener
-				}
-			}
+		end, ok := d.matchingStandaloneControlEnd(i)
+		if ok && end.Span.Start >= span.End {
+			return true
 		}
 	}
 	return false
+}
+
+func (d YAMLDocument) sequenceRegionHasCompletedStandaloneRangeBefore(region Span, regionOK bool, entrySpan Span, entryOK bool) bool {
+	if !regionOK || !entryOK {
+		return false
+	}
+	for i, action := range d.Mixed.Actions {
+		if !action.Standalone || templateActionKeyword(action.Text) != "range" {
+			continue
+		}
+		if action.Span.Start < region.Start || action.Span.End > region.End {
+			continue
+		}
+		end, ok := d.matchingStandaloneControlEnd(i)
+		if !ok || end.Span.End > region.End {
+			continue
+		}
+		if end.Span.End <= entrySpan.Start {
+			return true
+		}
+	}
+	return false
+}
+
+func (d YAMLDocument) matchingStandaloneControlEnd(startIndex int) (TemplateAction, bool) {
+	depth := 1
+	for _, action := range d.Mixed.Actions[startIndex+1:] {
+		if !action.Standalone || !action.Control {
+			continue
+		}
+		switch templateActionKeyword(action.Text) {
+		case "if", "range", "with":
+			depth++
+		case "end":
+			depth--
+			if depth == 0 {
+				return action, true
+			}
+		}
+	}
+	return TemplateAction{}, false
 }
 
 func (d YAMLDocument) offsetInTemplateAction(offset int) bool {

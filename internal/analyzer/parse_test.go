@@ -692,6 +692,41 @@ func TestSequenceElementAfterStandaloneRangeHasUnstableIndex(t *testing.T) {
 	}
 }
 
+func TestSequenceElementAfterTemplateOutputRangeHasUnstableIndex(t *testing.T) {
+	text := "items:\n  {{ range .Items }}\n  {{ . }}\n  {{ end }}\n  - name: after\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if !doc.IsStablePath("items") {
+		t.Fatal("expected parent items path to remain stable")
+	}
+	for _, path := range []string{"items[0]", "items[0].name"} {
+		if doc.IsStablePath(path) {
+			t.Fatalf("expected post-template-output-range %s path to be unstable", path)
+		}
+	}
+	if value, ok := doc.Values["items[0].name"]; ok {
+		t.Fatalf("post-template-output-range sequence child value recorded as %q", value)
+	}
+	offset := strings.LastIndex(text, "after")
+	if offset < 0 {
+		t.Fatal("test setup: after value not found")
+	}
+	occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+	if !ok {
+		t.Fatal("expected occurrence at post-template-output-range sequence child")
+	}
+	if occurrence.Path != "items[0].name" {
+		t.Fatalf("occurrence path = %q, want items[0].name", occurrence.Path)
+	}
+	if occurrence.Stable {
+		t.Fatal("expected post-template-output-range sequence child occurrence to be unstable")
+	}
+	if path, ok := doc.PathAtOffset(offset); ok {
+		t.Fatalf("path at post-template-output-range sequence child = %q, want no stable path", path)
+	}
+}
+
 func TestMappingEntryInsideStandaloneRangeIsNotStable(t *testing.T) {
 	text := "labels:\n  {{ range .Labels }}\n  app: static\n  {{ end }}\n"
 
