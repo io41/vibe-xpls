@@ -152,7 +152,7 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 	entrySpan, entryOK := d.mappingValueSpan(entry)
 	stable := parentStable && keyOK && !d.overlapsTemplateAction(keySpan)
 	scalar, scalarOK := scalarValue(entry.Value)
-	if scalarOK && (!valueOK || d.overlapsTemplateAction(valueSpan)) {
+	if scalarOK && d.scalarValueOverlapsTemplate(entry, scalar, valueSpan, valueOK, entrySpan, entryOK) {
 		stable = false
 	}
 
@@ -161,6 +161,16 @@ func (d *YAMLDocument) walkMappingValue(entry *ast.MappingValueNode, parentPath 
 		d.Values[path] = scalar
 	}
 	d.walkNode(entry.Value, path, stable)
+}
+
+func (d YAMLDocument) scalarValueOverlapsTemplate(entry *ast.MappingValueNode, scalar string, valueSpan Span, valueOK bool, entrySpan Span, entryOK bool) bool {
+	if d.overlapsKnownSpan(valueSpan, valueOK) {
+		return true
+	}
+	if d.mappingValueLineOverlapsTemplate(entry) && (!valueOK || scalar == "" || d.overlapsKnownSpan(entrySpan, entryOK)) {
+		return true
+	}
+	return false
 }
 
 func (d *YAMLDocument) recordPath(path string, stable bool, pathSpan Span, pathOK bool, keySpan Span, keyOK bool, valueSpan Span, valueOK bool) {
@@ -501,6 +511,23 @@ func (d YAMLDocument) overlapsKnownSpan(span Span, ok bool) bool {
 	return ok && d.overlapsTemplateAction(span)
 }
 
+func (d YAMLDocument) mappingValueLineOverlapsTemplate(entry *ast.MappingValueNode) bool {
+	if entry == nil {
+		return false
+	}
+	colonSpan, ok := d.tokenSpan(entry.Start)
+	if !ok {
+		return false
+	}
+	valueLine := Span{Start: colonSpan.End, End: lineContentEndForOffset(d.Mixed.RawText, colonSpan.End)}
+	for _, action := range d.Mixed.Actions {
+		if spansOverlap(valueLine, action.Span) {
+			return true
+		}
+	}
+	return false
+}
+
 func (d YAMLDocument) offsetInTemplateAction(offset int) bool {
 	for _, action := range d.Mixed.Actions {
 		if spanContains(action.Span, offset) {
@@ -556,6 +583,22 @@ func lineStartForOffset(text string, offset int) int {
 		offset = len(text)
 	}
 	for offset > 0 && text[offset-1] != '\n' {
+		offset--
+	}
+	return offset
+}
+
+func lineContentEndForOffset(text string, offset int) int {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(text) {
+		offset = len(text)
+	}
+	for offset < len(text) && text[offset] != '\n' {
+		offset++
+	}
+	if offset > 0 && text[offset-1] == '\r' {
 		offset--
 	}
 	return offset

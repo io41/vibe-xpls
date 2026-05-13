@@ -285,6 +285,30 @@ func TestTemplateScalarValueIsNotStable(t *testing.T) {
 	}
 }
 
+func TestUnterminatedInlineTemplateScalarValueIsNotStable(t *testing.T) {
+	text := "metadata:\n  name: {{ .Name\n"
+
+	doc := ParseYAMLDocument(text)
+
+	if len(doc.Mixed.TemplateDiagnostics) != 1 {
+		t.Fatalf("template diagnostics = %d, want 1", len(doc.Mixed.TemplateDiagnostics))
+	}
+	if !doc.IsStablePath("metadata") {
+		t.Fatal("expected parent metadata path to remain stable")
+	}
+	if doc.IsStablePath("metadata.name") {
+		t.Fatal("expected unterminated template scalar path to be unstable")
+	}
+	if value, ok := doc.Values["metadata.name"]; ok {
+		t.Fatalf("unterminated template scalar value recorded as %q", value)
+	}
+	offset := strings.Index(text, "{{ .Name")
+	path, ok := doc.PathAtOffset(offset)
+	if ok {
+		t.Fatalf("path inside unterminated template action = %q, want no path", path)
+	}
+}
+
 func TestTemplateSequenceElementIsNotStable(t *testing.T) {
 	text := "items: [{{ .Items }}]\nkind: Composition\n"
 
