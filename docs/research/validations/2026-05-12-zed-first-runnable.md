@@ -58,16 +58,16 @@ kind: Composition
 The following are manual Zed validation checks. Leave a checkbox unchecked until the check has actually been performed.
 
 - [x] Zed launches `<vibe-xpls-binary>`.
-- [ ] Missing-binary behavior is understandable when `<vibe-xpls-binary>` is missing.
+- [x] Missing-binary behavior is understandable when `<vibe-xpls-binary>` is missing.
 - [x] Root package attaches.
-- [ ] Nested package attaches.
+- [x] Nested package attaches.
 - [ ] Multi-package workspace attaches without schema cross-contamination.
-- [ ] No-root workspace stays quiet.
-- [ ] `.yaml` attach behavior was checked without user `file_types` mapping.
+- [x] No-root workspace stays quiet.
+- [x] `.yaml` attach behavior was checked without user `file_types` mapping.
 - [ ] `.yaml` attach behavior was checked with the documented Crossplane `file_types` mapping.
-- [ ] Diagnostics appear.
-- [ ] Diagnostics clear after valid edits.
-- [ ] Diagnostics clear after document close.
+- [x] Diagnostics appear.
+- [x] Diagnostics clear after valid edits.
+- [x] Diagnostics clear after document close.
 - [x] Hover works visibly.
 - [ ] Completion works visibly.
 
@@ -79,7 +79,7 @@ Do not record environment variables, kubeconfig content, registry credentials, t
 
 ### Manual Validation Status
 
-Manual Zed validation is partially complete. Launch, root package attachment, and hover were observed. Diagnostics, completion, stale diagnostic clearing, nested package, multi-package, no-root, and file-type mapping checks remain human-pending.
+Manual Zed validation is partially complete. Launch, root package attachment, nested package attachment, no-root quietness, diagnostics, diagnostic clearing, missing-binary behavior, and hover were observed. Completion, multi-package schema isolation, and the corrected `composition.yaml` file-type mapping retest remain human-pending.
 
 Historical unsuccessful attempts with the original `up-xpls` extension on 2026-05-13:
 
@@ -106,3 +106,13 @@ Updated local observations after replacing the validation extension on 2026-05-1
   - `2026-05-13T09:39:29+02:00 INFO  [lsp] starting language server process. binary path: "<vibe-xpls-binary>", working directory: "<user-home>/Code/ista-se/cas/devops/config/cluster-as-a-service/configurations/ista-azure-service-bus", args: ["serve"]`
 - Manual observation from Tim Kersten: after installing the new extension, it was running, and hovering over symbols in `<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` showed useful descriptions.
 - The hover observation is fixture-backed evidence for root package attachment and visible hover behavior in the real Zed path.
+
+Additional manual observations from Tim Kersten on 2026-05-13:
+
+- Diagnostics appeared, cleared after valid edits, and cleared after document close in Zed.
+- Completion did not show suggestions in Crossplane YAML, while a separate Python file did show suggestions. Completion remains an open product issue.
+- Moving `<vibe-xpls-binary>` away, restarting the language server, and restoring the binary produced a readable Zed startup error for `zed-xpls-vibe`.
+- After restoring the binary, Zed restarted with `<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` classified as ordinary `YAML`; manually changing it back to `Crossplane YAML` restored the working diagnostics path.
+- Opening `<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/nested/packages/network/` as its own Zed project and opening `crossplane.yaml` showed the `zed-xpls-vibe` language server running.
+- Opening the no-root fixture kept `plain.yaml` on ordinary `YAML`; manually forcing `Crossplane YAML` showed the expected readable no-root error from `zed-xpls-vibe`.
+- Local Zed settings were corrected to map `**/composition.yaml` and `**/composition.yml` to `Crossplane YAML` in addition to the documented `*-composition.*` and `*-definition.*` patterns. The real Zed UI retest for this corrected mapping is still pending.
