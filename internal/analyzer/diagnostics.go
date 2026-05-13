@@ -8,6 +8,9 @@ func (a *Analyzer) Diagnostics(uri string) []Diagnostic {
 		return nil
 	}
 	if a.documentExceedsLimit(doc) {
+		if !a.documentActiveByCheapSignal(uri) {
+			return nil
+		}
 		return []Diagnostic{{
 			URI:      uri,
 			Source:   "analyzer",
@@ -32,13 +35,14 @@ func (a *Analyzer) Diagnostics(uri string) []Diagnostic {
 }
 
 func (a *Analyzer) documentActive(uri string, parsed YAMLDocument) bool {
-	if a.hasPackageContext(uri) {
-		return true
-	}
-	if isCrossplaneClassifiedFilename(uri) {
+	if a.documentActiveByCheapSignal(uri) {
 		return true
 	}
 	return hasCrossplaneRootSignal(parsed)
+}
+
+func (a *Analyzer) documentActiveByCheapSignal(uri string) bool {
+	return a.hasPackageContext(uri) || isCrossplaneClassifiedFilename(uri)
 }
 
 func (a *Analyzer) hasPackageContext(uri string) bool {

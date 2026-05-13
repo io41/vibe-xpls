@@ -169,6 +169,20 @@ func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	}
 }
 
+func TestHugeNoRootOrdinaryDocumentStaysQuiet(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	a.OpenDocument(uri, "apiVersion: v1\nkind: ConfigMap\n"+strings.Repeat("a", 32))
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("ordinary oversized no-root yaml should stay quiet, got %#v", diagnostics)
+	}
+}
+
 func TestAnalyzerDiagnosticsRespectMaxDiagnosticsPerDoc(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDiagnosticsPerDoc: 1}})
