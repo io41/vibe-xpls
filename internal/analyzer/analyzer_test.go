@@ -155,6 +155,21 @@ func TestNoRootActivationTogglesDiagnostics(t *testing.T) {
 	}
 }
 
+func TestNoRootOrdinaryCustomResourceDefinitionStaysQuiet(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	text := "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec: [unterminated\n"
+	a.OpenDocument(uri, text)
+
+	if diagnostics := a.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("ordinary no-root CRD yaml should stay quiet, got %#v", diagnostics)
+	}
+}
+
 func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
@@ -166,6 +181,21 @@ func TestHugeDocumentDowngradesAnalysis(t *testing.T) {
 	diagnostics := a.Diagnostics(uri)
 	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "size limit") {
 		t.Fatalf("expected size limit diagnostic, got %#v", diagnostics)
+	}
+}
+
+func TestHugeNoRootCrossplaneRootSignalReportsSizeLimit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "no-root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: Limits{MaxDocumentBytes: 16}})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "plain.yaml")
+	a.OpenDocument(uri, "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"+strings.Repeat("a", 64))
+
+	diagnostics := a.Diagnostics(uri)
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "size limit") {
+		t.Fatalf("expected size limit diagnostic for oversized active no-root doc, got %#v", diagnostics)
 	}
 }
 
