@@ -11,12 +11,16 @@
 
 ## Zed Extension
 
-- Extension repository: `<zed-up-xpls-repo>`
-- Extension commit: `ac1d8cb5f6bd6c16f08af1db8fb8c94cc42c0e6d` (`ac1d8cb`)
-- Launch variable: `VIBE_XPLS_BIN=<vibe-xpls-binary>`
-- Launch wiring source evidence: `<zed-up-xpls-repo>/src/lib.rs:108` reads `worktree.shell_env()`, `<zed-up-xpls-repo>/src/lib.rs:110` checks `VIBE_XPLS_BIN`, and `<zed-up-xpls-repo>/src/lib.rs:111` returns a `zed::Command` using that value before the `up xpls serve` fallback.
-- Unit test source evidence: `<zed-up-xpls-repo>/src/lib.rs:228` defines `reads_vibe_xpls_override_from_shell_env`.
-- Focused test evidence: `CARGO_TARGET_DIR=<tmp-dir>/zed-up-xpls-target cargo test reads_vibe_xpls_override_from_shell_env --manifest-path <zed-up-xpls-repo>/Cargo.toml` passed with `1 passed; 0 failed; 10 filtered out`.
+- Extension repository: `<zed-xpls-vibe-repo>`
+- Extension commit: `3138ae6106d567edbf056609a5d3ccb0674d5123` (`3138ae6`)
+- Extension id: `zed-xpls-vibe`
+- Extension name: `Zed xpls Vibe`
+- Launch command: `<vibe-xpls-binary> serve`
+- Launch wiring source evidence: `<zed-xpls-vibe-repo>/src/lib.rs` defines `MILESTONE_XPLS_BIN` as `<vibe-xpls-binary>` and returns a `zed::Command` with `args: ["serve"]`.
+- Agent instruction evidence: `<zed-xpls-vibe-repo>/AGENTS.md` records that validation depends on rebuilding `<vibe-xpls-binary>` from this milestone worktree and installing `zed-xpls-vibe`, not the original `up-xpls` extension.
+- Focused test evidence: `cargo test` in `<zed-xpls-vibe-repo>` passed with `9 passed; 0 failed`.
+- Zed build evidence: `PATH="<rustup-bin-dir>:$PATH" cargo build --target wasm32-wasip2` in `<zed-xpls-vibe-repo>` passed.
+- Installed extension evidence: Zed extension index contains `id = zed-xpls-vibe`, `name = Zed xpls Vibe`, and `repository = https://github.com/io41/zed-xpls-vibe`.
 
 ## Final Automated Verification
 
@@ -44,18 +48,18 @@ kind: Composition
   - Result: PASS. No matches. `rg` exited 1 because no external execution, Docker, cluster, kubeconfig, or network-read patterns were found under `cmd` or `internal`.
 - `<vibe-xpls-binary> --version`
   - Result: PASS. Output was `vibe-xpls v0.0.1`.
-- `git -C <zed-up-xpls-repo> rev-parse HEAD`
-  - Result: PASS. Output was `ac1d8cb5f6bd6c16f08af1db8fb8c94cc42c0e6d`, preserving the Task 13 extension evidence.
-- `rg -n "VIBE_XPLS_BIN|shell_env|zed::Command|reads_vibe_xpls_override_from_shell_env" <zed-up-xpls-repo>/src/lib.rs`
-  - Result: PASS. Current source still shows `worktree.shell_env()` at line 108, `VIBE_XPLS_BIN` lookup at line 110, `zed::Command` construction at line 111, and the focused unit test at line 229.
+- `git -C <zed-xpls-vibe-repo> rev-parse HEAD`
+  - Result: PASS. Output was `3138ae6106d567edbf056609a5d3ccb0674d5123`.
+- `rg -n "zed-xpls-vibe|Zed xpls Vibe|<vibe-xpls-binary>|serve" <zed-xpls-vibe-repo>/extension.toml <zed-xpls-vibe-repo>/src <zed-xpls-vibe-repo>/AGENTS.md`
+  - Result: PASS. Current source and metadata show the `zed-xpls-vibe` extension id, `<vibe-xpls-binary>` binary path, and `serve` argument.
 
 ## Required Checks
 
 The following are manual Zed validation checks. Leave a checkbox unchecked until the check has actually been performed.
 
-- [ ] Zed launches `<vibe-xpls-binary>`.
-- [ ] Missing-binary behavior is understandable when `VIBE_XPLS_BIN` points to `<tmp-dir>/missing-vibe-xpls`.
-- [ ] Root package attaches.
+- [x] Zed launches `<vibe-xpls-binary>`.
+- [ ] Missing-binary behavior is understandable when `<vibe-xpls-binary>` is missing.
+- [x] Root package attaches.
 - [ ] Nested package attaches.
 - [ ] Multi-package workspace attaches without schema cross-contamination.
 - [ ] No-root workspace stays quiet.
@@ -64,7 +68,7 @@ The following are manual Zed validation checks. Leave a checkbox unchecked until
 - [ ] Diagnostics appear.
 - [ ] Diagnostics clear after valid edits.
 - [ ] Diagnostics clear after document close.
-- [ ] Hover works visibly.
+- [x] Hover works visibly.
 - [ ] Completion works visibly.
 
 ## Evidence Notes
@@ -75,9 +79,9 @@ Do not record environment variables, kubeconfig content, registry credentials, t
 
 ### Manual Validation Status
 
-Full manual Zed validation remains human-pending. The automated and log-only checks above do not prove the visual editor behaviors, so the required UI checkboxes remain unchecked.
+Manual Zed validation is partially complete. Launch, root package attachment, and hover were observed. Diagnostics, completion, stale diagnostic clearing, nested package, multi-package, no-root, and file-type mapping checks remain human-pending.
 
-Local observations on 2026-05-13:
+Historical unsuccessful attempts with the original `up-xpls` extension on 2026-05-13:
 
 - `zed --version` returned `Zed 1.1.8 - <zed-app>`.
 - Launch attempt for an ordinary `.yaml` file: `VIBE_XPLS_BIN=<vibe-xpls-binary> zed <vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` exited 0.
@@ -88,5 +92,17 @@ Local observations on 2026-05-13:
 - Zed log evidence after that launch reached the `up-xpls` language server path but stopped before launching because this fixture worktree was not trusted in the local Zed UI:
   - `2026-05-13T06:33:35+02:00 INFO  [project::trusted_worktrees] Worktree "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root" is not trusted`
   - `2026-05-13T06:33:35+02:00 INFO  [project::lsp_store] Waiting for worktree "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root" to be trusted, before starting language server up-xpls`
-- The Zed log did not show `<vibe-xpls-binary>` starting during these attempts. Therefore the `Zed launches <vibe-xpls-binary>` checkbox is not marked complete.
-- No diagnostics, diagnostic clearing, hover, completion, root/nested/multi-package attach, no-root quietness, or `.yaml` file-type mapping behavior was visually observed.
+- The Zed log did not show `<vibe-xpls-binary>` starting during these attempts. At this point, the `Zed launches <vibe-xpls-binary>` checkbox was still incomplete.
+- No diagnostics, diagnostic clearing, hover, completion, root/nested/multi-package attach, no-root quietness, or `.yaml` file-type mapping behavior was visually observed during these original-extension attempts.
+
+Updated local observations after replacing the validation extension on 2026-05-13:
+
+- The original `up-xpls` extension was uninstalled from Zed.
+- A forked dev extension from `<zed-xpls-vibe-repo>` was installed and shown in Zed as `Zed xpls Vibe` v0.0.1.
+- Zed extension build logs showed `<zed-xpls-vibe-repo>` compiling and writing `extension.wasm`.
+- Zed extension index evidence contains `zed-xpls-vibe` and no longer relies on `VIBE_XPLS_BIN` for this validation path.
+- Zed log evidence includes:
+  - `2026-05-13T09:39:18+02:00 INFO  [project::lsp_store] Waiting for worktree "<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root" to be trusted, before starting language server zed-xpls-vibe`
+  - `2026-05-13T09:39:29+02:00 INFO  [lsp] starting language server process. binary path: "<vibe-xpls-binary>", working directory: "<user-home>/Code/ista-se/cas/devops/config/cluster-as-a-service/configurations/ista-azure-service-bus", args: ["serve"]`
+- Manual observation from Tim Kersten: after installing the new extension, it was running, and hovering over symbols in `<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` showed useful descriptions.
+- The hover observation is fixture-backed evidence for root package attachment and visible hover behavior in the real Zed path.
