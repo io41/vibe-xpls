@@ -3,9 +3,12 @@ package app
 import (
 	"fmt"
 	"io"
+	"runtime/debug"
 )
 
-const Version = "v0.0.1"
+const defaultVersion = "v0.0.1"
+
+var version string
 
 type ServerRunner func(stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 type DebugRunner func(args []string, stdout io.Writer) int
@@ -27,7 +30,7 @@ func RunWithIO(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 
 	switch args[0] {
 	case "--version", "version":
-		fmt.Fprintf(stdout, "vibe-xpls %s\n", Version)
+		fmt.Fprintf(stdout, "vibe-xpls %s\n", Version())
 		return 0
 	case "serve":
 		if runners.Serve == nil {
@@ -45,4 +48,16 @@ func RunWithIO(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		return 2
 	}
+}
+
+func Version() string {
+	if version != "" {
+		return version
+	}
+
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok || buildInfo.Main.Version == "" || buildInfo.Main.Version == "(devel)" {
+		return defaultVersion
+	}
+	return buildInfo.Main.Version
 }

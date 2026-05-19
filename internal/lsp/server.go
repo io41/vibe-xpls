@@ -211,7 +211,7 @@ func (s *Server) handleInitialize(msg Message) error {
 			CompletionProvider: completionOptions{TriggerCharacters: []string{"\n"}},
 			PositionEncoding:   string(s.positionEncoding),
 		},
-		ServerInfo: serverInfo{Name: "vibe-xpls", Version: app.Version},
+		ServerInfo: serverInfo{Name: "vibe-xpls", Version: app.Version()},
 	}, nil)
 }
 

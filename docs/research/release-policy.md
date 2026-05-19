@@ -23,3 +23,12 @@ Release automation must reject tags that do not match:
 ```
 
 The only exception is a maintainer-approved exit-from-v0 decision.
+
+## Automation
+
+Release Please owns `CHANGELOG.md` and the release pull request on `main`.
+Release Please is configured to keep pre-1.0 changes on the `v0.X.X` line.
+
+GoReleaser publishes binaries when Release Please creates a valid `v0.X.X`
+release from a release pull request merge. The workflow runs
+`spikes/release/check-version.sh` before publishing.
