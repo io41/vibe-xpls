@@ -36,7 +36,6 @@
   "packages": {
     ".": {
       "package-name": "vibe-xpls",
-      "release-as": "0.0.1",
       "changelog-path": "CHANGELOG.md"
     }
   }
