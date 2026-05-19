@@ -28,6 +28,8 @@ The only exception is a maintainer-approved exit-from-v0 decision.
 
 Release Please owns `CHANGELOG.md` and the release pull request on `main`.
 Release Please is configured to keep pre-1.0 changes on the `v0.X.X` line.
+The first release is explicitly pinned to `0.0.1` in Release Please config;
+remove that bootstrap pin after the first release pull request is merged.
 
 GoReleaser publishes binaries when Release Please creates a valid `v0.X.X`
 release from a release pull request merge. The workflow runs
