@@ -3,16 +3,16 @@
 **Status:** Approved design
 **Date:** 2026-05-12
 **Repository:** `<vibe-xpls-repo>`
-**Related repository:** `<zed-up-xpls-repo>`
+**Related repository:** `<zed-xpls-vibe-repo>`
 **Research input:** `docs/research/crossplane-lsp-research-synthesis.md`
 
 ## Goal
 
 Build the first runnable `vibe-xpls` product milestone: a Zed-first Crossplane authoring loop backed by a shared analyzer and a thin LSP adapter.
 
-The milestone proves that a local `vibe-xpls` binary can be launched from the existing Zed extension path and can provide useful Crossplane editor intelligence in realistic repository shapes. It does not start by defining a public agent API, executing Crossplane commands, or building a render/validate system.
+The milestone proves that a local `vibe-xpls` binary can be launched from the local `zed-xpls-vibe` validation extension and can provide useful Crossplane editor intelligence in realistic repository shapes. It does not start by defining a public agent API, executing Crossplane commands, or building a render/validate system.
 
-Runnable means a `vibe-xpls` binary that Zed can launch through `VIBE_XPLS_BIN` and that satisfies the acceptance criteria in this document. If this milestone produces a public release, it ships as `v0.0.1` and remains on the `v0.X.X` line per `docs/research/decisions/gate-06-release-discipline.md`.
+Runnable means a `vibe-xpls` binary that Zed can launch as `<vibe-xpls-binary> serve` through `zed-xpls-vibe` and that satisfies the acceptance criteria in this document. If this milestone produces a public release, it ships as `v0.0.1` and remains on the `v0.X.X` line per `docs/research/decisions/gate-06-release-discipline.md`.
 
 ## Product Boundary
 
@@ -31,7 +31,7 @@ Required product shape:
 - A shared analyzer core owns Crossplane semantics.
 - A thin LSP adapter exposes diagnostics, hover, and completion.
 - A debug-only CLI may inspect analyzer behavior for fixtures, CI, and local debugging.
-- The existing `VIBE_XPLS_BIN` path in `<zed-up-xpls-repo>` is the first Zed launch path.
+- The local `zed-xpls-vibe` dev extension launches `<vibe-xpls-binary> serve` as the first Zed launch path.
 
 Out of scope for this milestone:
 
@@ -82,7 +82,7 @@ Completion text edits are a correctness requirement for this milestone, not a sn
 
 The debug CLI is another adapter over the same analyzer. Its output may be JSON so tests can assert on it, but it is internal and non-contractual. It should help inspect package detection, diagnostics, schema lookup, hover, and completion against fixture paths without launching Zed.
 
-The Zed extension remains thin. File classification, launcher configuration, and worktree integration stay in `zed-up-xpls`; Crossplane semantics live in `vibe-xpls`.
+The Zed extension remains thin. File classification and launcher configuration stay in `zed-xpls-vibe`; package/workspace detection and Crossplane semantics live in `vibe-xpls`.
 
 ## Data Flow
 
@@ -93,7 +93,7 @@ On startup, the LSP server initializes an analyzer workspace for the Zed worktre
 - Multi-package workspace.
 - No package root.
 
-Package detection aligns with the current `zed-up-xpls` launch markers: root `crossplane.yaml` or root `upbound.yaml` start the Zed language server path. After launch, the analyzer scans the workspace for additional `crossplane.yaml` and `upbound.yaml` package markers. A document belongs to the nearest containing package root. Root and nested package facts are isolated by package scope; multi-package workspaces index all package roots but do not share workspace schema facts across package boundaries unless a later design introduces explicit shared schema directories.
+Zed starts the language server for files classified as `Crossplane YAML`. The validation extension does not require a root `crossplane.yaml` or root `upbound.yaml`; after launch, the analyzer scans the workspace for `crossplane.yaml` and `upbound.yaml` package markers. A document belongs to the nearest containing package root. Root and nested package facts are isolated by package scope; multi-package workspaces index all package roots but do not share workspace schema facts across package boundaries unless a later design introduces explicit shared schema directories.
 
 For each opened document, the LSP server sends text changes into the analyzer with a monotonic document generation. The analyzer keeps:
 
@@ -178,7 +178,7 @@ These values are defaults for the first milestone and can be tuned by later evid
 
 Path handling must be explicit from the start. Workspace and package paths are resolved under the workspace root. In this milestone, traversal and symlink-escape rejection applies to workspace scanning, package-marker discovery, schema-file reads, and any package-relative file reads. Filesystem template expansion is out of scope. Diagnostics and debug output must not leak raw environment variables, credentials, kubeconfig data, registry credentials, or secret-bearing file content.
 
-`VIBE_XPLS_BIN` trust UX is deferred because this milestone uses a developer-controlled local binary. Manual validation must record the canonical binary path used, but end-user executable approval and content-identity trust gates are a later design topic.
+Executable trust UX is deferred because this milestone uses a developer-controlled local binary. Manual validation must record the canonical `<vibe-xpls-binary>` binary path used, but end-user executable approval and content-identity trust gates are a later design topic.
 
 ## Testing And Acceptance
 
@@ -222,11 +222,11 @@ Protocol tests cover:
 
 ### Manual Zed Validation
 
-Manual Zed validation is required before the milestone counts as runnable. The validation uses `<zed-up-xpls-repo>` and `VIBE_XPLS_BIN`.
+Manual Zed validation is required before the milestone counts as runnable. The validation uses the local `<zed-xpls-vibe-repo>` dev extension, which launches `<vibe-xpls-binary> serve`.
 
 Required checks:
 
-- The local binary is produced from the current worktree for validation, and the canonical path assigned to `VIBE_XPLS_BIN` is recorded with the validation evidence.
+- The local binary is produced from the current worktree for validation, and the canonical `<vibe-xpls-binary>` path is recorded with the validation evidence.
 - Zed launches the local `vibe-xpls` binary.
 - Missing-binary behavior is understandable.
 - A root package attaches.
@@ -271,6 +271,6 @@ The first runnable milestone is complete only when all of these are true:
 
 - Analyzer fixture tests pass for package detection, schema lookup, schema precedence, diagnostics, hover, completion, mixed YAML/template basics, no-root activation, bounded-resource behavior, path safety, and stale generation behavior.
 - LSP protocol tests pass for document sync, diagnostics, hover, completion, completion text edits, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
-- Manual Zed validation passes through `VIBE_XPLS_BIN` for root, nested, multi-package, and no-root workspaces.
+- Manual Zed validation passes through `zed-xpls-vibe` for root, nested, multi-package, and no-root workspaces.
 - No external execution, Docker, downloads, cluster reads, kubeconfig reads, or workspace writes occur during normal editor behavior.
 - The debug CLI remains internal and non-contractual.

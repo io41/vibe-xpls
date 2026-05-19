@@ -12,13 +12,13 @@
 ## Zed Extension
 
 - Extension repository: `<zed-xpls-vibe-repo>`
-- Extension commit: `3138ae6106d567edbf056609a5d3ccb0674d5123` (`3138ae6`)
+- Extension base commit: `f2a8f90` plus local validation changes on 2026-05-18 that remove the root-marker pre-launch gate.
 - Extension id: `zed-xpls-vibe`
 - Extension name: `Zed xpls Vibe`
 - Launch command: `<vibe-xpls-binary> serve`
-- Launch wiring source evidence: `<zed-xpls-vibe-repo>/src/lib.rs` defines `MILESTONE_XPLS_BIN` as `<vibe-xpls-binary>` and returns a `zed::Command` with `args: ["serve"]`.
+- Launch wiring source evidence: `<zed-xpls-vibe-repo>/src/lib.rs` defines `MILESTONE_XPLS_BIN` as `<vibe-xpls-binary>` and returns a `zed::Command` with `args: ["serve"]` without requiring a root `crossplane.yaml` or root `upbound.yaml` before launch.
 - Agent instruction evidence: `<zed-xpls-vibe-repo>/AGENTS.md` records that validation depends on rebuilding `<vibe-xpls-binary>` from this milestone worktree and installing `zed-xpls-vibe`, not the original `up-xpls` extension.
-- Focused test evidence: `cargo test` in `<zed-xpls-vibe-repo>` passed with `9 passed; 0 failed`.
+- Focused test evidence: `cargo test` in `<zed-xpls-vibe-repo>` passed with `3 passed; 0 failed` after the 2026-05-18 validation-fork change.
 - Zed build evidence: `PATH="<rustup-bin-dir>:$PATH" cargo build --target wasm32-wasip2` in `<zed-xpls-vibe-repo>` passed.
 - Installed extension evidence: Zed extension index contains `id = zed-xpls-vibe`, `name = Zed xpls Vibe`, and `repository = https://github.com/io41/zed-xpls-vibe`.
 
@@ -61,7 +61,7 @@ The following are manual Zed validation checks. Leave a checkbox unchecked until
 - [x] Missing-binary behavior is understandable when `<vibe-xpls-binary>` is missing.
 - [x] Root package attaches.
 - [x] Nested package attaches.
-- [ ] Multi-package workspace attaches without schema cross-contamination.
+- [x] Multi-package workspace attaches without schema cross-contamination.
 - [x] No-root workspace stays quiet.
 - [x] `.yaml` attach behavior was checked without user `file_types` mapping.
 - [x] `.yaml` attach behavior was checked with the documented Crossplane `file_types` mapping.
@@ -69,7 +69,7 @@ The following are manual Zed validation checks. Leave a checkbox unchecked until
 - [x] Diagnostics clear after valid edits.
 - [x] Diagnostics clear after document close.
 - [x] Hover works visibly.
-- [ ] Completion works visibly.
+- [x] Completion works visibly.
 
 ## Evidence Notes
 
@@ -126,3 +126,28 @@ Additional manual observations from Tim Kersten on 2026-05-13:
 - After restart/reload, `<vibe-xpls-worktree>/internal/analyzer/testdata/workspaces/root/api/composition.yaml` opened as `Crossplane YAML` without manual language switching, and the language server started.
 - Hover and diagnostics continued to work after the corrected mapping.
 - Zed showed some completion behavior, but completion was buggy: it did not trigger in the correct places and/or triggered in incorrect places. Completion remains unchecked until the trigger/context behavior is corrected and revalidated.
+
+Additional extension update on 2026-05-18:
+
+- Opening the `multi` fixture root initially failed before server launch because `zed-xpls-vibe` required root-level `crossplane.yaml` or `upbound.yaml`; the fixture has package markers under `packages/a` and `packages/b`.
+- The validation fork was changed so the extension launches for `Crossplane YAML` files and delegates package/no-root detection to the `vibe-xpls` analyzer.
+- `upbound.yaml`, `upbound.yml`, `composition.yaml`, `composition.yml`, `definition.yaml`, and `definition.yml` were added to the extension's built-in `Crossplane YAML` path suffixes so common Crossplane filenames do not require user `file_types` settings.
+- Local Zed settings were also updated to include `**/upbound.yaml` and `**/upbound.yml` in the `Crossplane YAML` `file_types` mapping.
+- Crossplane YAML indentation was set to two-space, space-only indentation in the validation extension language config and in local Zed settings after Zed inserted four spaces for Tab/Enter in Crossplane YAML buffers.
+- Verification after the extension change:
+  - `cargo fmt --check` passed.
+  - `cargo test` passed with `3 passed; 0 failed`.
+  - `PATH="<rustup-bin-dir>:$PATH" cargo build --target wasm32-wasip2` passed.
+- Tim Kersten reported the first current manual retest item verified. Completion remains unchecked because completion is visible, but acceptance/indentation needs another Zed reload retest after the two-space indentation fix.
+- Focused completion edit checks passed for the exact root `spec:` and nested `kind:` edit shapes: `go test ./internal/analyzer ./internal/lsp -run 'Completion.*Edit' -count=1 -v`.
+
+Additional completion update on 2026-05-19:
+
+- Tim Kersten confirmed package-manifest completion works for `spec.dependsOn.provider`, and Composition completion works for `spec.compositeTypeRef.kind`.
+- Root `spec:` completion indentation was still wrong for package manifests when Zed auto-indented the partial `s` line under `metadata`.
+- The analyzer was changed to try the current completion parent first, then ancestor parents, then root. Completion text edits now use the schema path depth for indentation, so a root `spec:` suggestion replaces the whole auto-indented line with column-0 `spec:`.
+- Verification after the analyzer change:
+  - `go test ./internal/analyzer ./internal/lsp -run 'CorrectsIndentedRootKey|RootKeyEdit|NestedKeyEdit|PlainTextEdits' -count=1 -v` passed.
+  - `go test ./...` passed.
+- Tim Kersten retested with the rebuilt `<vibe-xpls-binary>` binary after fully restarting Zed. Restarting only the language server was not enough for Zed to pick up the corrected behavior.
+- Completion now works visibly for package-manifest root `spec:`, `spec.dependsOn.provider`, and Composition `spec.compositeTypeRef.kind`.

@@ -2,14 +2,17 @@
 
 Treat the Zed replacement path as viable for code-path proof, but keep manual Zed UI validation as a later gate. The Zed extension should remain a thin launcher and syntax/highlighting integration layer; `vibe-xpls` should own Crossplane semantics in the language server and shared analyzer. Ordinary YAML should continue to use Zed's native YAML support.
 
+2026-05-18 update: first-runnable validation now uses the local `<zed-xpls-vibe-repo>` fork. That fork launches `<vibe-xpls-binary> serve` directly for files classified as `Crossplane YAML` and leaves package-root, multi-package, and no-root behavior to the `vibe-xpls` analyzer.
+
 ## Evidence.
 
-- `docs/research/spikes/02-zed-replacement.md` records that `<zed-up-xpls-repo>` is on branch `vibe-xpls-spike` at commit `ac1d8cb feat: allow vibe xpls binary override`.
-- The spike added `VIBE_XPLS_BIN` support so the extension can launch a local `vibe-xpls` binary when set, while preserving the existing `up xpls serve --verbose` fallback.
+- Historical spike evidence: `docs/research/spikes/02-zed-replacement.md` records that `<zed-up-xpls-repo>` was on branch `vibe-xpls-spike` at commit `ac1d8cb feat: allow vibe xpls binary override`.
+- That historical spike added `VIBE_XPLS_BIN` support so the original extension could launch a local `vibe-xpls` binary when set, while preserving the existing `up xpls serve --verbose` fallback.
+- The current validation fork `<zed-xpls-vibe-repo>` supersedes the temporary `VIBE_XPLS_BIN` path for this milestone and hardcodes `<vibe-xpls-binary> serve`.
 - The Zed extension build and tests passed in the external repo: `cargo fmt --check`, `cargo test`, and `cargo build --target wasm32-wasip2`.
 - The spike built a local LSP harness binary and proved only the stdio code path. It explicitly did not run manual Zed UI validation for startup logs, diagnostics, hover, completion, missing-binary behavior, or worktree shell environment propagation.
 - `docs/research/lanes/02-human-editor-ux.md` says the first editor goal should be protocol-first LSP, proven in Zed, with diagnostics, completion, hover, and navigation as the core loop.
-- `docs/research/lanes/09-existing-tooling.md` says the local Zed extension already owns Crossplane YAML language selection, root detection, and mixed template highlighting, while delegating semantics to the language server.
+- `docs/research/lanes/09-existing-tooling.md` says the local Zed extension already owns Crossplane YAML language selection and mixed template highlighting, while delegating semantics to the language server. In the current validation fork, package detection is also delegated to the language server.
 - `docs/research/lanes/02-human-editor-ux.md` records attach constraints: broad `.yaml` matching may require user `file_types`, and package-root detection must be tested for root manifests, nested packages, multi-package workspaces, and repositories without root manifests.
 
 ## Alternatives Considered.
@@ -21,16 +24,16 @@ Treat the Zed replacement path as viable for code-path proof, but keep manual Ze
 
 ## Risks.
 
-- Zed may not propagate `VIBE_XPLS_BIN` through worktree shell environment in the manual UI path.
 - Diagnostics, hover, and completion may behave differently through Zed than through the local stdio harness.
 - Missing-binary handling and stale diagnostic clearing remain unvalidated user-visible paths.
-- The extension may never attach in real repositories if package-root detection misses nested or multi-package layouts, or if users have not configured `file_types` for Crossplane YAML files.
-- A future approval or trust model for `VIBE_XPLS_BIN` could be unsafe if it trusts only the environment variable value instead of canonical executable path, symlink target, and content identity.
+- The extension may not attach in real repositories if users have not configured `file_types` for Crossplane YAML files.
+- The analyzer may still mishandle root, nested, multi-package, or no-root repository shapes after Zed launches it.
+- A future approval or trust model for configurable executables could be unsafe if it trusts only a command string instead of canonical executable path, symlink target, and content identity.
 - Mixed YAML/template highlighting is known to be best effort and should not be coupled to semantic correctness.
 
 ## What Would Change This Decision.
 
-- Manual Zed validation fails to launch `vibe-xpls` through `VIBE_XPLS_BIN` or cannot surface diagnostics, hover, and completion.
+- Manual Zed validation fails to launch `<vibe-xpls-binary> serve` through `zed-xpls-vibe` or cannot surface diagnostics, hover, and completion.
 - Manual Zed validation shows the server does not attach reliably for root packages, nested packages, multi-package workspaces, or documented `file_types` configurations.
 - Zed extension APIs change enough that the current command-launch model is no longer the right integration path.
 - User research shows another editor or CLI workflow is a stronger first integration gate than Zed.

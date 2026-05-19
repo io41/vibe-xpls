@@ -4,7 +4,7 @@
 
 The research program supports a clear next step: proceed to the real Crossplane LSP brainstorming and product-design phase, but do not start production implementation yet.
 
-The recommended shape is `vibe-xpls` as a Go-native Crossplane semantic analyzer with thin adapters for LSP and a structured JSON CLI. Zed is the first editor proof target through the existing `<zed-up-xpls-repo>` extension, but not the product boundary. AI agents are first-class users through analyzer-backed operations, not cursor-oriented LSP scraping; first scope covers file-backed terminal and CI agents, while editor-embedded agents still need an unsaved-overlay model. Kubernetes and YAML tooling should be reused as schema, validation, and UX precedent, while Crossplane-specific semantics stay in the analyzer.
+The recommended shape is `vibe-xpls` as a Go-native Crossplane semantic analyzer with thin adapters for LSP and a structured JSON CLI. Zed is the first editor proof target through a thin local extension path; current first-runnable validation uses `<zed-xpls-vibe-repo>`. AI agents are first-class users through analyzer-backed operations, not cursor-oriented LSP scraping; first scope covers file-backed terminal and CI agents, while editor-embedded agents still need an unsaved-overlay model. Kubernetes and YAML tooling should be reused as schema, validation, and UX precedent, while Crossplane-specific semantics stay in the analyzer.
 
 The strongest remaining blockers before production implementation are manual Zed UI validation, production parser selection, real workspace indexing performance, concrete trust UX, and broader user validation.
 
@@ -30,7 +30,7 @@ The first runnable product phase should produce a small but real command and LSP
 - Completion and hover from local XRD/CRD OpenAPI schemas and Crossplane helper catalogs.
 - Structured JSON CLI commands for disk-backed terminal/CI agents: `list-compositions`, `find-schema`, `validate-workspace`, and fixture-backed or trust-gated `render`.
 - An explicit design choice for editor-agent unsaved overlays: LSP document state, JSON-RPC session state, or CLI overlay inputs.
-- Zed launch through `VIBE_XPLS_BIN` with manual validation of startup, file classification, root detection, diagnostics, hover, completion, and stale diagnostic clearing.
+- Zed launch through `zed-xpls-vibe` using `<vibe-xpls-binary> serve`, with manual validation of startup, file classification, root/nested/multi-package/no-root analyzer behavior, diagnostics, hover, completion, and stale diagnostic clearing.
 - A Kubernetes/OpenAPI embeddable-library spike before committing to the production schema-index implementation.
 - Release guard and changelog dry-run starting at `v0.0.1`.
 
@@ -63,7 +63,7 @@ The evidence table names decisions, not production readiness. `docs/research/dec
 
 The first editor loop should prioritize diagnostics, completion, hover, and navigation. Render previews, virtual rendered documents, and code actions are valuable but should wait until source mapping and schema indexing are reliable.
 
-Zed is the first real editor acceptance gate. The extension should remain thin: file classification, highlighting, launcher configuration, and worktree detection belong there; Crossplane semantics belong in the server and analyzer. The Zed gate must test attach coverage, not only process launch: root packages, nested packages, multi-package workspaces, repositories without root manifests, and behavior before and after documented `file_types` mappings.
+Zed is the first real editor acceptance gate. The extension should remain thin: file classification, highlighting, and launcher configuration belong there; package/workspace detection and Crossplane semantics belong in the server and analyzer. The Zed gate must test attach coverage, not only process launch: root packages, nested packages, multi-package workspaces, repositories without root manifests, and behavior before and after documented `file_types` mappings.
 
 ## Agent Workflow Findings
 
@@ -79,9 +79,9 @@ The first agent surface should be a read-only JSON CLI with a stable envelope fo
 
 ## Zed Replacement Findings
 
-The local Zed extension replacement path is viable as a code-path proof. The external repo `<zed-up-xpls-repo>` has branch `vibe-xpls-spike` at commit `ac1d8cb feat: allow vibe xpls binary override`, adding `VIBE_XPLS_BIN` while preserving the Upbound fallback.
+The local Zed extension replacement path is viable as a code-path proof. The current validation fork is `<zed-xpls-vibe-repo>`; it uses extension id `zed-xpls-vibe`, launches `<vibe-xpls-binary> serve`, and leaves package/no-root detection to the `vibe-xpls` analyzer.
 
-Manual UI validation is still required before product implementation can claim Zed readiness. Required checks include launcher environment propagation, missing-binary behavior, file classification, root and nested package detection, multi-package workspaces, documented `file_types` behavior, diagnostics, hover, completion, and stale diagnostic clearing. Any trust approval for `VIBE_XPLS_BIN` must be tied to canonical path and executable identity rather than only an environment variable value.
+Manual UI validation is still required before product implementation can claim Zed readiness. Required checks include launcher behavior, missing-binary behavior, file classification, root and nested package detection, multi-package workspaces, documented `file_types` behavior, diagnostics, hover, completion, and stale diagnostic clearing. Any future executable trust approval must be tied to canonical path and executable identity rather than only a configurable command string.
 
 ## Kubernetes Reuse Findings
 
@@ -137,7 +137,7 @@ Diagnostics should degrade when evidence is unavailable instead of silently cros
 ## Open Risks
 
 - Manual Zed UI behavior may differ from subprocess harness behavior.
-- Zed may not attach in common repository shapes until root detection, nested packages, multi-package workspaces, and `file_types` expectations are validated.
+- Zed may still reveal attach or analyzer-context issues in common repository shapes until root detection, nested packages, multi-package workspaces, no-root workspaces, and `file_types` expectations are validated.
 - Production parser selection may change source-map quality, comment preservation, duplicate-key handling, and LSP position conversion.
 - Large provider CRD sets may expose indexing latency, memory, or cancellation problems.
 - Local-first schema lookup may be weak when repositories do not check in provider CRDs or resolved package metadata.
@@ -155,7 +155,7 @@ Use this research as the starting point for the real `vibe-xpls` brainstorming s
 
 - Define the first runnable product phase around the analyzer plus LSP and JSON CLI adapters.
 - Decide the production parser candidate and required source-map tests.
-- Define the minimum Zed manual validation script for `VIBE_XPLS_BIN`, including attach coverage for root manifests, nested and multi-package repos, no-root-manifest repos, and `file_types` mappings.
+- Define the minimum Zed manual validation script for `zed-xpls-vibe`, including attach coverage for root manifests, nested and multi-package repos, no-root-manifest repos, and `file_types` mappings.
 - Specify schema source precedence, conflict reporting, cache policy, and the embeddable Kubernetes/OpenAPI library comparison.
 - Define trust gates and user-visible status for render, validate, downloads, cluster discovery, kubeconfig `exec` auth, and executable/image identity.
 - Preserve proof levels in the design document: label fixture-backed spikes, code-path proofs, manual editor evidence, real-workspace evidence, and production-ready conclusions separately.

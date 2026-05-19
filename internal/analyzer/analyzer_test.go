@@ -185,6 +185,32 @@ func TestAnalyzerCompletionAtOffsetIncludesRootKeyEdit(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetCorrectsIndentedRootKeyEdit(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "completion-package-root-edit.yaml")
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\n  s"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "spec")
+	if !ok {
+		t.Fatalf("completion missing spec: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("spec completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "spec:" {
+		t.Fatalf("new text = %q, want spec:", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: strings.LastIndex(text, "\n") + 1, End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
 func TestAnalyzerCompletionAtOffsetIncludesNestedKeyEdit(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

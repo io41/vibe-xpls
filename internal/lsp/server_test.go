@@ -246,6 +246,36 @@ func TestCompletionItemsIncludePlainTextEdits(t *testing.T) {
 	}
 }
 
+func TestCompletionTextEditCorrectsIndentedRootKey(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "completion-package-root-edit.yaml"))
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\n  s"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "spec")
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "spec:" {
+		t.Fatalf("newText = %#v, want spec:", edit["newText"])
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(4) || start["character"] != float64(0) || end["line"] != float64(4) || end["character"] != float64(3) {
+		t.Fatalf("textEdit range = %#v, want line 4 char 0..3", rng)
+	}
+}
+
 func TestCompletionTextEditPreservesZeroWidthInsertionRange(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "completion-blank-line-edit.yaml"))

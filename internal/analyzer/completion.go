@@ -11,6 +11,7 @@ type Completion struct {
 
 type CompletionItem struct {
 	Label         string
+	Path          string
 	Documentation string
 	TextEdit      *CompletionTextEdit
 }
@@ -46,14 +47,20 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if !apiOK || !kindOK {
 		return Completion{}
 	}
-	if context.parentPath != "" && !parsed.IsStablePath(context.parentPath) {
-		return Completion{}
+	completion := Completion{}
+	for _, parentPath := range completionParentPaths(context.parentPath) {
+		if parentPath != "" && !parsed.IsStablePath(parentPath) {
+			continue
+		}
+		completion = filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, parentPath), context.prefix)
+		if len(completion.Items) != 0 {
+			break
+		}
 	}
-	completion := filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, context.parentPath), context.prefix)
 	for i := range completion.Items {
 		completion.Items[i].TextEdit = &CompletionTextEdit{
 			Replace: context.replace,
-			NewText: context.indent + completion.Items[i].Label + ":",
+			NewText: completionItemIndent(completion.Items[i]) + completion.Items[i].Label + ":",
 		}
 	}
 	return completion
@@ -158,9 +165,11 @@ func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath str
 			continue
 		}
 		label := rest
+		path := prefix + label
 		documentation := field.Description
 		if split := strings.IndexAny(rest, ".["); split >= 0 {
 			label = rest[:split]
+			path = prefix + label
 			documentation = ""
 		}
 		if label == "" {
@@ -170,9 +179,29 @@ func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath str
 			continue
 		}
 		seen[label] = struct{}{}
-		items = append(items, CompletionItem{Label: label, Documentation: documentation})
+		items = append(items, CompletionItem{Label: label, Path: path, Documentation: documentation})
 	}
 	return Completion{Items: items}
+}
+
+func completionParentPaths(parentPath string) []string {
+	paths := []string{parentPath}
+	for parentPath != "" {
+		if split := strings.LastIndex(parentPath, "."); split >= 0 {
+			parentPath = parentPath[:split]
+		} else {
+			parentPath = ""
+		}
+		paths = append(paths, parentPath)
+	}
+	return paths
+}
+
+func completionItemIndent(item CompletionItem) string {
+	if item.Path == "" {
+		return ""
+	}
+	return strings.Repeat("  ", strings.Count(item.Path, "."))
 }
 
 func filterCompletion(completion Completion, prefix string) Completion {

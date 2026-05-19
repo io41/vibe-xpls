@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first runnable `vibe-xpls` binary that Zed can launch through `VIBE_XPLS_BIN` and use for Crossplane diagnostics, hover, completion, and stale diagnostic clearing.
+**Goal:** Build the first runnable `vibe-xpls` binary that Zed can launch through `zed-xpls-vibe` as `<vibe-xpls-binary> serve` and use for Crossplane diagnostics, hover, completion, and stale diagnostic clearing.
 
 **Architecture:** Create a Go product module with a shared analyzer core, a thin LSP adapter, and an internal debug CLI. The analyzer owns workspace/package detection, path safety, document generations, mixed YAML/template parsing, schema indexing, diagnostics, hover, and completion. The LSP adapter owns JSON-RPC framing, LSP lifecycle, document sync, position encoding conversion, and formatting analyzer results.
 
-**Tech Stack:** Go 1.24+ module, stdlib JSON-RPC framing over stdio, `github.com/goccy/go-yaml` behind an internal parser facade, `go.yaml.in/yaml/v4` as parser fallback/reference, existing `zed-up-xpls` `VIBE_XPLS_BIN` launch path, `go test ./...` for verification.
+**Tech Stack:** Go 1.24+ module, stdlib JSON-RPC framing over stdio, `github.com/goccy/go-yaml` behind an internal parser facade, `go.yaml.in/yaml/v4` as parser fallback/reference, local `zed-xpls-vibe` dev-extension launch path, `go test ./...` for verification.
 
 ---
 
@@ -34,7 +34,7 @@ Required corrections before execution is considered complete:
 - **YAML error spans:** parser errors must produce source spans from parser token positions when available. They must not default to `(0,0)` once a parser position exists.
 - **Limits defaulting:** zero fields in `Limits` must be defaulted field-by-field rather than replacing the entire caller-provided struct.
 - **Symlinked workspace paths:** path safety must resolve the longest existing prefix of a path before comparing against the workspace realpath so logical paths under symlinked parents are not falsely rejected.
-- **Zed extension verification:** the Zed validation task must record the `zed-up-xpls` commit and verify that `VIBE_XPLS_BIN` is still wired into the launch path before manual validation starts.
+- **Zed extension verification:** the Zed validation task must record the `zed-xpls-vibe` commit or local diff and verify that `<vibe-xpls-binary> serve` is still wired into the launch path before manual validation starts.
 - **Pinned dependencies:** use explicit parser dependency versions recorded in the parser decision and commit them through `go.mod`/`go.sum`.
 
 ## File Structure
@@ -2996,13 +2996,13 @@ Create `docs/research/validations/2026-05-12-zed-first-runnable.md`:
 
 ## Zed Extension
 
-- Extension repository: `<zed-up-xpls-repo>`
-- Launch variable: `VIBE_XPLS_BIN=<vibe-xpls-binary>`
+- Extension repository: `<zed-xpls-vibe-repo>`
+- Launch command: `<vibe-xpls-binary> serve`
 
 ## Required Checks
 
 - [ ] Zed launches `<vibe-xpls-binary>`.
-- [ ] Missing-binary behavior is understandable when `VIBE_XPLS_BIN` points to `<tmp-dir>/missing-vibe-xpls`.
+- [ ] Missing-binary behavior is understandable when `<vibe-xpls-binary>` is missing.
 - [ ] Root package attaches.
 - [ ] Nested package attaches.
 - [ ] Multi-package workspace attaches without schema cross-contamination.
