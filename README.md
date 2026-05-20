@@ -1,13 +1,13 @@
 # vibe-xpls
 
-`vibe-xpls` is an experimental Crossplane language server. It currently focuses on local Crossplane package detection, YAML-aware diagnostics, hover, and completion for the first Zed validation path.
+`vibe-xpls` is an experimental Crossplane language server. It currently focuses on local Crossplane package detection, YAML-aware diagnostics, hover, and completion for Crossplane package authoring.
 
 ## Install
 
 Install the latest released version with Go:
 
 ```sh
-go install github.com/io41/vibe-xpls/cmd/vibe-xpls@v0.0.1
+go install github.com/io41/vibe-xpls/cmd/vibe-xpls@latest
 ```
 
 Run it as an LSP server:
@@ -22,7 +22,9 @@ Check the installed version:
 vibe-xpls --version
 ```
 
-The development Zed extension currently launches a fixed local binary path during validation. Until that extension grows installer/configuration support, rebuild and copy the binary to the path expected by the extension when doing local Zed validation.
+For Zed users, the `crossplane-yaml` extension starts `vibe-xpls serve` and manages the pinned `vibe-xpls` installation by default.
+
+For local `vibe-xpls` development, point Zed at a local build with `lsp.crossplane-yaml.binary.path` or place a compatible `vibe-xpls` binary on `PATH`.
 
 ## Development
 
