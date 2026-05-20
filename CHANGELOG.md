@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.0.3](https://github.com/io41/vibe-xpls/compare/v0.0.2...v0.0.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* add completion presentation metadata ([6e1bacb](https://github.com/io41/vibe-xpls/commit/6e1bacbff428247006856d889928004219e4332e))
+* omit generic completion detail ([db31793](https://github.com/io41/vibe-xpls/commit/db3179309130d6f2cf63adfec9867a2848f39b15))
+* suppress existing fallback completions ([c08614a](https://github.com/io41/vibe-xpls/commit/c08614a2fcdaf4f38b53dc3ddf07650048603ec2))
+
+
+### Documentation
+
+* design completion presentation slice ([12c355d](https://github.com/io41/vibe-xpls/commit/12c355d6e0f7f8cc50ddcfbd6b56196772fa18dd))
+* design completion presentation slice ([74b43be](https://github.com/io41/vibe-xpls/commit/74b43be68173a2c0976da4c0f689ea85c8abd8db))
+* investigate completion fallback bug ([c7109d0](https://github.com/io41/vibe-xpls/commit/c7109d08704391cf608afbe35a79ac21c18e5836))
+* mark completion presentation plan complete ([24e7387](https://github.com/io41/vibe-xpls/commit/24e7387719368ebae9b61b69b2843bd8c78fb8f6))
+* plan completion presentation slice ([54caf1a](https://github.com/io41/vibe-xpls/commit/54caf1a4fef9fddf2002d106afc48ae1e320654b))
+* remove obsolete zed integration history ([84cede7](https://github.com/io41/vibe-xpls/commit/84cede7fece6dc93d9141defe347aad7790318f1))
+* remove resolved follow-ups ([782793f](https://github.com/io41/vibe-xpls/commit/782793f7df9f0ba79fa05d3a29806e5517ca7c08))
+* track zed completion follow-ups ([d3f3d2a](https://github.com/io41/vibe-xpls/commit/d3f3d2a2f87ab83cd272e0e5c6953e0d600a740d))
+* update zed integration instructions ([da9df84](https://github.com/io41/vibe-xpls/commit/da9df84f259fab47ae3e57c52ba5f709dd20b928))
+
+
+### Tests
+
+* add completion presentation metadata coverage ([57c047a](https://github.com/io41/vibe-xpls/commit/57c047a1d2bdd406fe901bf3890e1ad8eb7c6861))
+
 ## [0.0.2](https://github.com/io41/vibe-xpls/compare/v0.0.1...v0.0.2) (2026-05-20)
 
 
