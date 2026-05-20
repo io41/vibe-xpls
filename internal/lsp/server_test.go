@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -174,6 +175,45 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 	completion := resultMap(t, responseForID(t, messages, 3))
 	if !itemsContainLabel(asSlice(t, completion["items"]), "kind") {
 		t.Fatalf("completion items = %#v, want kind", completion["items"])
+	}
+}
+
+func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-presentation.yaml"))
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n\n"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	items := asSlice(t, completion["items"])
+	if got, want := completionLabelsForTest(t, items), []string{"apiVersion", "kind", "metadata", "spec"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("completion labels = %#v, want %#v", got, want)
+	}
+	for _, raw := range items {
+		item := asMap(t, raw)
+		if item["kind"] != float64(10) {
+			t.Fatalf("completion item %#v kind = %#v, want LSP Property 10", item["label"], item["kind"])
+		}
+		if item["detail"] != "Crossplane YAML field" {
+			t.Fatalf("completion item %#v detail = %#v, want Crossplane YAML field", item["label"], item["detail"])
+		}
+	}
+	item := completionItemByLabelForTest(t, items, "apiVersion")
+	if item["documentation"] != "API version of the Composition resource." {
+		t.Fatalf("apiVersion documentation = %#v, want existing analyzer documentation", item["documentation"])
+	}
+	if item["detail"] == item["documentation"] {
+		t.Fatalf("detail was copied from documentation: %#v", item)
 	}
 }
 
@@ -569,6 +609,20 @@ func itemsContainLabel(items []any, label string) bool {
 		}
 	}
 	return false
+}
+
+func completionLabelsForTest(t *testing.T, items []any) []string {
+	t.Helper()
+	labels := make([]string, 0, len(items))
+	for _, raw := range items {
+		item := asMap(t, raw)
+		label, ok := item["label"].(string)
+		if !ok {
+			t.Fatalf("completion item label = %#v, want string", item["label"])
+		}
+		labels = append(labels, label)
+	}
+	return labels
 }
 
 func completionItemByLabelForTest(t *testing.T, items []any, label string) map[string]any {
