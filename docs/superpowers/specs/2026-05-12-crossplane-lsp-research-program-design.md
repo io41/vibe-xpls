@@ -3,7 +3,7 @@
 **Status:** Approved design  
 **Date:** 2026-05-12  
 **Repository:** `<vibe-xpls-repo>`  
-**Related repository:** `<zed-up-xpls-repo>`
+**Related repository:** `<crossplane-yaml-repo>`
 
 ## Goal
 
@@ -15,7 +15,7 @@ This spec is not the design for the language server itself. It defines what must
 
 The `vibe-xpls` repository is a new Go-oriented repository with no product code yet. It has a public GitHub repository at `https://github.com/io41/vibe-xpls`.
 
-The existing Zed extension at `<zed-up-xpls-repo>` currently starts `up xpls serve --verbose` for Crossplane package worktrees. It defines a `Crossplane YAML` language, pins the `gotmpl` Tree-sitter grammar, keeps ordinary YAML untouched, and documents known limitations around mixed YAML plus Go-template highlighting. The future `vibe-xpls` project should be able to replace Upbound `xpls` in this extension, but existing Upbound `xpls` behavior is a reference and migration input, not a compatibility contract.
+The existing Zed extension at `<crossplane-yaml-repo>` currently starts `vibe-xpls serve` for Crossplane package worktrees. It defines a `Crossplane YAML` language, pins the `gotmpl` Tree-sitter grammar, keeps ordinary YAML untouched, and documents known limitations around mixed YAML plus Go-template highlighting. The future `vibe-xpls` project should be able to replace Upbound `xpls` in this extension, but existing Upbound `xpls` behavior is a reference and migration input, not a compatibility contract.
 
 The research program must give equal priority to:
 
@@ -25,7 +25,7 @@ The research program must give equal priority to:
 The editor validation baseline is:
 
 - Protocol-first LSP validation using test harnesses.
-- Zed integration validation through `zed-up-xpls`.
+- Zed integration validation through `crossplane-yaml`.
 
 ## Non-Goals
 
@@ -52,7 +52,7 @@ The research program should avoid architecture-first reasoning. A Go LSP remains
 Determine whether the first real product should be:
 
 - A general Crossplane language server.
-- A Zed-centered replacement for `up xpls`.
+- A Zed-centered integration through `crossplane-yaml`.
 - A reusable analyzer library with LSP, CLI, and optional MCP/JSON-RPC transports.
 - A validation companion focused on render, validate, trace, and diagnostics.
 - A narrower function-specific tool, such as `function-go-templating` intelligence.
@@ -195,7 +195,7 @@ Audit tools as references and falsification inputs:
 
 - Upbound `xpls`.
 - Upbound VS Code extension.
-- Local `zed-up-xpls`.
+- Local `crossplane-yaml`.
 - Red Hat YAML Language Server.
 - Helm LS.
 - Terraform LS.
@@ -216,7 +216,7 @@ Research release tooling for a Go CLI/LSP project:
 - GoReleaser.
 - Conventional Commits and commit linting.
 
-The project must start at `v0.0.1`. Public releases must stay on the `v0.X.X` line until maintainers explicitly approve leaving pre-1.0 after several months of real-world usage.
+Public releases must stay on the `v0.X.X` line until maintainers explicitly approve leaving pre-1.0 after several months of real-world usage.
 
 Every later implementation phase must end with runnable functional code. Documentation-only milestones are not valid implementation phase gates.
 
@@ -274,9 +274,9 @@ Build a tiny language-server binary that supports:
 
 It must run through protocol tests and be launchable as a local binary.
 
-### Zed Replacement Spike
+### Zed Integration Review
 
-Modify or configure `zed-up-xpls` to launch the spike binary instead of `up xpls`. Prove that `vibe-xpls` can replace the command path without changing the extension's core model.
+Verify that `crossplane-yaml` launches `vibe-xpls serve` without changing the extension's core model.
 
 The spike must validate:
 
@@ -351,7 +351,7 @@ Set up changelog and release tooling in dry-run mode.
 
 The spike must produce:
 
-- A `v0.0.1` release-note path.
+- A `v0.X.X` release-note path.
 - A release dry-run.
 - A guard that rejects `v1.0.0` until the project explicitly exits pre-1.0.
 
@@ -377,9 +377,9 @@ Decide what to reuse, delegate to, or avoid:
 - CUE/KCL tooling.
 - Go parser and framework libraries.
 
-### Gate 4: Zed Replacement Readiness
+### Gate 4: Zed Integration Readiness
 
-Confirm the future LSP can be launched by `zed-up-xpls`, works over stdio, handles Crossplane package worktrees, and does not regress current syntax highlighting or language classification assumptions.
+Confirm the LSP can be launched by `crossplane-yaml`, works over stdio, handles Crossplane package worktrees, and does not regress current syntax highlighting or language classification assumptions.
 
 ### Gate 5: Agent Surface
 
@@ -391,7 +391,6 @@ If included, it must be structured JSON over stable analyzer interfaces, not scr
 
 Confirm:
 
-- The project starts at `v0.0.1`.
 - Releases stay on `v0.X.X`.
 - Changelog generation exists.
 - Release dry-runs exist.
@@ -432,7 +431,7 @@ The research program is ready to turn into an implementation plan when:
 - The implementation plan decomposes the research program into runnable, reviewable tasks.
 - Each research lane has a named output artifact.
 - Each required spike has an executable verification command.
-- Zed replacement research explicitly uses `<zed-up-xpls-repo>`.
+- Zed replacement research explicitly uses `<crossplane-yaml-repo>`.
 - Upbound `xpls` is treated as reference-only.
 - Kubernetes language intelligence has its own lane.
 - Human editor UX and agent semantic workflows are both first-class.

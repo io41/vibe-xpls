@@ -4,7 +4,7 @@
 
 The research program supports a clear next step: proceed to the real Crossplane LSP brainstorming and product-design phase, but do not start production implementation yet.
 
-The recommended shape is `vibe-xpls` as a Go-native Crossplane semantic analyzer with thin adapters for LSP and a structured JSON CLI. Zed is the first editor proof target through a thin local extension path; current first-runnable validation uses `<zed-xpls-vibe-repo>`. AI agents are first-class users through analyzer-backed operations, not cursor-oriented LSP scraping; first scope covers file-backed terminal and CI agents, while editor-embedded agents still need an unsaved-overlay model. Kubernetes and YAML tooling should be reused as schema, validation, and UX precedent, while Crossplane-specific semantics stay in the analyzer.
+The recommended shape is `vibe-xpls` as a Go-native Crossplane semantic analyzer with thin adapters for LSP and a structured JSON CLI. Zed is the first editor proof target through the `crossplane-yaml` extension. AI agents are first-class users through analyzer-backed operations, not cursor-oriented LSP scraping; first scope covers file-backed terminal and CI agents, while editor-embedded agents still need an unsaved-overlay model. Kubernetes and YAML tooling should be reused as schema, validation, and UX precedent, while Crossplane-specific semantics stay in the analyzer.
 
 The strongest remaining blockers before production implementation are manual Zed UI validation, production parser selection, real workspace indexing performance, concrete trust UX, and broader user validation.
 
@@ -30,9 +30,9 @@ The first runnable product phase should produce a small but real command and LSP
 - Completion and hover from local XRD/CRD OpenAPI schemas and Crossplane helper catalogs.
 - Structured JSON CLI commands for disk-backed terminal/CI agents: `list-compositions`, `find-schema`, `validate-workspace`, and fixture-backed or trust-gated `render`.
 - An explicit design choice for editor-agent unsaved overlays: LSP document state, JSON-RPC session state, or CLI overlay inputs.
-- Zed launch through `zed-xpls-vibe` using `<vibe-xpls-binary> serve`, with manual validation of startup, file classification, root/nested/multi-package/no-root analyzer behavior, diagnostics, hover, completion, and stale diagnostic clearing.
+- Zed launch through `crossplane-yaml` using `vibe-xpls serve`, with manual validation of startup, file classification, root/nested/multi-package/no-root analyzer behavior, diagnostics, hover, completion, and stale diagnostic clearing.
 - A Kubernetes/OpenAPI embeddable-library spike before committing to the production schema-index implementation.
-- Release guard and changelog dry-run starting at `v0.0.1`.
+- Release guard and automated changelog generation on the `v0.X.X` release line.
 
 Do not include live-cluster discovery, default Docker render, default package downloads, write-producing agent tools, or full rendered virtual documents in the first implementation scope.
 
@@ -43,9 +43,9 @@ Do not include live-cluster discovery, default Docker render, default package do
 | Product boundary | Analyzer core with LSP and JSON CLI first; MCP later | `docs/research/decisions/gate-01-product-boundary.md`, `docs/research/lanes/01-product-boundary.md`, `docs/research/spikes/01-lsp-harness.md` |
 | Architecture | Analyzer-first Go core, thin LSP adapter, explicit render/validate proof paths | `docs/research/decisions/gate-02-architecture-direction.md`, `docs/research/lanes/04-lsp-framework.md`, `docs/research/spikes/03-yaml-template-mapping.md`, `docs/research/spikes/05-render-validate.md` |
 | Reuse vs build | Provisionally reuse Kubernetes/YAML concepts and optional validators; build Crossplane semantic core; still compare embeddable libraries | `docs/research/decisions/gate-03-reuse-vs-build.md`, `docs/research/lanes/08-kubernetes-language-intelligence.md`, `docs/research/spikes/07-kubernetes-tooling.md` |
-| Zed | Code-path replacement is viable; manual UI and attach coverage remain gates | `docs/research/decisions/gate-04-zed-readiness.md`, `docs/research/spikes/02-zed-replacement.md` |
+| Zed | Thin extension integration is viable; manual UI and attach coverage remain gates | `docs/research/decisions/gate-04-zed-readiness.md` |
 | Agents | File-backed JSON CLI first for terminal/CI agents; editor-agent overlays unresolved; MCP after contracts and trust gates stabilize | `docs/research/decisions/gate-05-agent-surface.md`, `docs/research/lanes/03-agent-semantic-api.md`, `docs/research/spikes/06-agent-api.md` |
-| Release discipline | Start at `v0.0.1`, stay `v0.X.X`, use `git-cliff` first | `docs/research/decisions/gate-06-release-discipline.md`, `docs/research/lanes/10-release-phase-gates.md`, `docs/research/spikes/08-release.md` |
+| Release discipline | Stay on `v0.X.X` until an explicit pre-1.0 exit decision | `docs/research/decisions/gate-06-release-discipline.md`, `docs/research/lanes/10-release-phase-gates.md`, `docs/research/spikes/08-release.md` |
 | Go/no-go | GO for next brainstorming/design; NO-GO for product implementation | `docs/research/decisions/gate-07-go-no-go.md` |
 
 The evidence table names decisions, not production readiness. `docs/research/decisions/gate-07-go-no-go.md` is the controlling interpretation: use the evidence for the next brainstorming/design phase, then require stronger parser, Zed, indexing, trust, and user-validation evidence before product implementation.
@@ -77,9 +77,9 @@ Terminal and CI agents need repository-level operations over the Crossplane grap
 
 The first agent surface should be a read-only JSON CLI with a stable envelope for disk-backed workflows. Editor-embedded agents need an overlay-aware model before full support can be claimed. The next design must decide whether unsaved state comes from LSP document state, a persistent JSON-RPC session, or explicit CLI overlay inputs, and it must preserve stable object IDs across edits.
 
-## Zed Replacement Findings
+## Zed Integration Findings
 
-The local Zed extension replacement path is viable as a code-path proof. The current validation fork is `<zed-xpls-vibe-repo>`; it uses extension id `zed-xpls-vibe`, launches `<vibe-xpls-binary> serve`, and leaves package/no-root detection to the `vibe-xpls` analyzer.
+The `crossplane-yaml` extension is the Zed integration path. It uses extension id `crossplane-yaml`, starts `vibe-xpls serve`, and leaves package/no-root detection to the `vibe-xpls` analyzer.
 
 Manual UI validation is still required before product implementation can claim Zed readiness. Required checks include launcher behavior, missing-binary behavior, file classification, root and nested package detection, multi-package workspaces, documented `file_types` behavior, diagnostics, hover, completion, and stale diagnostic clearing. Any future executable trust approval must be tied to canonical path and executable identity rather than only a configurable command string.
 
@@ -103,7 +103,7 @@ Use static analysis for hot-path editor feedback. Use `crossplane render` and `c
 
 ## Release and Phase-Gate Findings
 
-Start public releases at `v0.0.1` and keep every release on `v0.X.X` until maintainers approve a pre-1.0 exit after months of real-world usage.
+Keep public releases on `v0.X.X` until maintainers approve a pre-1.0 exit after months of real-world usage.
 
 The first changelog path should use Conventional Commits plus `git-cliff`. The version guard in `spikes/release/check-version.sh` rejects non-`v0` and malformed versions. GoReleaser belongs after there is a real binary to package, and release-please belongs after the manual release cadence and v0 policy are proven.
 
@@ -155,11 +155,11 @@ Use this research as the starting point for the real `vibe-xpls` brainstorming s
 
 - Define the first runnable product phase around the analyzer plus LSP and JSON CLI adapters.
 - Decide the production parser candidate and required source-map tests.
-- Define the minimum Zed manual validation script for `zed-xpls-vibe`, including attach coverage for root manifests, nested and multi-package repos, no-root-manifest repos, and `file_types` mappings.
+- Define the minimum Zed manual validation script for `crossplane-yaml`, including attach coverage for root manifests, nested and multi-package repos, no-root-manifest repos, and `file_types` mappings.
 - Specify schema source precedence, conflict reporting, cache policy, and the embeddable Kubernetes/OpenAPI library comparison.
 - Define trust gates and user-visible status for render, validate, downloads, cluster discovery, kubeconfig `exec` auth, and executable/image identity.
 - Preserve proof levels in the design document: label fixture-backed spikes, code-path proofs, manual editor evidence, real-workspace evidence, and production-ready conclusions separately.
 - Add acceptance criteria for path normalization, workspace escape rejection, symlink policy, no-follow/open identity checks, cache provenance, immutable cache identity, cache refresh, output sanitization, timeout/cancellation, malformed-input resilience, async generation fencing, and stale-diagnostic clearing.
 - Design the first agent API contract from the spike envelope, including whether editor-agent overlays use LSP state, JSON-RPC session state, or CLI overlay inputs.
-- Decide the first `v0.0.1` changelog and release dry-run path.
+- Keep Release Please and GoReleaser validation aligned with the `v0.X.X` release policy.
 - Convert open risks into acceptance criteria before product implementation begins.

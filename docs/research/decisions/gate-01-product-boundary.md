@@ -6,7 +6,7 @@ The first product boundary is a reusable analyzer library with two initial consu
 
 - `docs/research/lanes/01-product-boundary.md` recommends an analyzer library with LSP and structured JSON CLI adapters first, with MCP staged after the CLI contract and execution trust model are proven.
 - `docs/research/lanes/01-product-boundary.md` finds that LSP standardizes editor features, MCP standardizes tool transports, and the clean boundary is a transport-agnostic analyzer core rather than one editor or one validation command.
-- `docs/research/lanes/09-existing-tooling.md` shows the local Zed extension can launch a language server for `Crossplane YAML` worktrees and keep highlighting separate from server semantics, making Zed a concrete replacement target.
+- `docs/research/lanes/09-existing-tooling.md` shows the `crossplane-yaml` extension can launch a language server for `Crossplane YAML` files and keep highlighting separate from server semantics, making Zed a concrete editor target.
 - `docs/research/lanes/09-existing-tooling.md` explicitly says not to clone Upbound `xpls` as a strict contract, not to make the server Zed-only, and not to make the editor extension own Crossplane semantics.
 - `docs/research/spikes/01-lsp-harness.md` proves a small Go LSP protocol loop can support diagnostics, hover, completion, document sync, and subprocess stdio framing while keeping semantics outside the handlers.
 - `docs/research/spikes/05-render-validate.md` shows Crossplane render and validate are useful proof steps but are not suitable as the per-keystroke product boundary because they can depend on Docker, cache state, registry access, kubeconfig, and credential helpers.

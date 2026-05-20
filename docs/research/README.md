@@ -2,7 +2,7 @@
 
 This directory contains the research notes, runnable spike reports, decision records, fixture inventory, release policy, and final synthesis required before the real `vibe-xpls` brainstorming session.
 
-The research program gives equal weight to human Crossplane authors and AI coding agents. Agent coverage includes terminal/CI agents that read files from disk and editor-embedded agents that may need unsaved buffer overlays. It validates protocol-level LSP behavior and Zed integration; the original first-runnable validation used a local `<zed-xpls-vibe-repo>` fork, and the current public Zed integration is the `crossplane-yaml` extension.
+The research program gives equal weight to human Crossplane authors and AI coding agents. Agent coverage includes terminal/CI agents that read files from disk and editor-embedded agents that may need unsaved buffer overlays. It validates protocol-level LSP behavior and Zed integration through the `crossplane-yaml` extension.
 
 ## Execution Rules
 
@@ -30,7 +30,6 @@ The research program gives equal weight to human Crossplane authors and AI codin
 ## Spike Reports
 
 - `spikes/01-lsp-harness.md`
-- `spikes/02-zed-replacement.md`
 - `spikes/03-yaml-template-mapping.md`
 - `spikes/04-schema-index.md`
 - `spikes/05-render-validate.md`

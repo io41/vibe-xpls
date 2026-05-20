@@ -7,8 +7,8 @@ NO-GO for product implementation. The project should not yet start building the 
 ## Evidence.
 
 - `docs/research/spikes/01-lsp-harness.md` proves a small Go stdio LSP loop can handle initialize, document sync, diagnostics, hover, completion, shutdown, and subprocess `Content-Length` framing, but it explicitly does not select the production LSP framework.
-- The historical `docs/research/spikes/02-zed-replacement.md` proved that the Zed launcher path could select a local `vibe-xpls` binary, while leaving manual Zed UI validation open for startup logs, diagnostics, hover, completion, and shell-environment propagation.
-- Current first-runnable validation has moved from the temporary `VIBE_XPLS_BIN` path to `<zed-xpls-vibe-repo>`, which launches `<vibe-xpls-binary> serve` for `Crossplane YAML` files and delegates package/no-root detection to the analyzer.
+- The `crossplane-yaml` extension launches `vibe-xpls serve` for `Crossplane YAML` files and delegates package/no-root detection to the analyzer.
+- Manual Zed UI validation remains required for startup logs, diagnostics, hover, completion, stale diagnostic clearing, and common repository shapes.
 - `docs/research/spikes/03-yaml-template-mapping.md` proves same-length masking can preserve source coordinates across mixed YAML and Go-template files, while noting that production still needs explicit LSP encoding conversion and a real YAML parser.
 - `docs/research/spikes/04-schema-index.md` proves local XRD, Composition, provider CRD, and package metadata lookup can support kind lookup and field documentation, but only through a narrow fixture parser without watchers, precedence, cache invalidation, or package discovery.
 - `docs/research/spikes/05-render-validate.md` proves `crossplane render` and `crossplane beta validate` are valuable proof commands, but render crosses Docker permissions and validate can depend on cache, registry, credential-helper, or kubeconfig state; they are not hot-path LSP operations.
@@ -39,7 +39,7 @@ NO-GO for product implementation. The project should not yet start building the 
 
 ## What Would Change This Decision.
 
-- A manual Zed run validates startup, diagnostics, hover, completion, missing-binary behavior, and package/no-root analyzer behavior through `zed-xpls-vibe`.
+- A manual Zed run validates startup, diagnostics, hover, completion, missing-binary behavior, stale diagnostic clearing, and package/no-root analyzer behavior through `crossplane-yaml`.
 - A production YAML/template parser choice is validated against mixed Crossplane fixtures, malformed input, UTF-8/UTF-16 position mapping, and source-map requirements.
 - A real workspace schema/index prototype proves acceptable performance, freshness, conflict handling, and provider package discovery.
 - A Kubernetes/OpenAPI library spike clarifies which upstream packages should be embedded versus which schema-index code remains custom.

@@ -1,7 +1,5 @@
 # Release Policy
 
-`vibe-xpls` starts at `v0.0.1`.
-
 Public releases must remain on the `v0.X.X` line until maintainers explicitly approve leaving pre-1.0 after several months of real-world usage.
 
 ## Pre-1.0 Exit Criteria
@@ -28,8 +26,7 @@ The only exception is a maintainer-approved exit-from-v0 decision.
 
 Release Please owns `CHANGELOG.md` and the release pull request on `main`.
 Release Please is configured to keep pre-1.0 changes on the `v0.X.X` line.
-The first release was bootstrapped at `0.0.1`; later release pull requests
-are calculated from Conventional Commits.
+Release pull requests are calculated from Conventional Commits.
 
 GoReleaser publishes binaries when Release Please creates a valid `v0.X.X`
 release from a release pull request merge. The workflow runs

@@ -2,7 +2,7 @@
 
 ## Summary
 
-As of 2026-05-12, the first human-editor goal for `vibe-xpls` should be a protocol-first LSP experience that is also proven in Zed through `<zed-up-xpls-repo>`.
+The first human-editor goal for `vibe-xpls` should be a protocol-first LSP experience that is also proven in Zed through the `crossplane-yaml` extension.
 
 The most valuable initial UX is diagnostics, completion, hover, and navigation for Crossplane package authors. Render previews and code actions are important differentiators, but they should be gated by reliable parsing, schema lookup, and source mapping.
 
@@ -18,7 +18,7 @@ The most valuable initial UX is diagnostics, completion, hover, and navigation f
 - CUE LSP getting started: https://github.com/cue-lang/cue/wiki/LSP%3A-Getting-started
 - KCL VS Code extension: https://marketplace.visualstudio.com/items?itemName=kcl.kcl-vscode-extension
 - Upbound VS Code extension: https://marketplace.visualstudio.com/items?itemName=Upboundio.upbound
-- Local Zed extension: `<zed-up-xpls-repo>`
+- `crossplane-yaml` Zed extension: `<crossplane-yaml-repo>`
 
 ## Feature Priority
 
@@ -34,22 +34,24 @@ The most valuable initial UX is diagnostics, completion, hover, and navigation f
 
 The Zed extension must remain a thin launcher and language integration layer. The language server should own Crossplane semantics.
 
-The existing Zed extension currently:
+The `crossplane-yaml` extension:
 
 - Defines a `Crossplane YAML` language.
 - Uses the pinned `gotmpl` Tree-sitter grammar.
 - Injects YAML highlighting into plain template text.
 - Keeps ordinary YAML on Zed's native YAML language.
-- Starts `up xpls serve --verbose` for Crossplane package worktrees.
-- Detects root `crossplane.yaml` and `upbound.yaml`.
+- Starts `vibe-xpls serve`.
+- Resolves or manages a pinned `vibe-xpls` installation by default.
+- Supports user override through `lsp.crossplane-yaml.binary.path`.
+- Leaves Crossplane package detection to the `vibe-xpls` analyzer.
 
-`vibe-xpls` should prove that it can replace the command path without requiring the extension to redesign syntax highlighting or file classification. Zed validation must cover successful startup, missing-binary failure, worktree environment behavior, diagnostics, completion, hover, and stale diagnostic clearing.
+`vibe-xpls` should keep the command path simple without requiring the extension to redesign syntax highlighting or file classification. Zed validation must cover successful startup, missing-binary failure, diagnostics, completion, hover, and stale diagnostic clearing.
 
 Known Zed constraints from the local extension:
 
 - `path_suffixes` works for exact filenames such as `crossplane.yaml`, but broad glob-style matching requires user `file_types`.
 - `first_line_pattern` cannot reliably override built-in YAML suffix matching for normal `.yaml` files.
-- The language server attach path depends on package-root detection. Repositories without root `crossplane.yaml` or `upbound.yaml`, nested packages, and multi-package workspaces need explicit validation before the extension can be called production-ready.
+- The language server attach path depends on file classification, while package-root interpretation belongs to the analyzer. Repositories without root `crossplane.yaml` or `upbound.yaml`, nested packages, and multi-package workspaces need explicit validation before the integration can be called production-ready.
 - Broad Crossplane `.yaml` coverage may require documented user `file_types` mappings unless the extension grows better classification.
 - Mixed YAML/template highlighting is best effort and should not be coupled to semantic validation.
 
@@ -84,7 +86,7 @@ Required editor fixtures:
 
 ## Recommendation
 
-Optimize for a protocol-first LSP with Zed as the first real editor integration. Do not build a Zed-only server, but treat Zed replacement as a required acceptance gate.
+Optimize for a protocol-first LSP with Zed as the first real editor integration. Do not build a Zed-only server, but treat the `crossplane-yaml` integration as a required acceptance gate.
 
 Use diagnostics, completion, hover, and navigation as the core authoring loop. Defer rich render previews and code actions until source mapping and schema indexing are proven.
 

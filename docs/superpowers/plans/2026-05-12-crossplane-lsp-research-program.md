@@ -6,7 +6,7 @@
 
 **Architecture:** The work is documentation-first but evidence-driven. Research lanes create structured notes under `docs/research/`, runnable spikes live under `spikes/`, and final decisions are recorded under `docs/research/decisions/`. The implementation deliberately keeps product code separate from spike code until the later real `vibe-xpls` design is approved.
 
-**Tech Stack:** Markdown research artifacts, Go spike modules, local Crossplane CLI checks, Zed extension validation against `<zed-up-xpls-repo>`, GitHub/official documentation research, optional Docker for Crossplane render validation.
+**Tech Stack:** Markdown research artifacts, Go spike modules, local Crossplane CLI checks, Zed extension validation against `<crossplane-yaml-repo>`, GitHub/official documentation research, optional Docker for Crossplane render validation.
 
 ---
 
@@ -25,7 +25,6 @@
 - Create: `docs/research/lanes/10-release-phase-gates.md` - release and phase-gate research.
 - Create: `docs/research/lanes/11-security-reliability.md` - security and reliability research.
 - Create: `docs/research/spikes/01-lsp-harness.md` - LSP harness spike report.
-- Create: `docs/research/spikes/02-zed-replacement.md` - Zed replacement spike report.
 - Create: `docs/research/spikes/03-yaml-template-mapping.md` - YAML/template mapping spike report.
 - Create: `docs/research/spikes/04-schema-index.md` - schema index spike report.
 - Create: `docs/research/spikes/05-render-validate.md` - render/validate spike report.
@@ -117,7 +116,7 @@ Write `docs/research/README.md`:
 
 This directory contains the research notes, runnable spike reports, decision records, fixture inventory, release policy, and final synthesis required before the real `vibe-xpls` brainstorming session.
 
-The research program gives equal weight to human Crossplane authors and AI coding agents. It validates protocol-level LSP behavior and Zed integration through `<zed-up-xpls-repo>`.
+The research program gives equal weight to human Crossplane authors and AI coding agents. It validates protocol-level LSP behavior and Zed integration through `<crossplane-yaml-repo>`.
 
 ## Execution Rules
 
@@ -145,7 +144,6 @@ The research program gives equal weight to human Crossplane authors and AI codin
 ## Spike Reports
 
 - `spikes/01-lsp-harness.md`
-- `spikes/02-zed-replacement.md`
 - `spikes/03-yaml-template-mapping.md`
 - `spikes/04-schema-index.md`
 - `spikes/05-render-validate.md`
@@ -190,7 +188,7 @@ This file tracks the fixtures used by research lanes and runnable spikes.
 ## Fixture Sources
 
 - Local `vibe-xpls` spike fixtures under `spikes/**/testdata/`.
-- Existing Zed extension fixtures under `<zed-up-xpls-repo>/fixtures/`.
+- Existing Zed extension fixtures under `<crossplane-yaml-repo>/fixtures/`.
 - Official Crossplane documentation examples when license and attribution permit.
 ```
 
@@ -201,7 +199,7 @@ Write `docs/research/release-policy.md`:
 ```markdown
 # Release Policy
 
-`vibe-xpls` starts at `v0.0.1`.
+`vibe-xpls` stays on `v0.X.X`.
 
 Public releases must remain on the `v0.X.X` line until maintainers explicitly approve leaving pre-1.0 after several months of real-world usage.
 
@@ -276,7 +274,7 @@ Expected: `docs/research/lanes/01-product-boundary.md` exists and contains cited
 Use a research subagent with this prompt:
 
 ```text
-Research human editor UX requirements for `vibe-xpls`. Evaluate diagnostics, completion, hover, go-to-definition, references, code actions, commands, virtual rendered documents, and noisy diagnostic controls. Include protocol-first LSP validation and Zed integration through `<zed-up-xpls-repo>`. Compare YAML LS, Helm LS, Terraform LS, CUE tooling, KCL tooling, Upbound VS Code extension, and current Zed extension behavior. Use primary sources and cite URLs. Write the final note to docs/research/lanes/02-human-editor-ux.md with sections: Summary, Sources, Feature Priority, Zed Requirements, Protocol Requirements, Fixtures, Recommendation, Confidence, Evidence That Would Change This Recommendation.
+Research human editor UX requirements for `vibe-xpls`. Evaluate diagnostics, completion, hover, go-to-definition, references, code actions, commands, virtual rendered documents, and noisy diagnostic controls. Include protocol-first LSP validation and Zed integration through `<crossplane-yaml-repo>`. Compare YAML LS, Helm LS, Terraform LS, CUE tooling, KCL tooling, Upbound VS Code extension, and current Zed extension behavior. Use primary sources and cite URLs. Write the final note to docs/research/lanes/02-human-editor-ux.md with sections: Summary, Sources, Feature Priority, Zed Requirements, Protocol Requirements, Fixtures, Recommendation, Confidence, Evidence That Would Change This Recommendation.
 ```
 
 Expected: `docs/research/lanes/02-human-editor-ux.md` exists and contains feature priorities plus Zed requirements.
@@ -296,10 +294,10 @@ Expected: `docs/research/lanes/03-agent-semantic-api.md` exists and distinguishe
 Use a research subagent with this prompt:
 
 ```text
-Audit existing tooling relevant to `vibe-xpls`: Upbound `xpls`, Upbound VS Code extension, `<zed-up-xpls-repo>`, Red Hat YAML Language Server, Helm LS, Terraform LS, CUE tooling, and KCL tooling. Treat Upbound `xpls` as a reference only, not a compatibility contract. For local Zed files, inspect README.md, extension.toml, src/lib.rs, docs/superpowers/specs, docs/superpowers/plans, languages/crossplane-yaml, and fixtures. Write the final note to docs/research/lanes/09-existing-tooling.md with sections: Summary, Sources, Local Zed Extension Findings, Tool Matrix, Reuse Opportunities, Divergence Points, Recommendation, Confidence, Evidence That Would Change This Recommendation.
+Audit existing tooling relevant to `vibe-xpls`: Upbound `xpls`, Upbound VS Code extension, `<crossplane-yaml-repo>`, Red Hat YAML Language Server, Helm LS, Terraform LS, CUE tooling, and KCL tooling. Treat Upbound `xpls` as a reference only, not a compatibility contract. For local Zed files, inspect README.md, extension.toml, src/lib.rs, docs/superpowers/specs, docs/superpowers/plans, languages/crossplane-yaml, and fixtures. Write the final note to docs/research/lanes/09-existing-tooling.md with sections: Summary, Sources, Local Zed Extension Findings, Tool Matrix, Reuse Opportunities, Divergence Points, Recommendation, Confidence, Evidence That Would Change This Recommendation.
 ```
 
-Expected: `docs/research/lanes/09-existing-tooling.md` exists and includes the current Zed extension command path `up xpls serve --verbose`.
+Expected: `docs/research/lanes/09-existing-tooling.md` exists and includes the current Zed extension command path `vibe-xpls serve`.
 
 - [ ] **Step 5: Verify wave outputs**
 
@@ -379,7 +377,7 @@ Research Kubernetes language intelligence for `vibe-xpls`. Include YAML Language
 Use a research subagent with this prompt:
 
 ```text
-Research release and phase-gate tooling for `vibe-xpls`. Compare release-please, Changie, git-cliff, GoReleaser, Conventional Commits, and commit linting. Recommend how to start at v0.0.1, stay on v0.X.X, generate changelogs, run release dry-runs, and enforce runnable functional code at every later implementation phase. Use primary sources and cite URLs. Write the final note to docs/research/lanes/10-release-phase-gates.md with sections: Summary, Sources, Tool Matrix, v0 Policy, Phase Gates, Recommendation, Confidence, Evidence That Would Change This Recommendation.
+Research release and phase-gate tooling for `vibe-xpls`. Compare release-please, Changie, git-cliff, GoReleaser, Conventional Commits, and commit linting. Recommend how to stay on v0.X.X, stay on v0.X.X, generate changelogs, run release dry-runs, and enforce runnable functional code at every later implementation phase. Use primary sources and cite URLs. Write the final note to docs/research/lanes/10-release-phase-gates.md with sections: Summary, Sources, Tool Matrix, v0 Policy, Phase Gates, Recommendation, Confidence, Evidence That Would Change This Recommendation.
 ```
 
 - [ ] **Step 7: Dispatch security and reliability research**
@@ -502,90 +500,87 @@ git commit -m "test: add lsp harness spike"
 
 Expected: a commit is created.
 
-## Task 5: Zed Replacement Spike
+## Task 5: Zed Integration Review
 
 **Files:**
-- Create: `docs/research/spikes/02-zed-replacement.md`
-- External read/write during spike: `<zed-up-xpls-repo>`
+- Update: `docs/research/decisions/gate-04-zed-readiness.md`
+- External read/write during spike: `<crossplane-yaml-repo>`
 
 - [ ] **Step 1: Record current Zed extension state**
 
 Run:
 
 ```bash
-git -C <zed-up-xpls-repo> status --short --branch
-sed -n '1,220p' <zed-up-xpls-repo>/README.md
-sed -n '1,220p' <zed-up-xpls-repo>/extension.toml
-sed -n '1,260p' <zed-up-xpls-repo>/src/lib.rs
+git -C <crossplane-yaml-repo> status --short --branch
+sed -n '1,220p' <crossplane-yaml-repo>/README.md
+sed -n '1,220p' <crossplane-yaml-repo>/extension.toml
+sed -n '1,260p' <crossplane-yaml-repo>/src/lib.rs
 ```
 
-Expected: the status output is recorded in the spike report, and source output shows the current `up xpls serve --verbose` command path.
+Expected: the status output is recorded in the spike report, and source output shows the current `vibe-xpls serve` command path.
 
-- [ ] **Step 2: Add a local override in a temporary Zed branch**
+- [ ] **Step 2: Verify the Zed launcher contract**
 
-In `<zed-up-xpls-repo>`, create a temporary branch named `vibe-xpls-spike`. Modify `src/lib.rs` so `language_server_command` uses the `VIBE_XPLS_BIN` environment variable when it is present and otherwise keeps the current `up xpls serve --verbose` behavior.
+In `<crossplane-yaml-repo>`, verify that `language_server_command` starts `vibe-xpls serve` and supports the documented `lsp.crossplane-yaml.binary.path` override.
 
 Run:
 
 ```bash
-git -C <zed-up-xpls-repo> switch -c vibe-xpls-spike
+rg -n "vibe-xpls|lsp.crossplane-yaml.binary.path|serve" <crossplane-yaml-repo>/README.md <crossplane-yaml-repo>/src
 ```
 
-Expected: branch switch succeeds.
+Expected: source and README output show the managed install path, the binary override setting, and the `serve` argument.
 
 - [ ] **Step 3: Verify Zed extension tests**
 
 Run:
 
 ```bash
-cd <zed-up-xpls-repo> && cargo fmt --check
-cd <zed-up-xpls-repo> && cargo test
-cd <zed-up-xpls-repo> && PATH="<rustup-bin-dir>:$PATH" cargo build --target wasm32-wasip2
+cd <crossplane-yaml-repo> && cargo fmt --check
+cd <crossplane-yaml-repo> && cargo test
+cd <crossplane-yaml-repo> && PATH="<rustup-bin-dir>:$PATH" cargo build --target wasm32-wasip2
 ```
 
 Expected: all commands exit successfully.
 
-- [ ] **Step 4: Launch Zed manually with the spike binary**
+- [ ] **Step 4: Launch Zed manually with the current extension**
 
 Run:
 
 ```bash
-cd <zed-up-xpls-repo> && VIBE_XPLS_BIN=<vibe-xpls-repo>/spikes/lsp-harness/lsp-harness zed --foreground .
+cd <crossplane-yaml-repo> && zed --foreground .
 ```
 
 Expected: Zed starts and logs show the language server command path. Manual verification records whether diagnostics, hover, and completion are visible in the fixture worktree.
 
-- [ ] **Step 5: Write the spike report**
+- [ ] **Step 5: Update the integration report**
 
-Write `docs/research/spikes/02-zed-replacement.md` with sections:
+Update `docs/research/decisions/gate-04-zed-readiness.md` with sections:
 
-- Summary.
 - Current Extension Contract.
-- Temporary Branch or Diff.
 - Commands Run.
 - Manual Zed Result.
-- Compatibility Findings.
 - Decision Impact.
 
-The report must state that Upbound `xpls` is reference-only and that the replacement target is the Zed extension command contract.
+The report must state that Upbound `xpls` is reference-only and that the extension command contract is `vibe-xpls serve`.
 
-- [ ] **Step 6: Return the external Zed repository to its original branch**
+- [ ] **Step 6: Verify the external Zed repository is clean**
 
 Run:
 
 ```bash
-git -C <zed-up-xpls-repo> status --short --branch
+git -C <crossplane-yaml-repo> status --short --branch
 ```
 
-Expected: any uncommitted Zed changes are either committed on the temporary branch or explicitly recorded in the spike report before switching away.
+Expected: any uncommitted Zed changes are either intentional and recorded or the repository is clean.
 
-- [ ] **Step 7: Commit Zed spike report in `vibe-xpls`**
+- [ ] **Step 7: Commit Zed integration report in `vibe-xpls`**
 
 Run:
 
 ```bash
-git add docs/research/spikes/02-zed-replacement.md
-git commit -m "docs: add zed replacement spike report"
+git add docs/research/decisions/gate-04-zed-readiness.md
+git commit -m "docs: update zed readiness decision"
 ```
 
 Expected: a commit is created in `vibe-xpls`.
@@ -777,11 +772,11 @@ Run:
 
 ```bash
 chmod +x spikes/release/check-version.sh
-spikes/release/check-version.sh v0.0.1
+spikes/release/check-version.sh v0.1.2
 ! spikes/release/check-version.sh v1.0.0
 ```
 
-Expected: `v0.0.1` passes and `v1.0.0` fails.
+Expected: `v0.X.X` passes and `v1.0.0` fails.
 
 - [ ] **Step 4: Write release spike report**
 
@@ -841,7 +836,7 @@ Write `docs/research/crossplane-lsp-research-synthesis.md` with sections:
 - Alternatives Rejected.
 - Human Editor UX Findings.
 - Agent Workflow Findings.
-- Zed Replacement Findings.
+- Zed Integration Findings.
 - Kubernetes Reuse Findings.
 - Technical Architecture Findings.
 - Release and Phase-Gate Findings.
@@ -947,7 +942,7 @@ cd spikes/lsp-harness && go test ./...
 cd ../../spikes/yaml-template-mapping && go test ./...
 cd ../../spikes/schema-index && go test ./...
 cd ../../spikes/agent-api && go test ./...
-cd ../.. && spikes/release/check-version.sh v0.0.1
+cd ../.. && spikes/release/check-version.sh v0.1.2
 cd <vibe-xpls-repo> && ! spikes/release/check-version.sh v1.0.0
 ```
 

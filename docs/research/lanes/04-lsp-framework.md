@@ -40,7 +40,7 @@ Among the Go options, `go-lsp` is the strongest full framework if we want a batt
 - Verify document synchronization in both full and incremental modes against fixture-backed tests.
 - Add a harness that can exercise server handlers without a live editor, or prove that the chosen framework already gives us that with acceptable ergonomics.
 - Measure cold start, incremental update latency, and memory growth on a realistic workspace so we can spot any framework-induced overhead.
-- Confirm Zed compatibility as the first editor acceptance gate through `<zed-up-xpls-repo>`. Keep agent validation at the analyzer/structured-CLI layer first rather than treating an agent-oriented LSP client as a first-scope gate.
+- Confirm Zed compatibility as the first editor acceptance gate through `<crossplane-yaml-repo>`. Keep agent validation at the analyzer/structured-CLI layer first rather than treating an agent-oriented LSP client as a first-scope gate.
 
 ## Recommendation
 

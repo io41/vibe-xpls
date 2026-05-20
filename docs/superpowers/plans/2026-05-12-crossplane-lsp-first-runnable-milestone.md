@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first runnable `vibe-xpls` binary that Zed can launch through `zed-xpls-vibe` as `<vibe-xpls-binary> serve` and use for Crossplane diagnostics, hover, completion, and stale diagnostic clearing.
+**Goal:** Build the first runnable `vibe-xpls` binary that Zed can launch through `crossplane-yaml` as `<vibe-xpls-binary> serve` and use for Crossplane diagnostics, hover, completion, and stale diagnostic clearing.
 
 **Architecture:** Create a Go product module with a shared analyzer core, a thin LSP adapter, and an internal debug CLI. The analyzer owns workspace/package detection, path safety, document generations, mixed YAML/template parsing, schema indexing, diagnostics, hover, and completion. The LSP adapter owns JSON-RPC framing, LSP lifecycle, document sync, position encoding conversion, and formatting analyzer results.
 
-**Tech Stack:** Go 1.24+ module, stdlib JSON-RPC framing over stdio, `github.com/goccy/go-yaml` behind an internal parser facade, `go.yaml.in/yaml/v4` as parser fallback/reference, local `zed-xpls-vibe` dev-extension launch path, `go test ./...` for verification.
+**Tech Stack:** Go 1.24+ module, stdlib JSON-RPC framing over stdio, `github.com/goccy/go-yaml` behind an internal parser facade, `go.yaml.in/yaml/v4` as parser fallback/reference, local `crossplane-yaml` dev-extension launch path, `go test ./...` for verification.
 
 ---
 
@@ -34,7 +34,7 @@ Required corrections before execution is considered complete:
 - **YAML error spans:** parser errors must produce source spans from parser token positions when available. They must not default to `(0,0)` once a parser position exists.
 - **Limits defaulting:** zero fields in `Limits` must be defaulted field-by-field rather than replacing the entire caller-provided struct.
 - **Symlinked workspace paths:** path safety must resolve the longest existing prefix of a path before comparing against the workspace realpath so logical paths under symlinked parents are not falsely rejected.
-- **Zed extension verification:** the Zed validation task must record the `zed-xpls-vibe` commit or local diff and verify that `<vibe-xpls-binary> serve` is still wired into the launch path before manual validation starts.
+- **Zed extension verification:** the Zed validation task must record the `crossplane-yaml` commit or local diff and verify that `<vibe-xpls-binary> serve` is still wired into the launch path before manual validation starts.
 - **Pinned dependencies:** use explicit parser dependency versions recorded in the parser decision and commit them through `go.mod`/`go.sum`.
 
 ## File Structure
@@ -61,7 +61,7 @@ Required corrections before execution is considered complete:
 - Create: `internal/lsp/server.go` - LSP adapter over analyzer.
 - Create: `internal/testkit/fixtures.go` - shared fixture helper functions.
 - Create: `internal/analyzer/testdata/workspaces/**` - root, nested, multi-package, no-root, malformed, mixed-template, conflict, huge-file, and path-safety fixtures.
-- Create: `docs/research/validations/2026-05-12-zed-first-runnable.md` - manual Zed validation record template and final evidence.
+- Update: `docs/research/decisions/gate-04-zed-readiness.md` - manual Zed validation criteria and final evidence.
 
 ## Task 0: Baseline
 
@@ -210,7 +210,7 @@ func TestRunVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr=%s", code, stderr.String())
 	}
-	if got := strings.TrimSpace(stdout.String()); got != "vibe-xpls v0.0.1" {
+	if got := strings.TrimSpace(stdout.String()); got != "vibe-xpls v0.X.X" {
 		t.Fatalf("version output = %q", got)
 	}
 }
@@ -255,7 +255,7 @@ import (
 	"io"
 )
 
-const Version = "v0.0.1"
+const Version = "v0.X.X"
 
 type ServerRunner func(stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 type DebugRunner func(args []string, stdout io.Writer) int
@@ -319,7 +319,7 @@ go test ./...
 go run ./cmd/vibe-xpls --version
 ```
 
-Expected: tests PASS and version output is `vibe-xpls v0.0.1`.
+Expected: tests PASS and version output is `vibe-xpls v0.X.X`.
 
 - [ ] **Step 6: Commit**
 
@@ -2504,7 +2504,7 @@ func (s *Server) handle(msg Message) error {
 					"triggerCharacters": []string{".", ":", "\n"},
 				},
 			},
-			"serverInfo": map[string]any{"name": "vibe-xpls", "version": "v0.0.1"},
+			"serverInfo": map[string]any{"name": "vibe-xpls", "version": "v0.X.X"},
 		}, nil)
 	case "shutdown":
 		return s.respond(msg.ID, nil, nil)
@@ -2671,7 +2671,7 @@ go test ./...
 go run ./cmd/vibe-xpls --version
 ```
 
-Expected: tests PASS and binary still prints `vibe-xpls v0.0.1`.
+Expected: tests PASS and binary still prints `vibe-xpls v0.X.X`.
 
 - [ ] **Step 6: Commit**
 
@@ -2691,7 +2691,7 @@ Expected: commit succeeds.
 - Modify: `internal/analyzer/analyzer_test.go`
 - Modify: `internal/lsp/server.go`
 - Modify: `internal/lsp/server_test.go`
-- Modify: `docs/research/validations/2026-05-12-zed-first-runnable.md`
+- Modify: `docs/research/decisions/gate-04-zed-readiness.md`
 
 - [ ] **Step 1: Add analyzer completion edit tests**
 
@@ -2944,7 +2944,7 @@ Expected: tests PASS.
 
 - [ ] **Step 9: Update Zed validation artifact**
 
-Modify `docs/research/validations/2026-05-12-zed-first-runnable.md` so the completion validation notes include:
+Modify `docs/research/decisions/gate-04-zed-readiness.md` so the completion validation notes include:
 
 ```markdown
 - Completion acceptance must be tested, not only suggestion visibility.
@@ -2958,7 +2958,7 @@ Modify `docs/research/validations/2026-05-12-zed-first-runnable.md` so the compl
 Run:
 
 ```bash
-git add internal/analyzer/completion.go internal/analyzer/analyzer_test.go internal/lsp/server.go internal/lsp/server_test.go docs/research/validations/2026-05-12-zed-first-runnable.md
+git add internal/analyzer/completion.go internal/analyzer/analyzer_test.go internal/lsp/server.go internal/lsp/server_test.go docs/research/decisions/gate-04-zed-readiness.md
 git commit -m "fix: add completion text edits"
 ```
 
@@ -2967,7 +2967,7 @@ Expected: commit succeeds.
 ## Task 13: Zed Manual Validation Artifact
 
 **Files:**
-- Create: `docs/research/validations/2026-05-12-zed-first-runnable.md`
+- Update: `docs/research/decisions/gate-04-zed-readiness.md`
 
 - [ ] **Step 1: Build the local binary for Zed**
 
@@ -2978,11 +2978,11 @@ go build -o <vibe-xpls-binary> ./cmd/vibe-xpls
 <vibe-xpls-binary> --version
 ```
 
-Expected: version output is `vibe-xpls v0.0.1`.
+Expected: version output is `vibe-xpls v0.X.X`.
 
-- [ ] **Step 2: Create validation record**
+- [ ] **Step 2: Update validation record**
 
-Create `docs/research/validations/2026-05-12-zed-first-runnable.md`:
+Update `docs/research/decisions/gate-04-zed-readiness.md`:
 
 ```markdown
 # Zed First Runnable Milestone Validation
@@ -2990,13 +2990,13 @@ Create `docs/research/validations/2026-05-12-zed-first-runnable.md`:
 ## Binary
 
 - Binary path: `<vibe-xpls-binary>`
-- Version output: `vibe-xpls v0.0.1`
+- Version output: `vibe-xpls v0.X.X`
 - Canonical path checked with: `realpath <vibe-xpls-binary>`
 - Built from worktree: `<vibe-xpls-worktree>`
 
 ## Zed Extension
 
-- Extension repository: `<zed-xpls-vibe-repo>`
+- Extension repository: `<crossplane-yaml-repo>`
 - Launch command: `<vibe-xpls-binary> serve`
 
 ## Required Checks
@@ -3026,7 +3026,7 @@ Record Zed log excerpts, fixture paths, and screenshots or manual observations h
 Run:
 
 ```bash
-git add docs/research/validations/2026-05-12-zed-first-runnable.md
+git add docs/research/decisions/gate-04-zed-readiness.md
 git commit -m "docs: add zed validation checklist"
 ```
 
@@ -3035,7 +3035,7 @@ Expected: commit succeeds.
 ## Task 14: Final Verification And Milestone Evidence
 
 **Files:**
-- Modify: `docs/research/validations/2026-05-12-zed-first-runnable.md`
+- Modify: `docs/research/decisions/gate-04-zed-readiness.md`
 
 - [ ] **Step 1: Run full tests**
 
@@ -3067,11 +3067,11 @@ Run:
 printf 'Content-Length: 120\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootUri":"file://%s","capabilities":{}}}' "$(pwd)/internal/analyzer/testdata/workspaces/root" | go run ./cmd/vibe-xpls serve
 ```
 
-Expected: output starts with `Content-Length:` and includes `"serverInfo":{"name":"vibe-xpls","version":"v0.0.1"}`.
+Expected: output starts with `Content-Length:` and includes `"serverInfo":{"name":"vibe-xpls","version":"v0.X.X"}`.
 
 - [ ] **Step 4: Complete manual Zed validation**
 
-Follow `docs/research/validations/2026-05-12-zed-first-runnable.md` and mark each checkbox with the evidence gathered.
+Follow `docs/research/decisions/gate-04-zed-readiness.md` and mark each checkbox with the evidence gathered.
 
 Expected: every required manual check is marked complete or the implementation returns to the failing task for a fix.
 
@@ -3090,7 +3090,7 @@ Expected: no matches that invoke external Crossplane execution, Docker, cluster 
 Run:
 
 ```bash
-git add docs/research/validations/2026-05-12-zed-first-runnable.md
+git add docs/research/decisions/gate-04-zed-readiness.md
 git commit -m "docs: record first runnable zed validation"
 ```
 
@@ -3101,7 +3101,7 @@ Expected: commit succeeds.
 - [ ] Parser decision is committed before product code.
 - [ ] Root Go module builds.
 - [ ] `go test ./...` passes.
-- [ ] `go run ./cmd/vibe-xpls --version` prints `vibe-xpls v0.0.1`.
+- [ ] `go run ./cmd/vibe-xpls --version` prints `vibe-xpls v0.X.X`.
 - [ ] Analyzer fixture tests cover package detection, schema lookup, schema precedence, diagnostics, hover, completion, mixed YAML/template basics, no-root activation, bounded-resource behavior, path safety, and stale generation behavior.
 - [ ] LSP tests cover document sync, diagnostics, hover, completion, completion text edits, negotiated position conversion, stale diagnostic clearing, and stale pull-request behavior.
 - [ ] Manual Zed validation evidence is recorded.

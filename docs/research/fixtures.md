@@ -19,5 +19,5 @@ This file tracks the fixtures used by research lanes and runnable spikes.
 ## Fixture Sources
 
 - Local `vibe-xpls` spike fixtures under `spikes/**/testdata/`.
-- Existing Zed extension fixtures under `<zed-up-xpls-repo>/fixtures/`.
+- Existing Zed extension fixtures under `<crossplane-yaml-repo>/fixtures/`.
 - Official Crossplane documentation examples when license and attribution permit.
