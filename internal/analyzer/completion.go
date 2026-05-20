@@ -48,11 +48,15 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		return Completion{}
 	}
 	completion := Completion{}
-	for _, parentPath := range completionParentPaths(context.parentPath) {
+	for i, parentPath := range completionParentPaths(context.parentPath) {
 		if parentPath != "" && !parsed.IsStablePath(parentPath) {
 			continue
 		}
-		completion = filterCompletion(completionFromSchema(a.schemas, apiVersion, kind, parentPath), context.prefix)
+		candidate := completionFromSchema(a.schemas, apiVersion, kind, parentPath)
+		if i > 0 {
+			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
+		}
+		completion = filterCompletion(candidate, context.prefix)
 		if len(completion.Items) != 0 {
 			break
 		}
@@ -64,6 +68,26 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 	}
 	return completion
+}
+
+func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, documentIndex int) Completion {
+	if len(completion.Items) == 0 {
+		return completion
+	}
+	existing := map[string]struct{}{}
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.DocumentIndex == documentIndex {
+			existing[occurrence.Path] = struct{}{}
+		}
+	}
+	items := completion.Items[:0]
+	for _, item := range completion.Items {
+		if _, ok := existing[item.Path]; ok {
+			continue
+		}
+		items = append(items, item)
+	}
+	return Completion{Items: items}
 }
 
 type completionContext struct {

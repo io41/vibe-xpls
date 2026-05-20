@@ -325,6 +325,31 @@ func TestCompletionTextEditCorrectsIndentedRootKey(t *testing.T) {
 	}
 }
 
+func TestCompletionDoesNotOfferExistingRootKeyFromNestedFallback(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "completion-nested-fallback.yaml"))
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\nspec:\n  a"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{
+			"rootUri":      fileURI(root),
+			"capabilities": zedCompletionCapabilities(),
+		}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	if itemsContainLabel(asSlice(t, completion["items"]), "apiVersion") {
+		t.Fatalf("completion items = %#v, want no existing root apiVersion fallback", completion["items"])
+	}
+}
+
 func TestCompletionTextEditPreservesZeroWidthInsertionRange(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "completion-blank-line-edit.yaml"))

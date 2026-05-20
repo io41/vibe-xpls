@@ -119,6 +119,84 @@ func TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetDoesNotOfferExistingRootKeysFromNestedFallback(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "completion-spec-fallback.yaml")
+	base := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\nspec:\n  "
+	tests := []struct {
+		prefix string
+		label  string
+	}{
+		{prefix: "a", label: "apiVersion"},
+		{prefix: "k", label: "kind"},
+		{prefix: "m", label: "metadata"},
+		{prefix: "s", label: "spec"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.prefix, func(t *testing.T) {
+			text := base + tt.prefix
+			a.ChangeDocument(uri, text)
+			completion := a.CompletionAtOffset(uri, len(text))
+			if containsCompletion(completion.Items, tt.label) {
+				t.Fatalf("nested fallback offered existing root key %q for prefix %q: %#v", tt.label, tt.prefix, completion.Items)
+			}
+		})
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetStillCompletesSpecChildren(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "completion-spec-child.yaml")
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\nspec:\n  d"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "dependsOn") {
+		t.Fatalf("expected dependsOn completion under spec, got %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetFallbackScopedToCurrentDocument(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "completion-multi-doc-fallback.yaml")
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: first\n---\napiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nm"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "metadata") {
+		t.Fatalf("metadata absent from doc 2 should still be offered despite presence in doc 1: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetSkipsDedentWhenRootKeyExists(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "completion-no-dedent-when-present.yaml")
+	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\nspec:\n  something: x\n  s"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if _, ok := completionItemByLabel(completion.Items, "spec"); ok {
+		t.Fatalf("dedent to existing root key spec should be suppressed: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerCompletionAtOffsetSuppressesTextEditBeforeExistingColon(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
