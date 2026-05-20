@@ -23,8 +23,6 @@ const (
 
 	// LSP CompletionItemKind.Property.
 	completionItemKindProperty = 10
-
-	completionItemDetailCrossplaneYAMLField = "Crossplane YAML field"
 )
 
 var nullResult = json.RawMessage("null")
@@ -141,7 +139,6 @@ type completionList struct {
 type completionItem struct {
 	Label          string    `json:"label"`
 	Kind           int       `json:"kind"`
-	Detail         string    `json:"detail"`
 	Documentation  string    `json:"documentation,omitempty"`
 	TextEdit       *textEdit `json:"textEdit,omitempty"`
 	InsertTextMode int       `json:"insertTextMode,omitempty"`
@@ -310,7 +307,6 @@ func (s *Server) handleCompletion(msg Message) error {
 		out := completionItem{
 			Label:         item.Label,
 			Kind:          completionItemKindProperty,
-			Detail:        completionItemDetailCrossplaneYAMLField,
 			Documentation: item.Documentation,
 		}
 		if item.TextEdit != nil {

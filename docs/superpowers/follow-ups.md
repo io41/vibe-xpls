@@ -4,20 +4,19 @@
 
 ### Completion row text is truncated in Zed
 
+Status: resolved by the completion presentation decision.
+
 Observed in Zed while completing `apiVersion` in `root/crossplane.yaml`.
-The completion row shows the `detail` value as truncated text (`Cro...`) and
-also shows the analyzer documentation in the same row.
+The completion row showed generic detail text and analyzer documentation in the
+same row, which crowded the completion popup.
 
-Current server behavior is intentional for this slice:
+Current decision:
 
-- `detail`: `Crossplane YAML field`
+- omit generic `detail`
+- use `kind` for the editor-rendered field/property category
 - `documentation`: analyzer-provided plain string documentation
 
-Initial assessment: this looks like Zed completion UI presentation rather than
-an LSP server correctness bug. There may not be a user setting for this. If the
-UX is not acceptable, investigate whether the language server should use a
-shorter `detail`, omit `detail`, or rely on a different LSP documentation shape
-for Zed.
+See `docs/research/decisions/completion-presentation.md`.
 
 ### Root-level completion accepted under `spec` inserts at the document root
 
@@ -58,7 +57,6 @@ the `a` prefix in the reproduction above, the server returns:
 {
   "label": "apiVersion",
   "kind": 10,
-  "detail": "Crossplane YAML field",
   "documentation": "API version of the Configuration metadata resource.",
   "textEdit": {
     "range": {

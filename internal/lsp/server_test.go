@@ -204,16 +204,13 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 		if item["kind"] != float64(10) {
 			t.Fatalf("completion item %#v kind = %#v, want LSP Property 10", item["label"], item["kind"])
 		}
-		if item["detail"] != "Crossplane YAML field" {
-			t.Fatalf("completion item %#v detail = %#v, want Crossplane YAML field", item["label"], item["detail"])
+		if _, ok := item["detail"]; ok {
+			t.Fatalf("completion item %#v detail = %#v, want omitted generic detail", item["label"], item["detail"])
 		}
 	}
 	item := completionItemByLabelForTest(t, items, "apiVersion")
 	if item["documentation"] != "API version of the Composition resource." {
 		t.Fatalf("apiVersion documentation = %#v, want existing analyzer documentation", item["documentation"])
-	}
-	if item["detail"] == item["documentation"] {
-		t.Fatalf("detail was copied from documentation: %#v", item)
 	}
 }
 
