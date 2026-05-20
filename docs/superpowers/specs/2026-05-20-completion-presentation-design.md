@@ -8,9 +8,9 @@ This slice is limited to LSP completion item metadata for fields the analyzer al
 
 - Keep `label` unchanged.
 - Keep `textEdit` and `insertTextMode` behavior unchanged.
-- Add `kind: Property` for YAML mapping-key completions.
-- Add a concise `detail` value for compact completion-list display.
-- Preserve the existing full `documentation` value.
+- Add `kind: 10`, the LSP wire value for `CompletionItemKind.Property`, for every emitted completion item.
+- Add `detail: Crossplane YAML field` for every emitted completion item.
+- Preserve the existing full `documentation` value as the same plain string wire shape used today.
 
 ## Non-Goals
 
@@ -28,11 +28,11 @@ The analyzer remains the source of completion candidates and schema-derived docu
 
 Implementation should prefer keeping presentation-only metadata in `internal/lsp`:
 
-- `completionItem.kind` uses the LSP `CompletionItemKind.Property` value.
-- `completionItem.detail` uses short stable text that does not pretend to be schema truth.
-- `completionItem.documentation` continues to carry the analyzer-provided documentation.
+- `completionItem.kind` uses the LSP `CompletionItemKind.Property` wire value, `10`.
+- `completionItem.detail` uses the fixed short text `Crossplane YAML field`.
+- `completionItem.documentation` continues to carry the analyzer-provided documentation as a plain string.
 
-If the implementation needs a helper, it should derive detail text from existing analyzer metadata such as `Path`, not from new hand-written Crossplane schema facts.
+The implementation should not derive `detail` from schema paths or field documentation in this slice. A fixed generic detail is enough to keep compact completion rows readable without creating a hand-maintained schema fact.
 
 ## Data Flow
 
@@ -45,15 +45,17 @@ If the implementation needs a helper, it should derive detail text from existing
 
 If a completion item lacks documentation, the LSP adapter should omit `documentation` as it does today.
 
-If a completion item lacks enough metadata to derive a specific detail string, it should use a generic detail such as `Crossplane YAML field`.
+`detail` does not depend on schema metadata, so missing analyzer metadata should not affect detail output.
 
 ## Testing
 
 Add focused LSP tests that prove existing completion candidates now include presentation metadata:
 
-- A known field completion has `kind` set to `Property`.
-- A known field completion has non-empty `detail`.
+- Every returned completion item has `kind` set to JSON number `10`.
+- Every returned completion item has `detail` set to `Crossplane YAML field`.
 - Existing `documentation` is still present for a documented field.
+- `detail` is not copied from `documentation`.
+- Existing completion labels remain unchanged for the tested request.
 - Existing `textEdit` and `insertTextMode` assertions continue to pass.
 
 No tests should assert new Crossplane fields or new field descriptions in this slice.
@@ -61,8 +63,8 @@ No tests should assert new Crossplane fields or new field descriptions in this s
 ## Acceptance Criteria
 
 - Current completion candidates are unchanged.
-- LSP completion items expose `kind: Property`.
-- LSP completion items expose concise `detail`.
+- LSP completion items expose `kind: 10` for every emitted item.
+- LSP completion items expose `detail: Crossplane YAML field` for every emitted item.
 - Existing documentation remains available as documentation, not overloaded into detail.
 - The slice has no manual Crossplane field catalog additions.
 - `go test ./...` passes.
