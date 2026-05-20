@@ -22,7 +22,7 @@ No analyzer files should change. No schema files or built-in field catalogs shou
 **Files:**
 - Modify: `internal/lsp/server_test.go`
 
-- [ ] **Step 1: Add `reflect` to the test imports**
+- [x] **Step 1: Add `reflect` to the test imports**
 
 Change the import block in `internal/lsp/server_test.go` from:
 
@@ -55,7 +55,7 @@ import (
 	"testing"
 ```
 
-- [ ] **Step 2: Add the failing presentation metadata test**
+- [x] **Step 2: Add the failing presentation metadata test**
 
 Insert this test after `TestHoverAndCompletionUseAnalyzer` in `internal/lsp/server_test.go`:
 
@@ -100,7 +100,7 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Add the completion label helper**
+- [x] **Step 3: Add the completion label helper**
 
 Insert this helper near `itemsContainLabel` and `completionItemByLabelForTest` in `internal/lsp/server_test.go`:
 
@@ -120,7 +120,7 @@ func completionLabelsForTest(t *testing.T, items []any) []string {
 }
 ```
 
-- [ ] **Step 4: Run the focused test and verify it fails**
+- [x] **Step 4: Run the focused test and verify it fails**
 
 Run:
 
@@ -130,7 +130,7 @@ go test ./internal/lsp -run TestCompletionItemsIncludePresentationMetadata -coun
 
 Expected: FAIL because current completion items do not include `kind` or `detail`.
 
-- [ ] **Step 5: Commit the failing test**
+- [x] **Step 5: Commit the failing test**
 
 Run:
 
@@ -146,7 +146,7 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `internal/lsp/server.go`
 
-- [ ] **Step 1: Add completion presentation constants**
+- [x] **Step 1: Add completion presentation constants**
 
 Change the constants near the top of `internal/lsp/server.go` from:
 
@@ -177,7 +177,7 @@ const (
 )
 ```
 
-- [ ] **Step 2: Add `kind` and `detail` to the LSP completion item type**
+- [x] **Step 2: Add `kind` and `detail` to the LSP completion item type**
 
 Change `completionItem` in `internal/lsp/server.go` from:
 
@@ -203,7 +203,7 @@ type completionItem struct {
 }
 ```
 
-- [ ] **Step 3: Populate presentation metadata during completion mapping**
+- [x] **Step 3: Populate presentation metadata during completion mapping**
 
 Change the start of the mapping loop in `handleCompletion` from:
 
@@ -228,7 +228,7 @@ to:
 		if item.TextEdit != nil {
 ```
 
-- [ ] **Step 4: Format the changed Go files**
+- [x] **Step 4: Format the changed Go files**
 
 Run:
 
@@ -238,7 +238,7 @@ gofmt -w internal/lsp/server.go internal/lsp/server_test.go
 
 Expected: command exits 0 and only formatting changes are applied.
 
-- [ ] **Step 5: Run the focused test and verify it passes**
+- [x] **Step 5: Run the focused test and verify it passes**
 
 Run:
 
@@ -248,7 +248,7 @@ go test ./internal/lsp -run TestCompletionItemsIncludePresentationMetadata -coun
 
 Expected: PASS.
 
-- [ ] **Step 6: Run existing completion edit regression tests**
+- [x] **Step 6: Run existing completion edit regression tests**
 
 Run:
 
@@ -258,7 +258,7 @@ go test ./internal/lsp -run 'TestCompletionItemsIncludePlainTextEdits|TestComple
 
 Expected: PASS, proving `textEdit` and `insertTextMode` behavior did not regress.
 
-- [ ] **Step 7: Commit the implementation**
+- [x] **Step 7: Commit the implementation**
 
 Run:
 
@@ -275,7 +275,7 @@ Expected: commit succeeds.
 - Verify: `internal/lsp/server.go`
 - Verify: `internal/lsp/server_test.go`
 
-- [ ] **Step 1: Run the full Go test suite**
+- [x] **Step 1: Run the full Go test suite**
 
 Run:
 
@@ -285,7 +285,7 @@ go test ./... -count=1
 
 Expected: PASS.
 
-- [ ] **Step 2: Confirm no analyzer or schema catalog changes**
+- [x] **Step 2: Confirm no analyzer or schema catalog changes**
 
 Run:
 
@@ -300,7 +300,7 @@ internal/lsp/server.go
 internal/lsp/server_test.go
 ```
 
-- [ ] **Step 3: Inspect the implementation diff**
+- [x] **Step 3: Inspect the implementation diff**
 
 Run:
 
@@ -310,7 +310,7 @@ git diff --check HEAD~2..HEAD
 
 Expected: command exits 0 with no whitespace errors.
 
-- [ ] **Step 4: Confirm release impact**
+- [x] **Step 4: Confirm release impact**
 
 Run:
 
