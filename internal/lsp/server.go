@@ -20,6 +20,11 @@ const (
 
 	// LSP InsertTextMode.asIs.
 	insertTextModeAsIs = 1
+
+	// LSP CompletionItemKind.Property.
+	completionItemKindProperty = 10
+
+	completionItemDetailCrossplaneYAMLField = "Crossplane YAML field"
 )
 
 var nullResult = json.RawMessage("null")
@@ -135,6 +140,8 @@ type completionList struct {
 
 type completionItem struct {
 	Label          string    `json:"label"`
+	Kind           int       `json:"kind"`
+	Detail         string    `json:"detail"`
 	Documentation  string    `json:"documentation,omitempty"`
 	TextEdit       *textEdit `json:"textEdit,omitempty"`
 	InsertTextMode int       `json:"insertTextMode,omitempty"`
@@ -300,7 +307,12 @@ func (s *Server) handleCompletion(msg Message) error {
 	}
 	items := make([]completionItem, 0, len(completion.Items))
 	for _, item := range completion.Items {
-		out := completionItem{Label: item.Label, Documentation: item.Documentation}
+		out := completionItem{
+			Label:         item.Label,
+			Kind:          completionItemKindProperty,
+			Detail:        completionItemDetailCrossplaneYAMLField,
+			Documentation: item.Documentation,
+		}
 		if item.TextEdit != nil {
 			out.TextEdit = &textEdit{
 				Range:   s.rangeFromTextEditSpan(snapshot.Text, item.TextEdit.Replace),
