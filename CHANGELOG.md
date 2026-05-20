@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.2](https://github.com/io41/vibe-xpls/compare/v0.0.1...v0.0.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* preserve completion edit indentation in zed ([bd65d07](https://github.com/io41/vibe-xpls/commit/bd65d0745f6b8a58ffc5876feec79ed539be70ab))
+
 ## 0.0.1 (2026-05-19)
 
 
