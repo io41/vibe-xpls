@@ -17,16 +17,20 @@ import (
 const (
 	methodNotFound = -32601
 	invalidParams  = -32602
+
+	// LSP InsertTextMode.asIs.
+	insertTextModeAsIs = 1
 )
 
 var nullResult = json.RawMessage("null")
 
 type Server struct {
-	in               *bufio.Reader
-	out              io.Writer
-	errOut           io.Writer
-	analyzer         *analyzer.Analyzer
-	positionEncoding source.Encoding
+	in                             *bufio.Reader
+	out                            io.Writer
+	errOut                         io.Writer
+	analyzer                       *analyzer.Analyzer
+	positionEncoding               source.Encoding
+	completionInsertTextModeAsIsOK bool
 }
 
 type initializeParams struct {
@@ -36,6 +40,15 @@ type initializeParams struct {
 		General struct {
 			PositionEncodings []string `json:"positionEncodings"`
 		} `json:"general"`
+		TextDocument struct {
+			Completion struct {
+				CompletionItem struct {
+					InsertTextModeSupport struct {
+						ValueSet []int `json:"valueSet"`
+					} `json:"insertTextModeSupport"`
+				} `json:"completionItem"`
+			} `json:"completion"`
+		} `json:"textDocument"`
 	} `json:"capabilities"`
 }
 
@@ -121,9 +134,10 @@ type completionList struct {
 }
 
 type completionItem struct {
-	Label         string    `json:"label"`
-	Documentation string    `json:"documentation,omitempty"`
-	TextEdit      *textEdit `json:"textEdit,omitempty"`
+	Label          string    `json:"label"`
+	Documentation  string    `json:"documentation,omitempty"`
+	TextEdit       *textEdit `json:"textEdit,omitempty"`
+	InsertTextMode int       `json:"insertTextMode,omitempty"`
 }
 
 type textEdit struct {
@@ -197,6 +211,8 @@ func (s *Server) handleInitialize(msg Message) error {
 		return s.respond(msg.ID, nil, &ResponseError{Code: invalidParams, Message: err.Error()})
 	}
 	s.positionEncoding = negotiatePositionEncoding(params.Capabilities.General.PositionEncodings)
+	insertTextModes := params.Capabilities.TextDocument.Completion.CompletionItem.InsertTextModeSupport.ValueSet
+	s.completionInsertTextModeAsIsOK = supportsInsertTextModeAsIs(insertTextModes)
 
 	a, err := analyzer.New(analyzer.Options{WorkspaceRoot: rootFromInitialize(params), Limits: analyzer.DefaultLimits()})
 	if err != nil {
@@ -290,10 +306,22 @@ func (s *Server) handleCompletion(msg Message) error {
 				Range:   s.rangeFromTextEditSpan(snapshot.Text, item.TextEdit.Replace),
 				NewText: item.TextEdit.NewText,
 			}
+			if s.completionInsertTextModeAsIsOK {
+				out.InsertTextMode = insertTextModeAsIs
+			}
 		}
 		items = append(items, out)
 	}
 	return s.respond(msg.ID, completionList{IsIncomplete: false, Items: items}, nil)
+}
+
+func supportsInsertTextModeAsIs(valueSet []int) bool {
+	for _, value := range valueSet {
+		if value == insertTextModeAsIs {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) publishDiagnosticsForGeneration(uri string, generation analyzer.Generation) error {

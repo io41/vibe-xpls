@@ -238,6 +238,9 @@ func TestCompletionItemsIncludePlainTextEdits(t *testing.T) {
 	if _, ok := item["insertTextFormat"]; ok {
 		t.Fatalf("completion should not use snippets: %#v", item)
 	}
+	if _, ok := item["insertTextMode"]; ok {
+		t.Fatalf("completion should not advertise insertTextMode without client support: %#v", item)
+	}
 	rng := asMap(t, edit["range"])
 	start := asMap(t, rng["start"])
 	end := asMap(t, rng["end"])
@@ -252,7 +255,10 @@ func TestCompletionTextEditCorrectsIndentedRootKey(t *testing.T) {
 	text := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: root-package\n  s"
 
 	messages := runServerFrames(t,
-		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		requestFrame(t, 1, "initialize", map[string]any{
+			"rootUri":      fileURI(root),
+			"capabilities": zedCompletionCapabilities(),
+		}),
 		notificationFrame(t, "textDocument/didOpen", map[string]any{
 			"textDocument": map[string]any{"uri": uri, "text": text},
 		}),
@@ -267,6 +273,9 @@ func TestCompletionTextEditCorrectsIndentedRootKey(t *testing.T) {
 	edit := asMap(t, item["textEdit"])
 	if edit["newText"] != "spec:" {
 		t.Fatalf("newText = %#v, want spec:", edit["newText"])
+	}
+	if item["insertTextMode"] != float64(1) {
+		t.Fatalf("insertTextMode = %#v, want asIs", item["insertTextMode"])
 	}
 	rng := asMap(t, edit["range"])
 	start := asMap(t, rng["start"])
@@ -572,6 +581,21 @@ func completionItemByLabelForTest(t *testing.T, items []any, label string) map[s
 	}
 	t.Fatalf("completion item %q not found in %#v", label, items)
 	return nil
+}
+
+func zedCompletionCapabilities() map[string]any {
+	return map[string]any{
+		"textDocument": map[string]any{
+			"completion": map[string]any{
+				"completionItem": map[string]any{
+					"insertTextModeSupport": map[string]any{
+						"valueSet": []int{1, 2},
+					},
+				},
+				"insertTextMode": 2,
+			},
+		},
+	}
 }
 
 func sameID(got any, want int) bool {
