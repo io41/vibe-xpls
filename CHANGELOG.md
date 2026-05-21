@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.0.4](https://github.com/io41/vibe-xpls/compare/v0.0.3...v0.0.4) (2026-05-21)
+
+
+### Features
+
+* add release-aware schema model ([2dc643f](https://github.com/io41/vibe-xpls/commit/2dc643f1b10f82964e11937492d26d47d1805a73))
+* add schema generator ([651d07a](https://github.com/io41/vibe-xpls/commit/651d07a3804e424b2775a1f175101299d00c0bfb))
+* complete from generated schema paths ([b911d86](https://github.com/io41/vibe-xpls/commit/b911d86af70193c7483c2a6b73edfc197177231e))
+* generate Crossplane core schemas ([a099e82](https://github.com/io41/vibe-xpls/commit/a099e82f889ae455f0d29a4f314ff637c599a5b5))
+* load generated schema bundle ([2d8c24c](https://github.com/io41/vibe-xpls/commit/2d8c24c5a94e2ac7392b501d67b6a47923cbf594))
+* report schema completion degradation ([e79c61b](https://github.com/io41/vibe-xpls/commit/e79c61ba4ca67fb37e9496b56d19c2176182da84))
+* resolve schema release per package ([1bbb731](https://github.com/io41/vibe-xpls/commit/1bbb731df9ef45b4d79f486c029e901d0bf0b2b7))
+
+
+### Bug Fixes
+
+* align YAML spans with source positions ([a21efea](https://github.com/io41/vibe-xpls/commit/a21efea202afa9848dc3233957816e57d748184f))
+* copy schema field metadata ([a836179](https://github.com/io41/vibe-xpls/commit/a836179918a9bdb3d3e3618c5b4e7315bf50888b))
+* generate compatibility schema data ([bfe5611](https://github.com/io41/vibe-xpls/commit/bfe5611facce6f952051ae5853bd3ddda16f58c9))
+* harden schema generator paths and refs ([89c4dff](https://github.com/io41/vibe-xpls/commit/89c4dff1b448d3ccf8834f11a97b0570bec0f27d))
+* honor package marker edits and workspace schemas ([a937006](https://github.com/io41/vibe-xpls/commit/a937006519b1df27caa07504a303a5abc82e4f71))
+* preserve generated schema bundle behavior ([dbcc166](https://github.com/io41/vibe-xpls/commit/dbcc16621a142503d2f14ae552a77f8cd393c121))
+* preserve generated schema compatibility ([dd17c47](https://github.com/io41/vibe-xpls/commit/dd17c477e99c60ecc28f35d7ae71865a2a908b9d))
+* preserve hover at scalar boundaries ([9897f2c](https://github.com/io41/vibe-xpls/commit/9897f2c4c88116a58de5a631d01ff3f9087d026d))
+* stabilize hover path selection ([36fb7bd](https://github.com/io41/vibe-xpls/commit/36fb7bdc0e500eb6d3f9e7dead0d7d0d04e00ccc))
+* throttle stable completion suppressions ([88854e9](https://github.com/io41/vibe-xpls/commit/88854e930d788565e032d7436d5bd4cf3eecb451))
+* tighten completion degradation reporting ([af3357b](https://github.com/io41/vibe-xpls/commit/af3357b2a5392de6758e7b56100f7f1073b3eea5))
+
+
+### Documentation
+
+* clarify experimental project status ([42c6058](https://github.com/io41/vibe-xpls/commit/42c6058091d35a95443e5d5e3e03c100ed28838f))
+* design generated completion foundation ([1a8a440](https://github.com/io41/vibe-xpls/commit/1a8a44099fa59296dc0c9d486f884ffaef530644))
+* document generated schema bundle ([8c2c73e](https://github.com/io41/vibe-xpls/commit/8c2c73e24a0183987ecc27499ad5de03ee3128a9))
+* plan generated completion foundation ([216568f](https://github.com/io41/vibe-xpls/commit/216568fcb2fb5d3e7f68c9e9c61b868b9c6583b9))
+
+
+### Tests
+
+* cover schema generator path guards ([821633f](https://github.com/io41/vibe-xpls/commit/821633f7bc89e7245744633565f96d66c3b7a5de))
+* harden completion metadata assertions ([4504e9a](https://github.com/io41/vibe-xpls/commit/4504e9a163573bd96dda07bea978b77a6e8225dc))
+
 ## [0.0.3](https://github.com/io41/vibe-xpls/compare/v0.0.2...v0.0.3) (2026-05-20)
 
 
