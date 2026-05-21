@@ -1151,6 +1151,38 @@ func TestAnalyzerIgnoresOpenWorkspaceProviderCRDInIgnoredDirectory(t *testing.T)
 	}
 }
 
+func TestAnalyzerDoesNotTreatOrdinaryYAMLAsWorkspaceSchemaSource(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "provider-crd.yaml"), workspaceProviderCRD("diskName", "Disk bucket name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	resourceURI := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	a.OpenDocument(resourceURI, "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n    diskName: [unterminated\n")
+
+	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "diskName", "Disk bucket name.")
+	if diagnostics := a.Diagnostics(resourceURI); containsDiagnosticSourceMessage(diagnostics, "schema", "parse workspace schema source") {
+		t.Fatalf("ordinary resource diagnostics = %#v, want no workspace schema parse diagnostic", diagnostics)
+	}
+}
+
+func TestAnalyzerLoadsUnsavedMultiDocumentWorkspaceProviderCRD(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	resourceURI := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	a.OpenDocument(resourceURI, "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n")
+	crdURI := "file://" + filepath.Join(root, "api", "multi-doc-provider-crd.yaml")
+	a.OpenDocument(crdURI, "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ignored\n---\n"+workspaceProviderCRD("multiDocName", "Multi document bucket name."))
+
+	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "multiDocName", "Multi document bucket name.")
+}
+
 func TestAnalyzerSurfacesMalformedWorkspaceProviderCRDDiagnostic(t *testing.T) {
 	root := t.TempDir()
 	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")

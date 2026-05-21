@@ -87,6 +87,16 @@ func (s *DocumentStore) FilePaths() []string {
 	return paths
 }
 
+func (s *DocumentStore) Documents() []Document {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	docs := make([]Document, 0, len(s.docs))
+	for _, doc := range s.docs {
+		docs = append(docs, doc)
+	}
+	return docs
+}
+
 func (s *DocumentStore) set(uri, text string, closed bool) Document {
 	s.mu.Lock()
 	defer s.mu.Unlock()

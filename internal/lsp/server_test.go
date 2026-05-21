@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -560,6 +561,46 @@ func TestStaleDiagnosticPublicationIsDropped(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSchemaDiagnosticClearsOnRelatedSourceChange(t *testing.T) {
+	root := t.TempDir()
+	writeLSPTestFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	firstURI := fileURI(filepath.Join(root, "api", "a-provider-crd.yaml"))
+	secondURI := fileURI(filepath.Join(root, "api", "b-provider-crd.yaml"))
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{
+				"uri":  firstURI,
+				"text": lspProviderCRD("s3.aws.upbound.io", "Bucket", "bucketName", "First bucket name."),
+			},
+		}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{
+				"uri":  secondURI,
+				"text": lspProviderCRD("s3.aws.upbound.io", "Bucket", "bucketName", "Second bucket name."),
+			},
+		}),
+		notificationFrame(t, "textDocument/didChange", map[string]any{
+			"textDocument": map[string]any{"uri": firstURI},
+			"contentChanges": []map[string]any{{
+				"text": lspProviderCRD("ec2.aws.upbound.io", "VPC", "cidrBlock", "CIDR block."),
+			}},
+		}),
+	)
+
+	secondDiagnostics := diagnosticsNotificationsForURI(t, messages, secondURI)
+	if len(secondDiagnostics) < 2 {
+		t.Fatalf("diagnostics for %s = %#v, want warning then clear", secondURI, secondDiagnostics)
+	}
+	if !diagnosticsContainMessage(secondDiagnostics[0], "workspace schema conflicts with another workspace schema") {
+		t.Fatalf("initial second CRD diagnostics = %#v, want duplicate warning", secondDiagnostics[0])
+	}
+	if len(secondDiagnostics[len(secondDiagnostics)-1]) != 0 {
+		t.Fatalf("final second CRD diagnostics = %#v, want clear after first CRD changes GVK", secondDiagnostics[len(secondDiagnostics)-1])
+	}
+}
+
 func TestStaleHoverAndCompletionSnapshotsAreDropped(t *testing.T) {
 	var out bytes.Buffer
 	s, uri := newServerWithAnalyzer(t, &out)
@@ -674,6 +715,36 @@ func diagnosticsFromLastNotification(t *testing.T, messages []Message) []any {
 		t.Fatalf("missing diagnostics notification in %#v", messages)
 	}
 	return diagnostics
+}
+
+func diagnosticsNotificationsForURI(t *testing.T, messages []Message, uri string) [][]any {
+	t.Helper()
+	var result [][]any
+	for _, message := range messages {
+		if message.Method != "textDocument/publishDiagnostics" {
+			continue
+		}
+		params := paramsMap(t, message)
+		if params["uri"] != uri {
+			continue
+		}
+		result = append(result, asSlice(t, params["diagnostics"]))
+	}
+	return result
+}
+
+func diagnosticsContainMessage(diagnostics []any, want string) bool {
+	for _, raw := range diagnostics {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		message, ok := item["message"].(string)
+		if ok && strings.Contains(message, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func resultMap(t *testing.T, msg Message) map[string]any {
@@ -807,6 +878,47 @@ func toLSPPosition(position source.Position) Position {
 
 func fileURI(path string) string {
 	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+}
+
+func writeLSPTestFile(t *testing.T, path, text string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("create parent directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func lspProviderCRD(group, kind, fieldName, description string) string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: test.example.org
+spec:
+  group: ` + group + `
+  names:
+    kind: ` + kind + `
+    plural: tests
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                forProvider:
+                  type: object
+                  properties:
+                    ` + fieldName + `:
+                      type: string
+                      description: ` + description + `
+`
 }
 
 func testRoot(t *testing.T) string {

@@ -70,9 +70,71 @@ type workspaceOpenAPISchema struct {
 func (a *Analyzer) loadWorkspaceSchemas() {
 	a.workspaceSchemas = map[workspaceSchemaKey]Schema{}
 	a.workspaceSchemaDiagnostics = map[string][]Diagnostic{}
+	a.workspaceSchemaSources = map[string]map[string]struct{}{}
 	for _, pkg := range a.workspace.PackageRoots {
 		a.refreshWorkspaceSchemasForPackage(pkg)
 	}
+}
+
+func (a *Analyzer) DocumentMayAffectWorkspaceSchemas(uri, text string) bool {
+	path, pkg, ok := a.workspaceSchemaRefreshContext(uri)
+	if !ok {
+		return false
+	}
+	return a.workspaceSchemaSourcePathKnown(pkg, path) || workspaceSchemaSourceTextMayAffect([]byte(text))
+}
+
+func (a *Analyzer) ClosedDocumentMayAffectWorkspaceSchemas(uri string) bool {
+	path, pkg, ok := a.workspaceSchemaRefreshContext(uri)
+	if !ok {
+		return false
+	}
+	return a.workspaceSchemaSourcePathKnown(pkg, path)
+}
+
+func (a *Analyzer) WorkspaceSchemaDiagnosticURIs(uri string) []string {
+	path, ok := filePathFromURI(uri)
+	if !ok {
+		return nil
+	}
+	pkg, ok := a.workspace.PackageForFile(path)
+	if !ok {
+		return nil
+	}
+	sources := a.workspaceSchemaSources[pkg.Root]
+	if len(sources) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var uris []string
+	for _, doc := range a.docs.Documents() {
+		docPath, ok := filePathFromURI(doc.URI)
+		if !ok {
+			continue
+		}
+		if _, ok := sources[filepath.Clean(docPath)]; !ok {
+			continue
+		}
+		if _, ok := seen[doc.URI]; ok {
+			continue
+		}
+		seen[doc.URI] = struct{}{}
+		uris = append(uris, doc.URI)
+	}
+	sort.Strings(uris)
+	return uris
+}
+
+func (a *Analyzer) workspaceSchemaRefreshContext(uri string) (string, PackageRoot, bool) {
+	path, ok := filePathFromURI(uri)
+	if !ok || !isWorkspaceYAMLFile(path) {
+		return "", PackageRoot{}, false
+	}
+	pkg, ok := a.workspace.PackageForFile(path)
+	if !ok || !a.packageOwnsSchemaSourcePath(pkg, path) {
+		return "", PackageRoot{}, false
+	}
+	return filepath.Clean(path), pkg, true
 }
 
 func (a *Analyzer) refreshWorkspaceSchemasForURI(uri string) {
@@ -94,22 +156,33 @@ func (a *Analyzer) refreshWorkspaceSchemasForPackage(pkg PackageRoot) {
 	if a.workspaceSchemaDiagnostics == nil {
 		a.workspaceSchemaDiagnostics = map[string][]Diagnostic{}
 	}
+	if a.workspaceSchemaSources == nil {
+		a.workspaceSchemaSources = map[string]map[string]struct{}{}
+	}
 	for key := range a.workspaceSchemas {
 		if key.PackageRoot == pkg.Root {
 			delete(a.workspaceSchemas, key)
 		}
 	}
 	delete(a.workspaceSchemaDiagnostics, pkg.Root)
+	delete(a.workspaceSchemaSources, pkg.Root)
+	sourcePaths := map[string]struct{}{}
 	for _, path := range a.workspaceSchemaSourcePaths(pkg) {
 		raw, ok := a.workspaceSchemaSource(path)
 		if !ok {
 			continue
 		}
 		schemas, diagnostics := workspaceSchemasFromRaw(path, raw)
+		if workspaceSchemaSourceTextMayAffect(raw) || len(schemas) != 0 || len(diagnostics) != 0 {
+			sourcePaths[filepath.Clean(path)] = struct{}{}
+		}
 		a.workspaceSchemaDiagnostics[pkg.Root] = append(a.workspaceSchemaDiagnostics[pkg.Root], diagnostics...)
 		for _, schema := range schemas {
 			a.addWorkspaceSchemaForPackage(pkg, schema)
 		}
+	}
+	if len(sourcePaths) != 0 {
+		a.workspaceSchemaSources[pkg.Root] = sourcePaths
 	}
 }
 
@@ -125,7 +198,9 @@ func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
 			continue
 		}
 		if a.packageOwnsSchemaSourcePath(pkg, path) {
-			paths[path] = struct{}{}
+			if doc, ok := a.docs.GetByFilePath(path); ok && (workspaceSchemaSourceTextMayAffect([]byte(doc.Text)) || a.workspaceSchemaSourcePathKnown(pkg, path)) {
+				paths[path] = struct{}{}
+			}
 		}
 	}
 	result := make([]string, 0, len(paths))
@@ -139,6 +214,15 @@ func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
 func (a *Analyzer) packageOwnsSchemaSourcePath(pkg PackageRoot, path string) bool {
 	owner, ok := a.workspace.PackageForFile(path)
 	return ok && owner.Root == pkg.Root && workspaceSchemaSourcePathAllowed(pkg.Root, path)
+}
+
+func (a *Analyzer) workspaceSchemaSourcePathKnown(pkg PackageRoot, path string) bool {
+	sources := a.workspaceSchemaSources[pkg.Root]
+	if len(sources) == 0 {
+		return false
+	}
+	_, ok := sources[filepath.Clean(path)]
+	return ok
 }
 
 func (a *Analyzer) workspaceSchemaSource(path string) ([]byte, bool) {
@@ -388,6 +472,35 @@ func workspaceSchemasFromRaw(path string, raw []byte) ([]Schema, []Diagnostic) {
 		}
 	}
 	return schemas, diagnostics
+}
+
+func workspaceSchemaSourceTextMayAffect(raw []byte) bool {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	for {
+		var node yaml.Node
+		err := decoder.Decode(&node)
+		if errors.Is(err, io.EOF) {
+			return false
+		}
+		if err != nil {
+			break
+		}
+		var header struct {
+			APIVersion string `yaml:"apiVersion"`
+			Kind       string `yaml:"kind"`
+		}
+		if err := node.Decode(&header); err == nil && workspaceSchemaHeaderMayAffect(header.APIVersion, header.Kind) {
+			return true
+		}
+	}
+	text := string(raw)
+	return (strings.Contains(text, "apiextensions.k8s.io/v1") && strings.Contains(text, "CustomResourceDefinition")) ||
+		(strings.Contains(text, "apiextensions.crossplane.io/v1") && strings.Contains(text, "CompositeResourceDefinition"))
+}
+
+func workspaceSchemaHeaderMayAffect(apiVersion, kind string) bool {
+	return (apiVersion == "apiextensions.k8s.io/v1" && kind == "CustomResourceDefinition") ||
+		(apiVersion == "apiextensions.crossplane.io/v1" && kind == "CompositeResourceDefinition")
 }
 
 func workspaceSchemasFromCRDDocument(doc workspaceCRDDocument, provenance SchemaProvenance) []Schema {

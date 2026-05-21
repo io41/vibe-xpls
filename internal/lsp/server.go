@@ -262,8 +262,9 @@ func (s *Server) handleDidOpen(raw json.RawMessage) error {
 	if err := decodeParams(raw, &params); err != nil || params.TextDocument.URI == "" {
 		return nil
 	}
+	publishSchemaSources := s.analyzer.DocumentMayAffectWorkspaceSchemas(params.TextDocument.URI, params.TextDocument.Text)
 	doc := s.analyzer.OpenDocument(params.TextDocument.URI, params.TextDocument.Text)
-	return s.publishDiagnosticsForGeneration(doc.URI, doc.Generation)
+	return s.publishDiagnosticsForDocumentSet(doc.URI, publishSchemaSources)
 }
 
 func (s *Server) handleDidChange(raw json.RawMessage) error {
@@ -275,8 +276,9 @@ func (s *Server) handleDidChange(raw json.RawMessage) error {
 		return nil
 	}
 	text := params.ContentChanges[len(params.ContentChanges)-1].Text
+	publishSchemaSources := s.analyzer.DocumentMayAffectWorkspaceSchemas(params.TextDocument.URI, text)
 	doc := s.analyzer.ChangeDocument(params.TextDocument.URI, text)
-	return s.publishDiagnosticsForGeneration(doc.URI, doc.Generation)
+	return s.publishDiagnosticsForDocumentSet(doc.URI, publishSchemaSources)
 }
 
 func (s *Server) handleDidClose(raw json.RawMessage) error {
@@ -284,10 +286,18 @@ func (s *Server) handleDidClose(raw json.RawMessage) error {
 	if err := decodeParams(raw, &params); err != nil || params.TextDocument.URI == "" {
 		return nil
 	}
+	publishSchemaSources := false
 	if s.analyzer != nil {
+		publishSchemaSources = s.analyzer.ClosedDocumentMayAffectWorkspaceSchemas(params.TextDocument.URI)
 		s.analyzer.CloseDocument(params.TextDocument.URI)
 	}
-	return s.publishEmptyDiagnostics(params.TextDocument.URI)
+	if err := s.publishEmptyDiagnostics(params.TextDocument.URI); err != nil {
+		return err
+	}
+	if publishSchemaSources {
+		return s.publishDiagnosticsForWorkspaceSchemaSources(params.TextDocument.URI)
+	}
+	return nil
 }
 
 func (s *Server) handleHover(msg Message) error {
@@ -376,6 +386,42 @@ func (s *Server) publishDiagnosticsForGeneration(uri string, generation analyzer
 		return nil
 	}
 	return s.publishDiagnostics(publication)
+}
+
+func (s *Server) publishDiagnosticsForDocumentSet(uri string, includeWorkspaceSchemaSources bool) error {
+	if err := s.publishDiagnosticsForCurrentDocument(uri); err != nil {
+		return err
+	}
+	if includeWorkspaceSchemaSources {
+		return s.publishDiagnosticsForWorkspaceSchemaSources(uri)
+	}
+	return nil
+}
+
+func (s *Server) publishDiagnosticsForCurrentDocument(uri string) error {
+	if s.analyzer == nil {
+		return nil
+	}
+	doc, ok := s.analyzer.Document(uri)
+	if !ok {
+		return nil
+	}
+	return s.publishDiagnosticsForGeneration(uri, doc.Generation)
+}
+
+func (s *Server) publishDiagnosticsForWorkspaceSchemaSources(uri string) error {
+	if s.analyzer == nil {
+		return nil
+	}
+	for _, sourceURI := range s.analyzer.WorkspaceSchemaDiagnosticURIs(uri) {
+		if sourceURI == uri {
+			continue
+		}
+		if err := s.publishDiagnosticsForCurrentDocument(sourceURI); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) diagnosticsPublication(uri string, generation analyzer.Generation) (diagnosticPublication, bool) {

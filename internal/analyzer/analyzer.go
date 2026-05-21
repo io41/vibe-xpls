@@ -20,6 +20,7 @@ type Analyzer struct {
 	schemas                    *SchemaIndex
 	workspaceSchemas           map[workspaceSchemaKey]Schema
 	workspaceSchemaDiagnostics map[string][]Diagnostic
+	workspaceSchemaSources     map[string]map[string]struct{}
 }
 
 func New(options Options) (*Analyzer, error) {
@@ -48,20 +49,29 @@ func (a *Analyzer) SchemaBundleStatus() SchemaBundleStatus {
 }
 
 func (a *Analyzer) OpenDocument(uri, text string) Document {
+	refreshSchemas := a.DocumentMayAffectWorkspaceSchemas(uri, text)
 	doc := a.docs.Open(uri, text)
-	a.refreshWorkspaceSchemasForURI(uri)
+	if refreshSchemas {
+		a.refreshWorkspaceSchemasForURI(uri)
+	}
 	return doc
 }
 
 func (a *Analyzer) ChangeDocument(uri, text string) Document {
+	refreshSchemas := a.DocumentMayAffectWorkspaceSchemas(uri, text)
 	doc := a.docs.Change(uri, text)
-	a.refreshWorkspaceSchemasForURI(uri)
+	if refreshSchemas {
+		a.refreshWorkspaceSchemasForURI(uri)
+	}
 	return doc
 }
 
 func (a *Analyzer) CloseDocument(uri string) Document {
+	refreshSchemas := a.ClosedDocumentMayAffectWorkspaceSchemas(uri)
 	doc := a.docs.Close(uri)
-	a.refreshWorkspaceSchemasForURI(uri)
+	if refreshSchemas {
+		a.refreshWorkspaceSchemasForURI(uri)
+	}
 	return doc
 }
 
