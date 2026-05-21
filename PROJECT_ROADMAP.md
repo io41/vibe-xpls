@@ -49,6 +49,9 @@ schema tests, runs the full Go test suite, and builds both CLIs into
   artifacts.
 - Stale-generation tests that rerun the generator and compare output with the
   committed manifest and schema JSON files.
+- Workspace CRD/XRD schema sources. Local provider CRDs and XRD OpenAPI schemas
+  are loaded into the source-neutral schema model for package-scoped key
+  completions and docs without registry, cluster, or network access.
 
 ## Current
 
@@ -60,27 +63,20 @@ schema tests, runs the full Go test suite, and builds both CLIs into
 
 ## Next
 
-1. Workspace CRD/XRD schema sources.
-   Load local workspace CRDs and XRD OpenAPI schemas into the existing
-   source-neutral schema model so provider managed resources and workspace XR
-   resources can produce key completions and docs without registry, cluster, or
-   network access. Implementation plan:
-   `docs/superpowers/plans/2026-05-21-workspace-schema-sources.md`.
-
-2. Function input schema dispatch.
+1. Function input schema dispatch.
    Use the selected pipeline function and known input GVK to provide completions
    under `spec.pipeline[].input` when the input object's schema is known.
 
-3. Relationship-aware completions.
+2. Relationship-aware completions.
    Use the local package, XRD, Composition, function, and provider graph to
    suggest safe relationships such as composition type refs and package
    dependency references.
 
-4. Safe value completions.
+3. Safe value completions.
    Add value completions from schema enums, defaults, and in-workspace facts
    without inventing values or querying remote systems.
 
-5. Developer/debug schema insight command.
+4. Developer/debug schema insight command.
    Add a command that explains bundle health, selected release, active package
    root, schema provenance, and completion suppression reasons for a file.
 
