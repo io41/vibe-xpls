@@ -3,6 +3,7 @@ package analyzer
 import (
 	"encoding/json"
 	"testing"
+	"testing/fstest"
 )
 
 func TestBuiltInCrossplaneSchemas(t *testing.T) {
@@ -15,6 +16,35 @@ func TestBuiltInCrossplaneSchemas(t *testing.T) {
 	}
 	if doc.Description == "" {
 		t.Fatal("expected non-empty field documentation")
+	}
+}
+
+func TestEmbeddedSchemaBundleLoadsFixture(t *testing.T) {
+	idx := NewSchemaIndex()
+	status := idx.LoadGeneratedBuiltIns()
+	if !status.OK {
+		t.Fatalf("bundle status = %#v", status)
+	}
+	doc, ok := idx.FieldDocumentationForRelease(CrossplaneRelease{Tag: "v1.20.7"}, "apiextensions.crossplane.io/v1", "Composition", "spec.compositeTypeRef.kind")
+	if !ok {
+		t.Fatal("expected generated fixture field")
+	}
+	if doc.Type != "string" || !doc.Required {
+		t.Fatalf("field = %#v, want string required field", doc)
+	}
+}
+
+func TestInvalidBundleFormatDisablesGeneratedBuiltIns(t *testing.T) {
+	fsys := fstest.MapFS{
+		"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
+	}
+	idx := NewSchemaIndex()
+	status := idx.loadGeneratedBuiltInsFromFS(fsys)
+	if status.OK {
+		t.Fatalf("status = %#v, want failed status", status)
+	}
+	if len(idx.FieldsForRelease(CrossplaneRelease{Tag: "v1.20.7"}, "apiextensions.crossplane.io/v1", "Composition")) != 0 {
+		t.Fatal("invalid bundle should not load generated fields")
 	}
 }
 

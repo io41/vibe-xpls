@@ -24,7 +24,7 @@ func New(options Options) (*Analyzer, error) {
 		return nil, err
 	}
 	schemas := NewSchemaIndex()
-	schemas.LoadBuiltIns()
+	schemas.bundleStatus = schemas.LoadGeneratedBuiltIns()
 	return &Analyzer{
 		workspace: workspace,
 		limits:    defaultLimits(options.Limits),

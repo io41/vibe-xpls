@@ -1,0 +1,12 @@
+{
+  "apiVersion": "apiextensions.crossplane.io/v1",
+  "fields": [
+    {"description": "API version of the Composition resource.", "path": "apiVersion", "type": "string"},
+    {"description": "Resource kind, normally Composition.", "path": "kind", "type": "string"},
+    {"description": "Name of the Composition.", "path": "metadata.name", "type": "string"},
+    {"description": "Kind of the composite resource type this Composition renders.", "path": "spec.compositeTypeRef.kind", "required": true, "type": "string"}
+  ],
+  "kind": "Composition",
+  "provenance": {"owner": "core", "source": "generated-built-in", "upstreamReleaseTag": "v1.20.7", "upstreamSourcePath": "fixture"},
+  "release": "v1.20.7"
+}

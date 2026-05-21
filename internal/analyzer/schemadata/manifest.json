@@ -1,0 +1,14 @@
+{
+  "bundleFormatVersion": 1,
+  "generatorVersion": "fixture",
+  "releases": [
+    {
+      "tag": "v1.20.7",
+      "commit": "5fae6c1ab967e57b1dc792b5c52c97bceda12953",
+      "schemas": [
+        "schemas/v1.20.7/apiextensions.crossplane.io_v1_Composition.json",
+        "schemas/v1.20.7/meta.pkg.crossplane.io_v1_Configuration.json"
+      ]
+    }
+  ]
+}

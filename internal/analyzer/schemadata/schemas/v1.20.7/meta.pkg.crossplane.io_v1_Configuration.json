@@ -1,0 +1,12 @@
+{
+  "apiVersion": "meta.pkg.crossplane.io/v1",
+  "fields": [
+    {"description": "API version of the Configuration metadata resource.", "path": "apiVersion", "type": "string"},
+    {"description": "Resource kind, normally Configuration.", "path": "kind", "type": "string"},
+    {"description": "Name of the Configuration package.", "path": "metadata.name", "type": "string"},
+    {"description": "Provider package dependency required by this Configuration.", "path": "spec.dependsOn.provider", "type": "string"}
+  ],
+  "kind": "Configuration",
+  "provenance": {"owner": "core", "source": "generated-built-in", "upstreamReleaseTag": "v1.20.7", "upstreamSourcePath": "fixture"},
+  "release": "v1.20.7"
+}

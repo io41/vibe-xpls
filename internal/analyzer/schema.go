@@ -60,6 +60,7 @@ type SchemaIndex struct {
 	releaseSchemas map[releaseGVK]Schema
 	builtIns       map[SourceGVK]struct{}
 	diagnostics    []Diagnostic
+	bundleStatus   SchemaBundleStatus
 }
 
 type releaseGVK struct {
