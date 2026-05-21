@@ -32,6 +32,30 @@ func TestAnalyzerDiagnosticsHoverAndCompletion(t *testing.T) {
 	}
 }
 
+func TestAnalyzerStartupServesCompositeTypeRefAPIVersionDocs(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    apiVersion: example.org/v1\n"
+	a.OpenDocument(uri, text)
+
+	hover, ok := a.Hover(uri, "spec.compositeTypeRef.apiVersion")
+	if !ok || !strings.Contains(hover.Markdown, "API version of the composite resource type this Composition renders.") {
+		t.Fatalf("hover = %#v ok=%v", hover, ok)
+	}
+	completion := a.Completion(uri, "spec.compositeTypeRef")
+	item, ok := completionItemByLabel(completion.Items, "apiVersion")
+	if !ok {
+		t.Fatalf("completion missing apiVersion: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "API version of the composite resource type this Composition renders.") {
+		t.Fatalf("apiVersion completion documentation = %q", item.Documentation)
+	}
+}
+
 func TestAnalyzerCompletionUsesSchemaParentThatDoesNotExistYet(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

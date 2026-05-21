@@ -48,6 +48,44 @@ func TestInvalidBundleFormatDisablesGeneratedBuiltIns(t *testing.T) {
 	}
 }
 
+func TestInvalidSchemaDocumentDisablesGeneratedBuiltInsAtomically(t *testing.T) {
+	fsys := fstest.MapFS{
+		"schemadata/manifest.json": {Data: []byte(`{
+			"bundleFormatVersion": 1,
+			"generatorVersion": "fixture",
+			"releases": [{
+				"tag": "v1.20.7",
+				"commit": "fixture",
+				"schemas": [
+					"schemas/v1.20.7/valid.json",
+					"schemas/v1.20.7/corrupt.json"
+				]
+			}]
+		}`)},
+		"schemadata/schemas/v1.20.7/valid.json": {Data: []byte(`{
+			"apiVersion": "apiextensions.crossplane.io/v1",
+			"fields": [
+				{"description": "Kind of the composite resource type this Composition renders.", "path": "spec.compositeTypeRef.kind", "required": true, "type": "string"}
+			],
+			"kind": "Composition",
+			"provenance": {"owner": "core", "source": "generated-built-in"},
+			"release": "v1.20.7"
+		}`)},
+		"schemadata/schemas/v1.20.7/corrupt.json": {Data: []byte(`{`)},
+	}
+	idx := NewSchemaIndex()
+	status := idx.loadGeneratedBuiltInsFromFS(fsys)
+	if status.OK {
+		t.Fatalf("status = %#v, want failed status", status)
+	}
+	if len(idx.FieldsForRelease(CrossplaneRelease{Tag: "v1.20.7"}, "apiextensions.crossplane.io/v1", "Composition")) != 0 {
+		t.Fatal("corrupt bundle should not leak release fields")
+	}
+	if len(idx.Fields("apiextensions.crossplane.io/v1", "Composition")) != 0 {
+		t.Fatal("corrupt bundle should not leak legacy fields")
+	}
+}
+
 func TestProviderSchemaCanBeAdded(t *testing.T) {
 	idx := NewSchemaIndex()
 	idx.AddWorkspaceSchema(Schema{

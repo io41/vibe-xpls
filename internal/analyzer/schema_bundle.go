@@ -54,34 +54,54 @@ func (idx *SchemaIndex) loadGeneratedBuiltInsFromFS(fsys fs.FS) SchemaBundleStat
 	if manifest.BundleFormatVersion != schemaBundleFormatVersion {
 		return SchemaBundleStatus{Message: fmt.Sprintf("unsupported schema bundle format %d", manifest.BundleFormatVersion)}
 	}
+	staged := NewSchemaIndex()
+	loaded := []releaseGVK{}
 	for _, release := range manifest.Releases {
 		for _, relPath := range release.Schemas {
-			if err := idx.loadSchemaDocumentJSON(fsys, filepath.ToSlash(filepath.Join("schemadata", relPath))); err != nil {
+			schema, err := schemaFromDocumentJSON(fsys, filepath.ToSlash(filepath.Join("schemadata", relPath)))
+			if err != nil {
 				return SchemaBundleStatus{Message: err.Error()}
 			}
+			staged.AddGeneratedBuiltIn(schema)
+			loaded = append(loaded, releaseGVK{
+				Release:    schema.Release,
+				APIVersion: schema.GVK.APIVersion,
+				Kind:       schema.GVK.Kind,
+			})
 		}
+	}
+	for _, key := range loaded {
+		idx.AddGeneratedBuiltIn(staged.releaseSchemas[key])
 	}
 	return SchemaBundleStatus{OK: true}
 }
 
 func (idx *SchemaIndex) loadSchemaDocumentJSON(fsys fs.FS, path string) error {
+	schema, err := schemaFromDocumentJSON(fsys, path)
+	if err != nil {
+		return err
+	}
+	idx.AddGeneratedBuiltIn(schema)
+	return nil
+}
+
+func schemaFromDocumentJSON(fsys fs.FS, path string) (Schema, error) {
 	raw, err := fs.ReadFile(fsys, path)
 	if err != nil {
-		return fmt.Errorf("read schema document %s: %w", path, err)
+		return Schema{}, fmt.Errorf("read schema document %s: %w", path, err)
 	}
 	var doc schemaDocumentJSON
 	if err := json.Unmarshal(raw, &doc); err != nil {
-		return fmt.Errorf("parse schema document %s: %w", path, err)
+		return Schema{}, fmt.Errorf("parse schema document %s: %w", path, err)
 	}
 	fields := make(map[string]FieldDoc, len(doc.Fields))
 	for _, field := range doc.Fields {
 		fields[field.Path] = field
 	}
-	idx.AddGeneratedBuiltIn(Schema{
+	return Schema{
 		Release:    CrossplaneRelease{Tag: doc.Release},
 		GVK:        SourceGVK{APIVersion: doc.APIVersion, Kind: doc.Kind},
 		Fields:     fields,
 		Provenance: doc.Provenance,
-	})
-	return nil
+	}, nil
 }
