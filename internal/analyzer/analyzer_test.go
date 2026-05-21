@@ -1036,6 +1036,31 @@ func TestAnalyzerLoadsUnsavedNewWorkspaceProviderCRDSchema(t *testing.T) {
 	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "unsavedName", "Unsaved document bucket name.")
 }
 
+func TestAnalyzerIgnoresOpenWorkspaceProviderCRDInIgnoredDirectory(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "provider-crd.yaml"), workspaceProviderCRD("diskName", "Disk bucket name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	resourceURI := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	a.OpenDocument(resourceURI, "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n")
+	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "diskName", "Disk bucket name.")
+
+	ignoredCRDURI := "file://" + filepath.Join(root, "vendor", "provider-crd.yaml")
+	a.OpenDocument(ignoredCRDURI, workspaceProviderCRD("ignoredName", "Ignored vendor bucket name."))
+
+	completion := a.Completion(resourceURI, "spec.forProvider")
+	assertBucketCompletionDoc(t, completion, "diskName", "Disk bucket name.")
+	if containsCompletion(completion.Items, "ignoredName") {
+		t.Fatalf("completion contains ignored vendor CRD field: %#v", completion.Items)
+	}
+	if diagnostics := a.Diagnostics(ignoredCRDURI); containsDiagnosticSourceMessage(diagnostics, "schema", "workspace schema conflicts with another workspace schema") {
+		t.Fatalf("ignored CRD diagnostics = %#v, want no workspace schema conflict", diagnostics)
+	}
+}
+
 func TestAnalyzerSurfacesMalformedWorkspaceProviderCRDDiagnostic(t *testing.T) {
 	root := t.TempDir()
 	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")

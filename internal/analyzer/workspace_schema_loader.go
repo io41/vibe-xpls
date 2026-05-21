@@ -120,7 +120,7 @@ func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
 
 func (a *Analyzer) packageOwnsSchemaSourcePath(pkg PackageRoot, path string) bool {
 	owner, ok := a.workspace.PackageForFile(path)
-	return ok && owner.Root == pkg.Root
+	return ok && owner.Root == pkg.Root && workspaceSchemaSourcePathAllowed(pkg.Root, path)
 }
 
 func (a *Analyzer) workspaceSchemaSource(path string) ([]byte, bool) {
@@ -245,6 +245,42 @@ func workspaceYAMLFiles(root string, limits Limits) []string {
 	})
 	sort.Strings(files)
 	return files
+}
+
+func workspaceSchemaSourcePathAllowed(root, path string) bool {
+	cleanRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cleanRoot, cleanPath)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	current := cleanRoot
+	for _, part := range parts[:len(parts)-1] {
+		if workspaceIgnoredSchemaDir(part) {
+			return false
+		}
+		current = filepath.Join(current, part)
+		if workspaceDirHasPackageMarker(current) {
+			return false
+		}
+	}
+	return true
+}
+
+func workspaceIgnoredSchemaDir(name string) bool {
+	switch name {
+	case ".git", ".worktrees", "node_modules", "vendor":
+		return true
+	default:
+		return false
+	}
 }
 
 func workspaceDirHasPackageMarker(path string) bool {
