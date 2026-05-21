@@ -825,6 +825,84 @@ func TestAnalyzerLoadsWorkspaceProviderCRDSchema(t *testing.T) {
 	}
 }
 
+func TestAnalyzerScopesWorkspaceProviderCRDSchemaByPackage(t *testing.T) {
+	root := t.TempDir()
+	pkgA := filepath.Join(root, "packages", "a")
+	pkgB := filepath.Join(root, "packages", "b")
+	analyzerWriteFile(t, filepath.Join(pkgA, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package-a\n")
+	analyzerWriteFile(t, filepath.Join(pkgB, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package-b\n")
+	analyzerWriteFile(t, filepath.Join(pkgA, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Package A bucket name."))
+	analyzerWriteFile(t, filepath.Join(pkgB, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Package B bucket name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+
+	uriA := "file://" + filepath.Join(pkgA, "api", "bucket-instance.yaml")
+	uriB := "file://" + filepath.Join(pkgB, "api", "bucket-instance.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n"
+	a.OpenDocument(uriA, text)
+	a.OpenDocument(uriB, text)
+
+	completionA := a.Completion(uriA, "spec.forProvider")
+	itemA, ok := completionItemByLabel(completionA.Items, "bucketName")
+	if !ok || !strings.Contains(itemA.Documentation, "Package A bucket name.") || strings.Contains(itemA.Documentation, "Package B bucket name.") {
+		t.Fatalf("package A bucketName completion = %#v", itemA)
+	}
+	hoverA, ok := a.Hover(uriA, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(hoverA.Markdown, "Package A bucket name.") || strings.Contains(hoverA.Markdown, "Package B bucket name.") {
+		t.Fatalf("package A hover = %#v ok=%v", hoverA, ok)
+	}
+
+	completionB := a.Completion(uriB, "spec.forProvider")
+	itemB, ok := completionItemByLabel(completionB.Items, "bucketName")
+	if !ok || !strings.Contains(itemB.Documentation, "Package B bucket name.") || strings.Contains(itemB.Documentation, "Package A bucket name.") {
+		t.Fatalf("package B bucketName completion = %#v", itemB)
+	}
+	hoverB, ok := a.Hover(uriB, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(hoverB.Markdown, "Package B bucket name.") || strings.Contains(hoverB.Markdown, "Package A bucket name.") {
+		t.Fatalf("package B hover = %#v ok=%v", hoverB, ok)
+	}
+}
+
+func TestAnalyzerRefreshesWorkspaceProviderCRDSchemaFromOpenDocument(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	crdPath := filepath.Join(root, "api", "provider-crd.yaml")
+	analyzerWriteFile(t, crdPath, workspaceProviderCRD("diskName", "Disk bucket name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	resourceURI := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	resourceText := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n"
+	a.OpenDocument(resourceURI, resourceText)
+
+	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "diskName", "Disk bucket name.")
+
+	crdURI := "file://" + crdPath
+	a.OpenDocument(crdURI, workspaceProviderCRD("openName", "Open document bucket name."))
+	completion := a.Completion(resourceURI, "spec.forProvider")
+	assertBucketCompletionDoc(t, completion, "openName", "Open document bucket name.")
+	if containsCompletion(completion.Items, "diskName") {
+		t.Fatalf("completion still contains diskName after open document refresh: %#v", completion.Items)
+	}
+
+	a.ChangeDocument(crdURI, workspaceProviderCRD("changedName", "Changed document bucket name."))
+	completion = a.Completion(resourceURI, "spec.forProvider")
+	assertBucketCompletionDoc(t, completion, "changedName", "Changed document bucket name.")
+	if containsCompletion(completion.Items, "openName") {
+		t.Fatalf("completion still contains openName after change document refresh: %#v", completion.Items)
+	}
+
+	a.CloseDocument(crdURI)
+	completion = a.Completion(resourceURI, "spec.forProvider")
+	assertBucketCompletionDoc(t, completion, "diskName", "Disk bucket name.")
+	if containsCompletion(completion.Items, "changedName") {
+		t.Fatalf("completion still contains changedName after close document refresh: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -1222,6 +1300,60 @@ func analyzerWithPackageMarkerAndGeneratedSchemas(t *testing.T, versionRange str
 func unsupportedSchemaBundleFS() fstest.MapFS {
 	return fstest.MapFS{
 		"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
+	}
+}
+
+func analyzerWriteFile(t *testing.T, path string, text string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("create parent directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func workspaceProviderCRD(fieldName, description string) string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: buckets.s3.aws.upbound.io
+spec:
+  group: s3.aws.upbound.io
+  names:
+    kind: Bucket
+    plural: buckets
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                forProvider:
+                  type: object
+                  properties:
+                    ` + fieldName + `:
+                      type: string
+                      description: ` + description + `
+              required:
+                - forProvider
+`
+}
+
+func assertBucketCompletionDoc(t *testing.T, completion Completion, label, doc string) {
+	t.Helper()
+	item, ok := completionItemByLabel(completion.Items, label)
+	if !ok {
+		t.Fatalf("completion missing %s: %#v", label, completion.Items)
+	}
+	if !strings.Contains(item.Documentation, doc) {
+		t.Fatalf("%s completion = %#v, want documentation %q", label, item, doc)
 	}
 }
 

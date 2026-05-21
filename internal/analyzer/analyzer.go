@@ -14,10 +14,12 @@ type Options struct {
 }
 
 type Analyzer struct {
-	workspace Workspace
-	limits    Limits
-	docs      *DocumentStore
-	schemas   *SchemaIndex
+	workspace                  Workspace
+	limits                     Limits
+	docs                       *DocumentStore
+	schemas                    *SchemaIndex
+	workspaceSchemas           map[workspaceSchemaKey]Schema
+	workspaceSchemaDiagnostics map[string][]Diagnostic
 }
 
 func New(options Options) (*Analyzer, error) {
@@ -46,15 +48,21 @@ func (a *Analyzer) SchemaBundleStatus() SchemaBundleStatus {
 }
 
 func (a *Analyzer) OpenDocument(uri, text string) Document {
-	return a.docs.Open(uri, text)
+	doc := a.docs.Open(uri, text)
+	a.refreshWorkspaceSchemasForURI(uri)
+	return doc
 }
 
 func (a *Analyzer) ChangeDocument(uri, text string) Document {
-	return a.docs.Change(uri, text)
+	doc := a.docs.Change(uri, text)
+	a.refreshWorkspaceSchemasForURI(uri)
+	return doc
 }
 
 func (a *Analyzer) CloseDocument(uri string) Document {
-	return a.docs.Close(uri)
+	doc := a.docs.Close(uri)
+	a.refreshWorkspaceSchemasForURI(uri)
+	return doc
 }
 
 func (a *Analyzer) Document(uri string) (Document, bool) {

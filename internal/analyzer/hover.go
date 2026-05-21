@@ -30,6 +30,13 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 		}
 		return hoverFromField(field), true
 	}
+	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
+		field, ok := schema.Fields[fieldPath]
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(copyFieldDoc(field)), true
+	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Hover{}, false
@@ -65,6 +72,13 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 			return Hover{}, false
 		}
 		return hoverFromField(field), true
+	}
+	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
+		field, ok := schema.Fields[occurrence.Path]
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(copyFieldDoc(field)), true
 	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {

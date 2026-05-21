@@ -41,6 +41,9 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if a.schemas.HasWorkspaceSchema(gvk) {
 		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, schemaParentPath)
 	}
+	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
+		return completionFromFields(fieldsFromSchema(schema), schemaParentPath)
+	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Completion{Reason: resolution.Reason}
@@ -66,9 +69,10 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		return Completion{Reason: SuppressionMissingRootGVK}
 	}
 	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
-	workspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
+	legacyWorkspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
+	schema, scopedWorkspaceSchema := a.workspaceSchemaForURI(uri, gvk)
 	var resolution schemaResolution
-	if !workspaceSchema {
+	if !legacyWorkspaceSchema && !scopedWorkspaceSchema {
 		if !a.schemas.bundleStatus.OK {
 			return Completion{Reason: SuppressionBundleDisabled}
 		}
@@ -84,8 +88,10 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 		var candidate Completion
 		schemaParentPath := schemaPathFromParsedPath(parentPath)
-		if workspaceSchema {
+		if legacyWorkspaceSchema {
 			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, schemaParentPath)
+		} else if scopedWorkspaceSchema {
+			candidate = completionFromFields(fieldsFromSchema(schema), schemaParentPath)
 		} else {
 			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, schemaParentPath)
 		}
