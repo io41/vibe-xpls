@@ -32,6 +32,9 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 		return Completion{}
 	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, parentPath)
+	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Completion{Reason: resolution.Reason}
@@ -54,16 +57,25 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		return Completion{Reason: SuppressionMissingRootGVK}
 	}
 	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
-	resolution := a.resolveSchemaRelease(uri, gvk)
-	if !resolution.OK {
-		return Completion{Reason: resolution.Reason}
+	workspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
+	var resolution schemaResolution
+	if !workspaceSchema {
+		resolution = a.resolveSchemaRelease(uri, gvk)
+		if !resolution.OK {
+			return Completion{Reason: resolution.Reason}
+		}
 	}
 	completion := Completion{}
 	for i, parentPath := range completionParentPaths(context.parentPath) {
 		if parentPath != "" && !parsed.IsStablePath(parentPath) {
 			continue
 		}
-		candidate := completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, parentPath)
+		var candidate Completion
+		if workspaceSchema {
+			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, parentPath)
+		} else {
+			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, parentPath)
+		}
 		if i > 0 {
 			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
 		}
@@ -185,13 +197,21 @@ func pathExists(parsed YAMLDocument, path string) bool {
 }
 
 func completionFromSchema(schemas *SchemaIndex, release CrossplaneRelease, apiVersion, kind, parentPath string) Completion {
+	return completionFromFields(schemas.FieldsForRelease(release, apiVersion, kind), parentPath)
+}
+
+func completionFromWorkspaceSchema(schemas *SchemaIndex, apiVersion, kind, parentPath string) Completion {
+	return completionFromFields(schemas.Fields(apiVersion, kind), parentPath)
+}
+
+func completionFromFields(fields []FieldDoc, parentPath string) Completion {
 	var items []CompletionItem
 	seen := map[string]struct{}{}
 	prefix := parentPath
 	if prefix != "" {
 		prefix += "."
 	}
-	for _, field := range schemas.FieldsForRelease(release, apiVersion, kind) {
+	for _, field := range fields {
 		if !strings.HasPrefix(field.Path, prefix) {
 			continue
 		}

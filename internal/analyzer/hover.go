@@ -20,6 +20,13 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 		return Hover{}, false
 	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, fieldPath)
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(field), true
+	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Hover{}, false
@@ -46,6 +53,13 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 		return Hover{}, false
 	}
 	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		field, ok := a.schemas.FieldDocumentation(apiVersion, kind, occurrence.Path)
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(field), true
+	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Hover{}, false

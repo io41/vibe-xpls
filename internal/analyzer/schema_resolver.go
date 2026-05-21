@@ -40,7 +40,7 @@ func (a *Analyzer) resolveSchemaRelease(uri string, gvk SourceGVK) schemaResolut
 	if !ok {
 		return latestSchemaRelease(candidates)
 	}
-	versionRange, ok := packageCrossplaneVersionRange(pkg)
+	versionRange, ok := a.packageCrossplaneVersionRange(pkg)
 	if !ok {
 		return latestSchemaRelease(candidates)
 	}
@@ -71,12 +71,33 @@ type crossplaneVersionRange struct {
 	maxExclusive bool
 }
 
-func packageCrossplaneVersionRange(pkg PackageRoot) (crossplaneVersionRange, bool) {
-	raw, err := os.ReadFile(filepath.Join(pkg.Root, pkg.Marker))
+func (a *Analyzer) packageCrossplaneVersionRange(pkg PackageRoot) (crossplaneVersionRange, bool) {
+	markerPath, ok := packageMarkerPath(pkg)
+	if !ok {
+		return crossplaneVersionRange{}, false
+	}
+	if doc, ok := a.docs.GetByFilePath(markerPath); ok {
+		return packageCrossplaneVersionRangeFromText(doc.Text)
+	}
+	raw, err := os.ReadFile(markerPath)
 	if err != nil {
 		return crossplaneVersionRange{}, false
 	}
-	parsed := ParseYAMLDocument(string(raw))
+	return packageCrossplaneVersionRangeFromText(string(raw))
+}
+
+func packageMarkerPath(pkg PackageRoot) (string, bool) {
+	if _, ok := markerPriority[pkg.Marker]; !ok {
+		return "", false
+	}
+	if pkg.Root == "" {
+		return "", false
+	}
+	return filepath.Join(pkg.Root, pkg.Marker), true
+}
+
+func packageCrossplaneVersionRangeFromText(text string) (crossplaneVersionRange, bool) {
+	parsed := ParseYAMLDocument(text)
 	version := strings.TrimSpace(parsed.Values["spec.crossplane.version"])
 	if version == "" {
 		return crossplaneVersionRange{}, false

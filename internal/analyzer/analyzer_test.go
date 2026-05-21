@@ -435,6 +435,99 @@ func TestAnalyzerCompletionUsesPackageCrossplaneVersionConstraint(t *testing.T) 
 	}
 }
 
+func TestAnalyzerCompletionUsesOpenPackageMarkerVersion(t *testing.T) {
+	root := t.TempDir()
+	markerPath := filepath.Join(root, "crossplane.yaml")
+	if err := os.WriteFile(markerPath, []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	a.OpenDocument("file://localhost"+filepath.ToSlash(markerPath), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v1.20.0 <v2.0.0\"\n")
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  r"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "resources") {
+		t.Fatalf("open package metadata should override disk marker version: %#v", completion.Items)
+	}
+}
+
+func TestResolveSchemaReleaseSupportsLowerBoundRange(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	before := CrossplaneRelease{Tag: "v1.12.0"}
+	after := CrossplaneRelease{Tag: "v1.12.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, ">=v1.12.1-0", []Schema{
+		{Release: before, GVK: gvk, Fields: map[string]FieldDoc{"spec.before": {Path: "spec.before"}}},
+		{Release: after, GVK: gvk, Fields: map[string]FieldDoc{"spec.after": {Path: "spec.after"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != after {
+		t.Fatalf("release = %#v, want %#v", got, after)
+	}
+}
+
+func TestResolveSchemaReleaseSupportsBoundedRange(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, ">=v1.20.0 <v2.0.0", []Schema{
+		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
+		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != v1 {
+		t.Fatalf("release = %#v, want %#v", got, v1)
+	}
+}
+
+func TestResolveSchemaReleaseUnsupportedRangeFallsBackToLatestGVK(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, "^1.20.0", []Schema{
+		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
+		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != v2 {
+		t.Fatalf("release = %#v, want latest exact-GVK release %#v", got, v2)
+	}
+}
+
+func TestAnalyzerWorkspaceSchemaCompletionAndHover(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	a.schemas.AddWorkspaceSchema(Schema{
+		GVK: SourceGVK{APIVersion: "s3.aws.upbound.io/v1beta1", Kind: "Bucket"},
+		Fields: map[string]FieldDoc{
+			"spec.forProvider.bucketName": {Path: "spec.forProvider.bucketName", Description: "Workspace bucket name."},
+		},
+		Provenance: SchemaProvenance{Path: "provider-crd.yaml", Owner: SchemaOwnerProvider, Source: SchemaSourceWorkspace},
+	})
+	uri := "file://" + filepath.Join(root, "api", "bucket.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n    bucketName: example\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.forProvider")
+	if !containsCompletion(completion.Items, "bucketName") {
+		t.Fatalf("workspace schema completion missing bucketName: %#v", completion.Items)
+	}
+	hover, ok := a.Hover(uri, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(hover.Markdown, "Workspace bucket name.") {
+		t.Fatalf("workspace schema hover = %#v ok=%v", hover, ok)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -802,6 +895,30 @@ func TestNoRootCrossplaneFilenameActivatesDiagnostics(t *testing.T) {
 	a.OpenDocument(uri, "apiVersion: v1\nkind: ConfigMap\nspec: [unterminated\n")
 	if got := len(a.Diagnostics(uri)); got == 0 {
 		t.Fatal("Crossplane-classified filename should activate diagnostics")
+	}
+}
+
+func analyzerWithPackageMarkerAndGeneratedSchemas(t *testing.T, versionRange string, schemas []Schema) *Analyzer {
+	t.Helper()
+	root := t.TempDir()
+	marker := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \"" + versionRange + "\"\n"
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte(marker), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	workspace, err := DetectWorkspace(root)
+	if err != nil {
+		t.Fatalf("detect workspace: %v", err)
+	}
+	idx := NewSchemaIndex()
+	idx.bundleStatus = SchemaBundleStatus{OK: true}
+	for _, schema := range schemas {
+		idx.AddGeneratedBuiltIn(schema)
+	}
+	return &Analyzer{
+		workspace: workspace,
+		limits:    DefaultLimits(),
+		docs:      NewDocumentStore(),
+		schemas:   idx,
 	}
 }
 

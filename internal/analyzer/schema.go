@@ -134,6 +134,14 @@ func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, 
 	return copyFieldDoc(doc), ok
 }
 
+func (idx *SchemaIndex) HasWorkspaceSchema(gvk SourceGVK) bool {
+	if _, ok := idx.schemas[gvk]; !ok {
+		return false
+	}
+	_, builtIn := idx.builtIns[gvk]
+	return !builtIn
+}
+
 func (idx *SchemaIndex) ReleasesForGVK(gvk SourceGVK) []CrossplaneRelease {
 	seen := map[CrossplaneRelease]struct{}{}
 	releases := []CrossplaneRelease{}
