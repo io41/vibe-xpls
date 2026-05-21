@@ -2,6 +2,17 @@
 
 `vibe-xpls` is an experimental Crossplane language server. It currently focuses on local Crossplane package detection, YAML-aware diagnostics, hover, and completion for Crossplane package authoring.
 
+## Built-In Crossplane Schemas
+
+`vibe-xpls` ships an offline generated schema bundle for Crossplane core resources. The bundle is generated from pinned Crossplane release artifacts and is used for YAML key completions and completion documentation.
+
+Current built-in release lines:
+
+- Crossplane `v1.20.7`
+- Crossplane `v2.2.1`
+
+Runtime does not download schemas, read registries, or connect to clusters.
+
 ## Install
 
 Install the latest released version with Go:
