@@ -35,6 +35,54 @@ func TestAnalyzerDiagnosticsHoverAndCompletion(t *testing.T) {
 	}
 }
 
+func TestAnalyzerHoverIgnoresCommentsAndCoversCompositeRefValue(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  # This Composition implements the XServiceBusNamespace composite behind IstaServiceBusNamespace.
+  name: xservice
+spec:
+  # IstaServiceBusNamespace claims create XServiceBusNamespace composites. XTopic references these
+  # XServiceBusNamespace objects through spec.serviceBusNamespaceRef.
+  compositeTypeRef:
+    apiVersion: asb.platform.ista.com/v1alpha1
+    kind: XServiceBusNamespace
+`
+	a.OpenDocument(uri, text)
+
+	for _, needle := range []string{
+		"This Composition implements",
+		"IstaServiceBusNamespace claims",
+		"XServiceBusNamespace objects",
+	} {
+		offset := strings.Index(text, needle)
+		if offset < 0 {
+			t.Fatalf("test setup: %q not found", needle)
+		}
+		if hover, ok := a.HoverAtOffset(uri, offset); ok {
+			t.Fatalf("comment hover at %q = %#v, want none", needle, hover)
+		}
+	}
+
+	value := "XServiceBusNamespace"
+	start := strings.LastIndex(text, value)
+	if start < 0 {
+		t.Fatalf("test setup: %q value not found", value)
+	}
+	for i := 0; i < len(value); i++ {
+		hover, ok := a.HoverAtOffset(uri, start+i)
+		if !ok || !strings.Contains(hover.Markdown, "Composite kind") {
+			t.Fatalf("hover at value offset %d = %#v ok=%v", i, hover, ok)
+		}
+	}
+}
+
 func TestAnalyzerStartupServesCompositeTypeRefAPIVersionDocs(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

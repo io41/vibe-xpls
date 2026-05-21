@@ -138,6 +138,46 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 		}
 	}
 	if best.Path == "" {
+		return d.pathOccurrenceAtScalarValueOffset(offset)
+	}
+	return best, true
+}
+
+func (d YAMLDocument) pathOccurrenceAtScalarValueOffset(offset int) (PathOccurrence, bool) {
+	lineStart := lineStartForOffset(d.Mixed.RawText, offset)
+	lineEnd := lineContentEndForOffset(d.Mixed.RawText, offset)
+	line := d.Mixed.RawText[lineStart:lineEnd]
+
+	var best PathOccurrence
+	bestLen := math.MaxInt
+	bestDepth := -1
+	for _, occurrence := range d.occurrences {
+		if !occurrence.ValueOK || occurrence.Value == "" || !occurrence.ValueSpanOK {
+			continue
+		}
+		if lineStartForOffset(d.Mixed.RawText, occurrence.ValueSpan.Start) != lineStart {
+			continue
+		}
+		for search := 0; search <= len(line); {
+			idx := strings.Index(line[search:], occurrence.Value)
+			if idx < 0 {
+				break
+			}
+			start := lineStart + search + idx
+			span := Span{Start: start, End: start + len(occurrence.Value)}
+			if spanContains(span, offset) {
+				spanLen := span.End - span.Start
+				depth := pathDepth(occurrence.Path)
+				if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
+					best = occurrence
+					bestLen = spanLen
+					bestDepth = depth
+				}
+			}
+			search += idx + len(occurrence.Value)
+		}
+	}
+	if best.Path == "" {
 		return PathOccurrence{}, false
 	}
 	return best, true

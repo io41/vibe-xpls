@@ -43,6 +43,9 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Hover{}, false
 	}
+	if offsetInFullLineYAMLComment(parsed.Mixed.RawText, offset) {
+		return Hover{}, false
+	}
 	occurrence, ok := parsed.PathOccurrenceAtOffset(offset)
 	if !ok || !occurrence.Stable || parsed.offsetInTemplateAction(offset) {
 		return Hover{}, false
@@ -69,6 +72,14 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 		return Hover{}, false
 	}
 	return hoverFromField(field), true
+}
+
+func offsetInFullLineYAMLComment(text string, offset int) bool {
+	lineStart := lineStartForOffset(text, offset)
+	lineEnd := lineContentEndForOffset(text, offset)
+	line := text[lineStart:lineEnd]
+	trimmed := strings.TrimLeft(line, " \t")
+	return strings.HasPrefix(trimmed, "#")
 }
 
 func hoverFromField(field FieldDoc) Hover {
