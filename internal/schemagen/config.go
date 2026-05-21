@@ -30,22 +30,30 @@ func LoadConfigFile(path string) (Config, error) {
 	}
 	base := filepath.Dir(path)
 	for i := range cfg.Releases {
-		cfg.Releases[i].RawCRDDir = resolveConfigPath(base, cfg.Releases[i].RawCRDDir)
-		cfg.Releases[i].CrossplaneGoMod = resolveConfigPath(base, cfg.Releases[i].CrossplaneGoMod)
+		rawCRDDir, err := resolveConfigPath(base, cfg.Releases[i].RawCRDDir)
+		if err != nil {
+			return Config{}, fmt.Errorf("release %s rawCRDDir: %w", cfg.Releases[i].Tag, err)
+		}
+		crossplaneGoMod, err := resolveConfigPath(base, cfg.Releases[i].CrossplaneGoMod)
+		if err != nil {
+			return Config{}, fmt.Errorf("release %s crossplaneGoMod: %w", cfg.Releases[i].Tag, err)
+		}
+		cfg.Releases[i].RawCRDDir = rawCRDDir
+		cfg.Releases[i].CrossplaneGoMod = crossplaneGoMod
 	}
 	return cfg, nil
 }
 
-func resolveConfigPath(base, path string) string {
-	if path == "" || filepath.IsAbs(path) {
-		return path
+func resolveConfigPath(base, path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is empty")
 	}
-	resolved := filepath.Join(base, path)
-	if _, err := os.Stat(resolved); err == nil {
-		return resolved
+	resolved := path
+	if !filepath.IsAbs(path) {
+		resolved = filepath.Join(base, path)
 	}
-	if _, err := os.Stat(path); err == nil {
-		return path
+	if _, err := os.Stat(resolved); err != nil {
+		return "", fmt.Errorf("%s: %w", resolved, err)
 	}
-	return resolved
+	return resolved, nil
 }

@@ -112,10 +112,14 @@ func Generate(cfg Config, outDir string) error {
 	sort.SliceStable(manifest.Releases, func(i, j int) bool {
 		return manifest.Releases[i].Tag < manifest.Releases[j].Tag
 	})
-	return writeJSON(filepath.Join(outDir, "manifest.json"), manifest)
+	return writeJSONUnder(outDir, "manifest.json", manifest)
 }
 
 func generateRelease(release ReleaseConfig, outDir string) ([]string, error) {
+	safeReleaseTag, err := sanitizePathComponent(release.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("release tag %q: %w", release.Tag, err)
+	}
 	crdFiles, err := yamlFiles(release.RawCRDDir)
 	if err != nil {
 		return nil, err
@@ -135,7 +139,10 @@ func generateRelease(release ReleaseConfig, outDir string) ([]string, error) {
 					continue
 				}
 				apiVersion := doc.Spec.Group + "/" + version.Name
-				fields := collectFields(version.Schema.OpenAPIV3Schema, doc.Spec.Scope)
+				fields, err := collectFields(version.Schema.OpenAPIV3Schema, doc.Spec.Scope)
+				if err != nil {
+					return nil, fmt.Errorf("generate %s %s from %s: %w", apiVersion, doc.Spec.Names.Kind, path, err)
+				}
 				relSourcePath := relativeSourcePath(release.RawCRDDir, path)
 				schema := schemaDocumentJSON{
 					Release:    release.Tag,
@@ -150,8 +157,12 @@ func generateRelease(release ReleaseConfig, outDir string) ([]string, error) {
 						UpstreamSHA256:     sha,
 					},
 				}
-				relSchemaPath := filepath.ToSlash(filepath.Join("schemas", release.Tag, schemaFilename(apiVersion, doc.Spec.Names.Kind)))
-				if err := writeJSON(filepath.Join(outDir, relSchemaPath), schema); err != nil {
+				filename, err := schemaFilename(apiVersion, doc.Spec.Names.Kind)
+				if err != nil {
+					return nil, fmt.Errorf("schema filename for %s %s: %w", apiVersion, doc.Spec.Names.Kind, err)
+				}
+				relSchemaPath := filepath.ToSlash(filepath.Join("schemas", safeReleaseTag, filename))
+				if err := writeJSONUnder(outDir, relSchemaPath, schema); err != nil {
 					return nil, err
 				}
 				schemaPaths = append(schemaPaths, relSchemaPath)
@@ -206,10 +217,12 @@ func readCRDDocuments(path string) ([]crdDocument, string, error) {
 	return docs, hex.EncodeToString(sum[:]), nil
 }
 
-func collectFields(root openAPISchema, scope string) []analyzer.FieldDoc {
+func collectFields(root openAPISchema, scope string) ([]analyzer.FieldDoc, error) {
 	fields := map[string]analyzer.FieldDoc{}
 	addMetadataFields(fields, scope)
-	walkProperties(fields, root, root, "", nil)
+	if err := walkProperties(fields, root, root, "", nil); err != nil {
+		return nil, err
+	}
 	out := make([]analyzer.FieldDoc, 0, len(fields))
 	for _, field := range fields {
 		out = append(out, field)
@@ -217,16 +230,22 @@ func collectFields(root openAPISchema, scope string) []analyzer.FieldDoc {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Path < out[j].Path
 	})
-	return out
+	return out, nil
 }
 
-func walkProperties(fields map[string]analyzer.FieldDoc, root, schema openAPISchema, prefix string, required []string) {
-	schema = resolveSchema(root, schema, nil)
+func walkProperties(fields map[string]analyzer.FieldDoc, root, schema openAPISchema, prefix string, required []string) error {
+	schema, err := resolveSchema(root, schema, nil)
+	if err != nil {
+		return err
+	}
 	if schema.Type == "array" && schema.Items != nil {
 		arrayPath := prefix + "[]"
 		putField(fields, arrayPath, schema, isRequired(required, lastPathSegment(prefix)))
-		walkProperties(fields, root, *schema.Items, arrayPath, schema.Items.Required)
-		return
+		item, err := resolveSchema(root, *schema.Items, nil)
+		if err != nil {
+			return err
+		}
+		return walkProperties(fields, root, item, arrayPath, item.Required)
 	}
 	names := make([]string, 0, len(schema.Properties))
 	for name := range schema.Properties {
@@ -234,19 +253,30 @@ func walkProperties(fields map[string]analyzer.FieldDoc, root, schema openAPISch
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		child := resolveSchema(root, schema.Properties[name], nil)
+		child, err := resolveSchema(root, schema.Properties[name], nil)
+		if err != nil {
+			return err
+		}
 		path := joinPath(prefix, name)
 		childRequired := isRequired(schema.Required, name)
 		if child.Type == "array" && child.Items != nil {
 			arrayPath := path + "[]"
 			putField(fields, arrayPath, child, childRequired)
-			item := resolveSchema(root, *child.Items, nil)
-			walkProperties(fields, root, item, arrayPath, item.Required)
+			item, err := resolveSchema(root, *child.Items, nil)
+			if err != nil {
+				return err
+			}
+			if err := walkProperties(fields, root, item, arrayPath, item.Required); err != nil {
+				return err
+			}
 			continue
 		}
 		putField(fields, path, child, childRequired)
-		walkProperties(fields, root, child, path, child.Required)
+		if err := walkProperties(fields, root, child, path, child.Required); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func addMetadataFields(fields map[string]analyzer.FieldDoc, scope string) {
@@ -283,23 +313,26 @@ func putField(fields map[string]analyzer.FieldDoc, path string, schema openAPISc
 	}
 }
 
-func resolveSchema(root, schema openAPISchema, seen map[string]struct{}) openAPISchema {
+func resolveSchema(root, schema openAPISchema, seen map[string]struct{}) (openAPISchema, error) {
 	if schema.Ref == "" {
-		return schema
+		return schema, nil
 	}
 	if seen == nil {
 		seen = map[string]struct{}{}
 	}
 	if _, ok := seen[schema.Ref]; ok {
-		return schema
+		return openAPISchema{}, fmt.Errorf("cyclic local ref %s", schema.Ref)
 	}
 	seen[schema.Ref] = struct{}{}
 	resolved, ok := resolveLocalRef(root, schema.Ref)
 	if !ok {
-		return schema
+		return openAPISchema{}, fmt.Errorf("unresolved local ref %s", schema.Ref)
 	}
-	resolved = resolveSchema(root, resolved, seen)
-	return mergeSchemaOverride(resolved, schema)
+	resolved, err := resolveSchema(root, resolved, seen)
+	if err != nil {
+		return openAPISchema{}, err
+	}
+	return mergeSchemaOverride(resolved, schema), nil
 }
 
 func resolveLocalRef(root openAPISchema, ref string) (openAPISchema, bool) {
@@ -442,6 +475,14 @@ func toFieldDocJSON(fields []analyzer.FieldDoc) []fieldDocJSON {
 	return out
 }
 
+func writeJSONUnder(outDir, relPath string, value any) error {
+	path, err := safeOutputPath(outDir, relPath)
+	if err != nil {
+		return err
+	}
+	return writeJSON(path, value)
+}
+
 func writeJSON(path string, value any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create output dir %s: %w", filepath.Dir(path), err)
@@ -457,8 +498,59 @@ func writeJSON(path string, value any) error {
 	return nil
 }
 
-func schemaFilename(apiVersion, kind string) string {
-	return strings.ReplaceAll(apiVersion, "/", "_") + "_" + kind + ".json"
+func safeOutputPath(outDir, relPath string) (string, error) {
+	if filepath.IsAbs(relPath) {
+		return "", fmt.Errorf("output path %s is absolute", relPath)
+	}
+	target := filepath.Join(outDir, filepath.FromSlash(relPath))
+	absOut, err := filepath.Abs(outDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve output dir %s: %w", outDir, err)
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("resolve output path %s: %w", target, err)
+	}
+	rel, err := filepath.Rel(absOut, absTarget)
+	if err != nil {
+		return "", fmt.Errorf("check output containment for %s: %w", target, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("output path %s escapes output dir %s", target, outDir)
+	}
+	return target, nil
+}
+
+func schemaFilename(apiVersion, kind string) (string, error) {
+	apiVersionComponent, err := sanitizePathComponent(strings.ReplaceAll(apiVersion, "/", "_"))
+	if err != nil {
+		return "", fmt.Errorf("apiVersion %q: %w", apiVersion, err)
+	}
+	kindComponent, err := sanitizePathComponent(kind)
+	if err != nil {
+		return "", fmt.Errorf("kind %q: %w", kind, err)
+	}
+	return apiVersionComponent + "_" + kindComponent + ".json", nil
+}
+
+func sanitizePathComponent(component string) (string, error) {
+	if component == "" {
+		return "", fmt.Errorf("path component is empty")
+	}
+	if component == "." || component == ".." {
+		return "", fmt.Errorf("path component %q is not allowed", component)
+	}
+	for _, r := range component {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '.', r == '_', r == '-':
+		default:
+			return "", fmt.Errorf("path component %q contains unsafe character %q", component, r)
+		}
+	}
+	return component, nil
 }
 
 func relativeSourcePath(root, path string) string {

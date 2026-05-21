@@ -2,8 +2,10 @@ package schemagen
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,6 +43,171 @@ func TestGenerateFixtureCRD(t *testing.T) {
 	assertGeneratedPath(t, doc.Fields, "spec.compositeTypeRef.kind", true)
 }
 
+func TestGenerateRejectsReleaseTagPathEscape(t *testing.T) {
+	base := t.TempDir()
+	out := filepath.Join(base, "out")
+	cfg := fixtureConfig()
+	cfg.Releases[0].Tag = "../../escape"
+
+	err := Generate(cfg, out)
+	if err == nil {
+		t.Fatal("Generate succeeded with path traversal release tag")
+	}
+	if _, statErr := os.Stat(filepath.Join(base, "escape")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("outside output path stat err = %v, want not exist", statErr)
+	}
+}
+
+func TestLoadConfigFileRejectsCWDRelativeFallback(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	raw := `{
+  "bundleFormatVersion": 1,
+  "releases": [
+    {
+      "tag": "v1.20.7",
+      "commit": "5fae6c1ab967e57b1dc792b5c52c97bceda12953",
+      "rawCRDDir": "internal/schemagen/testdata",
+      "crossplaneGoMod": "internal/schemagen/testdata/go.mod"
+    }
+  ]
+}`
+	if err := os.WriteFile(configPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if _, err := LoadConfigFile(configPath); err == nil {
+		t.Fatal("LoadConfigFile succeeded with missing config-relative paths")
+	}
+}
+
+func TestGenerateFailsForMissingLocalRef(t *testing.T) {
+	out := t.TempDir()
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: Widget
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                broken:
+                  $ref: "#/definitions/DoesNotExist"
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	if err := Generate(cfg, out); err == nil {
+		t.Fatal("Generate succeeded with missing local ref")
+	}
+}
+
+func TestGenerateFailsForCyclicLocalRef(t *testing.T) {
+	out := t.TempDir()
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: Widget
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          definitions:
+            A:
+              $ref: "#/definitions/B"
+            B:
+              $ref: "#/definitions/A"
+          properties:
+            spec:
+              type: object
+              properties:
+                loop:
+                  $ref: "#/definitions/A"
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	if err := Generate(cfg, out); err == nil {
+		t.Fatal("Generate succeeded with cyclic local ref")
+	}
+}
+
+func TestGenerateIsDeterministic(t *testing.T) {
+	cfg := fixtureConfig()
+	out1 := t.TempDir()
+	out2 := t.TempDir()
+	if err := Generate(cfg, out1); err != nil {
+		t.Fatalf("generate first output: %v", err)
+	}
+	if err := Generate(cfg, out2); err != nil {
+		t.Fatalf("generate second output: %v", err)
+	}
+
+	files1 := readTree(t, out1)
+	files2 := readTree(t, out2)
+	if len(files1) != len(files2) {
+		t.Fatalf("file count = %d, want %d", len(files2), len(files1))
+	}
+	for path, want := range files1 {
+		if got, ok := files2[path]; !ok {
+			t.Fatalf("second output missing %s", path)
+		} else if got != want {
+			t.Fatalf("content mismatch for %s", path)
+		}
+	}
+}
+
+func TestGenerateSkipsNonCRDMultiDocumentYAML(t *testing.T) {
+	out := t.TempDir()
+	crdDir := writeCRDDir(t, `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ignored
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: Widget
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                name:
+                  type: string
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	if err := Generate(cfg, out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "schemas", "v1.20.7", "example.io_v1_Widget.json")); err != nil {
+		t.Fatalf("generated CRD schema stat: %v", err)
+	}
+}
+
 func assertGeneratedPath(t *testing.T, fields []struct {
 	Path     string `json:"path"`
 	Required bool   `json:"required,omitempty"`
@@ -55,4 +222,51 @@ func assertGeneratedPath(t *testing.T, fields []struct {
 		}
 	}
 	t.Fatalf("missing generated path %s", path)
+}
+
+func fixtureConfig() Config {
+	return Config{
+		BundleFormatVersion: 1,
+		Releases: []ReleaseConfig{{
+			Tag:             "v1.20.7",
+			Commit:          "5fae6c1ab967e57b1dc792b5c52c97bceda12953",
+			RawCRDDir:       filepath.Join("testdata"),
+			CrossplaneGoMod: filepath.Join("testdata", "go.mod"),
+		}},
+	}
+}
+
+func writeCRDDir(t *testing.T, yamlDoc string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "crd.yaml"), []byte(yamlDoc), 0o644); err != nil {
+		t.Fatalf("write CRD: %v", err)
+	}
+	return dir
+}
+
+func readTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	if err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = strings.TrimSpace(string(raw))
+		return nil
+	}); err != nil {
+		t.Fatalf("read output tree: %v", err)
+	}
+	return files
 }
