@@ -102,7 +102,7 @@ func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
 			}
 			warnings++
 			params := paramsMap(t, msg)
-			if params["type"] != float64(2) || !strings.Contains(params["message"].(string), "schema completions are disabled") {
+			if params["type"] != float64(2) || !strings.Contains(params["message"].(string), "schema completions and hover are disabled") {
 				t.Fatalf("warning params = %#v", params)
 			}
 		}
@@ -123,12 +123,16 @@ func TestLogSuppressionThrottlesByReasonScope(t *testing.T) {
 	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
 	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
 	s.logSuppression("file:///one.yaml", 2, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 3, analyzer.SuppressionMalformedYAMLContext)
 	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionBundleDisabled)
 	s.logSuppression("file:///two.yaml", 1, analyzer.SuppressionBundleDisabled)
 
 	logs := stderr.String()
-	if got := strings.Count(logs, "missing-root-gvk"); got != 2 {
-		t.Fatalf("missing-root-gvk logs = %d, want 2; logs=%q", got, logs)
+	if got := strings.Count(logs, "missing-root-gvk"); got != 1 {
+		t.Fatalf("missing-root-gvk logs = %d, want 1; logs=%q", got, logs)
+	}
+	if got := strings.Count(logs, "malformed-yaml-context"); got != 1 {
+		t.Fatalf("malformed-yaml-context logs = %d, want 1; logs=%q", got, logs)
 	}
 	if got := strings.Count(logs, "bundle-disabled"); got != 1 {
 		t.Fatalf("bundle-disabled logs = %d, want 1; logs=%q", got, logs)

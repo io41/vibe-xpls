@@ -248,7 +248,7 @@ func (s *Server) handleInitialize(msg Message) error {
 		s.bundleWarningShown = true
 		return s.notify("window/showMessage", map[string]any{
 			"type":    2,
-			"message": "Crossplane schema completions are disabled: " + status.Message,
+			"message": "Crossplane schema completions and hover are disabled: " + status.Message,
 		})
 	}
 	return nil
@@ -352,7 +352,7 @@ func (s *Server) logSuppression(uri string, generation analyzer.Generation, reas
 	}
 	key := string(reason)
 	if reason != analyzer.SuppressionBundleDisabled {
-		key = fmt.Sprintf("%s:%d:%s", uri, generation, reason)
+		key = fmt.Sprintf("%s:%s", uri, reason)
 	}
 	if _, ok := s.loggedSuppression[key]; ok {
 		return
