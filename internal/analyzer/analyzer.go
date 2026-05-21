@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,10 @@ func New(options Options) (*Analyzer, error) {
 		return nil, err
 	}
 	schemas := NewSchemaIndex()
-	schemas.bundleStatus = schemas.LoadGeneratedBuiltIns()
+	schemas.LoadBuiltIns()
+	if !schemas.bundleStatus.OK {
+		return nil, fmt.Errorf("load built-in schema bundle: %s", schemas.bundleStatus.Message)
+	}
 	return &Analyzer{
 		workspace: workspace,
 		limits:    defaultLimits(options.Limits),

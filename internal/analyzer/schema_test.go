@@ -21,6 +21,16 @@ func TestBuiltInCrossplaneSchemas(t *testing.T) {
 	if doc.Description == "" {
 		t.Fatal("expected non-empty field documentation")
 	}
+	if doc.Description != "Kind of the composite resource type this Composition renders." {
+		t.Fatalf("composition kind description = %q", doc.Description)
+	}
+	doc, ok = idx.FieldDocumentation("meta.pkg.crossplane.io/v1", "Configuration", "spec.dependsOn.provider")
+	if !ok {
+		t.Fatal("expected built-in Configuration field documentation")
+	}
+	if doc.Description != "Provider package dependency required by this Configuration." {
+		t.Fatalf("configuration dependsOn provider description = %q", doc.Description)
+	}
 }
 
 func TestEmbeddedSchemaBundleLoadsFixture(t *testing.T) {
@@ -321,29 +331,61 @@ func TestFieldDocumentationMarkdownOmitsWhitespaceOnlyFacts(t *testing.T) {
 
 func assertDirectoriesEqual(t *testing.T, wantPath, gotPath string) {
 	t.Helper()
-	wantInfo, err := os.Stat(wantPath)
-	if err != nil {
-		t.Fatalf("stat want path %s: %v", wantPath, err)
+	wantFiles := filesByRelativePath(t, wantPath)
+	gotFiles := filesByRelativePath(t, gotPath)
+	if len(wantFiles) != len(gotFiles) {
+		t.Fatalf("file count mismatch for %s and %s: want %d, got %d", wantPath, gotPath, len(wantFiles), len(gotFiles))
 	}
-	if !wantInfo.IsDir() {
-		want, err := os.ReadFile(wantPath)
-		if err != nil {
-			t.Fatalf("read want file %s: %v", wantPath, err)
-		}
-		got, err := os.ReadFile(gotPath)
-		if err != nil {
-			t.Fatalf("read got file %s: %v", gotPath, err)
+	for path, want := range wantFiles {
+		got, ok := gotFiles[path]
+		if !ok {
+			t.Fatalf("%s is missing generated file %s", wantPath, path)
 		}
 		if !bytes.Equal(want, got) {
-			t.Fatalf("%s is stale", wantPath)
+			t.Fatalf("%s/%s is stale", wantPath, path)
 		}
-		return
 	}
-	entries, err := os.ReadDir(wantPath)
+	for path := range gotFiles {
+		if _, ok := wantFiles[path]; !ok {
+			t.Fatalf("%s has extra generated file %s", gotPath, path)
+		}
+	}
+}
+
+func filesByRelativePath(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	info, err := os.Stat(root)
 	if err != nil {
-		t.Fatalf("read want dir %s: %v", wantPath, err)
+		t.Fatalf("stat path %s: %v", root, err)
 	}
-	for _, entry := range entries {
-		assertDirectoriesEqual(t, filepath.Join(wantPath, entry.Name()), filepath.Join(gotPath, entry.Name()))
+	if !info.IsDir() {
+		raw, err := os.ReadFile(root)
+		if err != nil {
+			t.Fatalf("read file %s: %v", root, err)
+		}
+		return map[string][]byte{".": raw}
 	}
+	files := map[string][]byte{}
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = raw
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk path %s: %v", root, err)
+	}
+	return files
 }
