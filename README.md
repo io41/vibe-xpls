@@ -47,11 +47,19 @@ Run the test suite:
 go test ./...
 ```
 
+Regenerate schemas, verify generated artifacts, run tests, and build local CLIs:
+
+```sh
+./scripts/update-generated.sh
+```
+
 Run the CLI from source:
 
 ```sh
 go run ./cmd/vibe-xpls --version
 ```
+
+Project direction is tracked in [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md).
 
 ## Releases
 
