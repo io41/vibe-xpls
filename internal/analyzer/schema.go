@@ -78,27 +78,7 @@ func NewSchemaIndex() *SchemaIndex {
 }
 
 func (idx *SchemaIndex) LoadBuiltIns() {
-	idx.addBuiltInSchema(Schema{
-		GVK: SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
-		Fields: map[string]FieldDoc{
-			"apiVersion":                       {Path: "apiVersion", Description: "API version of the Composition resource."},
-			"kind":                             {Path: "kind", Description: "Resource kind, normally Composition."},
-			"metadata.name":                    {Path: "metadata.name", Description: "Name of the Composition."},
-			"spec.compositeTypeRef.apiVersion": {Path: "spec.compositeTypeRef.apiVersion", Description: "API version of the composite resource type this Composition renders."},
-			"spec.compositeTypeRef.kind":       {Path: "spec.compositeTypeRef.kind", Description: "Kind of the composite resource type this Composition renders."},
-		},
-		Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-	})
-	idx.addBuiltInSchema(Schema{
-		GVK: SourceGVK{APIVersion: "meta.pkg.crossplane.io/v1", Kind: "Configuration"},
-		Fields: map[string]FieldDoc{
-			"apiVersion":              {Path: "apiVersion", Description: "API version of the Configuration metadata resource."},
-			"kind":                    {Path: "kind", Description: "Resource kind, normally Configuration."},
-			"metadata.name":           {Path: "metadata.name", Description: "Name of the Configuration package."},
-			"spec.dependsOn.provider": {Path: "spec.dependsOn.provider", Description: "Provider package dependency required by this Configuration."},
-		},
-		Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-	})
+	idx.bundleStatus = idx.LoadGeneratedBuiltIns()
 }
 
 func (idx *SchemaIndex) AddWorkspaceSchema(schema Schema) {
@@ -186,10 +166,6 @@ func (idx *SchemaIndex) Diagnostics() []Diagnostic {
 	diagnostics := make([]Diagnostic, len(idx.diagnostics))
 	copy(diagnostics, idx.diagnostics)
 	return diagnostics
-}
-
-func (idx *SchemaIndex) addBuiltInSchema(schema Schema) {
-	idx.AddGeneratedBuiltIn(schema)
 }
 
 func copySchema(schema Schema) Schema {

@@ -1,0 +1,263 @@
+{
+  "release": "v2.2.1",
+  "apiVersion": "pkg.crossplane.io/v1",
+  "kind": "FunctionRevision",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "FunctionRevisionSpec specifies configuration for a FunctionRevision.",
+      "type": "object"
+    },
+    {
+      "path": "spec.commonLabels",
+      "description": "Map of string keys and values that can be used to organize and categorize\n(scope and select) objects. May match selectors of replication controllers\nand services.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "type": "object"
+    },
+    {
+      "path": "spec.desiredState",
+      "description": "DesiredState of the PackageRevision. Can be either Active or Inactive.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.ignoreCrossplaneConstraints",
+      "description": "IgnoreCrossplaneConstraints indicates to the package manager whether to\nhonor Crossplane version constrains specified by the package.\nDefault is false.",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "spec.image",
+      "description": "Package image used by install Pod to extract package contents.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.packagePullPolicy",
+      "description": "PackagePullPolicy defines the pull policy for the package. It is also\napplied to any images pulled for the package, such as a provider's\ncontroller image.\nDefault is IfNotPresent.",
+      "type": "string",
+      "default": "IfNotPresent"
+    },
+    {
+      "path": "spec.packagePullSecrets[]",
+      "description": "PackagePullSecrets are named secrets in the same namespace that can be\nused to fetch packages from private registries. They are also applied to\nany images pulled for the package, such as a provider's controller image.",
+      "type": "array"
+    },
+    {
+      "path": "spec.packagePullSecrets[].name",
+      "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "spec.revision",
+      "description": "Revision number. Indicates when the revision will be garbage collected\nbased on the parent's RevisionHistoryLimit.",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "path": "spec.runtimeConfigRef",
+      "description": "RuntimeConfigRef references a RuntimeConfig resource that will be used\nto configure the package runtime.",
+      "type": "object",
+      "default": {
+        "name": "default"
+      }
+    },
+    {
+      "path": "spec.runtimeConfigRef.apiVersion",
+      "description": "API version of the referent.",
+      "type": "string",
+      "default": "pkg.crossplane.io/v1beta1"
+    },
+    {
+      "path": "spec.runtimeConfigRef.kind",
+      "description": "Kind of the referent.",
+      "type": "string",
+      "default": "DeploymentRuntimeConfig"
+    },
+    {
+      "path": "spec.runtimeConfigRef.name",
+      "description": "Name of the RuntimeConfig.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.skipDependencyResolution",
+      "description": "SkipDependencyResolution indicates to the package manager whether to skip\nresolving dependencies for a package. Setting this value to true may have\nunintended consequences.\nDefault is false.",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "spec.tlsClientSecretName",
+      "description": "TLSClientSecretName is the name of the TLS Secret that stores client\ncertificates of the Provider.",
+      "type": "string"
+    },
+    {
+      "path": "spec.tlsServerSecretName",
+      "description": "TLSServerSecretName is the name of the TLS Secret that stores server\ncertificates of the Provider.",
+      "type": "string"
+    },
+    {
+      "path": "status",
+      "description": "FunctionRevisionStatus represents the observed state of a FunctionRevision.",
+      "type": "object"
+    },
+    {
+      "path": "status.appliedImageConfigRefs[]",
+      "description": "AppliedImageConfigRefs records any image configs that were applied in\nreconciling this revision, and what they were used for.",
+      "type": "array"
+    },
+    {
+      "path": "status.appliedImageConfigRefs[].name",
+      "description": "Name is the name of the image config.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.appliedImageConfigRefs[].reason",
+      "description": "Reason indicates what the image config was used for.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.capabilities[]",
+      "description": "Capabilities of this package. Capabilities are opaque strings that\nmay be meaningful to package consumers.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.endpoint",
+      "description": "Endpoint is the gRPC endpoint where Crossplane will send\nRunFunctionRequests.",
+      "type": "string"
+    },
+    {
+      "path": "status.foundDependencies",
+      "description": "Dependency information.",
+      "type": "integer"
+    },
+    {
+      "path": "status.installedDependencies",
+      "type": "integer"
+    },
+    {
+      "path": "status.invalidDependencies",
+      "type": "integer"
+    },
+    {
+      "path": "status.objectRefs[]",
+      "description": "References to objects owned by PackageRevision.",
+      "type": "array"
+    },
+    {
+      "path": "status.objectRefs[].apiVersion",
+      "description": "APIVersion of the referenced object.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.objectRefs[].kind",
+      "description": "Kind of the referenced object.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.objectRefs[].name",
+      "description": "Name of the referenced object.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.objectRefs[].uid",
+      "description": "UID of the referenced object.",
+      "type": "string"
+    },
+    {
+      "path": "status.resolvedImage",
+      "description": "ResolvedPackage is the name of the package that was installed. It may be\ndifferent from spec.image if the package path was rewritten using an\nimage config.",
+      "type": "string"
+    },
+    {
+      "path": "status.tlsClientSecretName",
+      "description": "TLSClientSecretName is the name of the TLS Secret that stores client\ncertificates of the Provider.",
+      "type": "string"
+    },
+    {
+      "path": "status.tlsServerSecretName",
+      "description": "TLSServerSecretName is the name of the TLS Secret that stores server\ncertificates of the Provider.",
+      "type": "string"
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v2.2.1",
+    "upstreamSourcePath": "pkg.crossplane.io_functionrevisions.yaml",
+    "upstreamSHA256": "0f50de55c9a07739c7ac992515a8940d6b54bb9e1e7bcaa26d80ed63cb46b1f9"
+  }
+}

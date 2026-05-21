@@ -1,7 +1,7 @@
 {
   "release": "v1.20.7",
   "apiVersion": "apiextensions.crossplane.io/v1",
-  "kind": "Composition",
+  "kind": "CompositionRevision",
   "fields": [
     {
       "path": "apiVersion",
@@ -34,7 +34,7 @@
     },
     {
       "path": "spec",
-      "description": "CompositionSpec specifies desired state of a composition.",
+      "description": "CompositionRevisionSpec specifies the desired state of the composition\nrevision.",
       "type": "object"
     },
     {
@@ -882,16 +882,66 @@
       ]
     },
     {
+      "path": "spec.revision",
+      "description": "Revision number. Newer revisions have larger numbers.\n\nThis number can change. When a Composition transitions from state A\n-\u003e B -\u003e A there will be only two CompositionRevisions. Crossplane will\nedit the original CompositionRevision to change its revision number from\n0 to 2.",
+      "type": "integer",
+      "required": true
+    },
+    {
       "path": "spec.writeConnectionSecretsToNamespace",
       "description": "WriteConnectionSecretsToNamespace specifies the namespace in which the\nconnection secrets of composite resource dynamically provisioned using\nthis composition will be created.\nThis field is planned to be replaced in a future release in favor of\nPublishConnectionDetailsWithStoreConfigRef. Currently, both could be\nset independently and connection details would be published to both\nwithout affecting each other as long as related fields at MR level\nspecified.",
       "type": "string"
+    },
+    {
+      "path": "status",
+      "description": "CompositionRevisionStatus shows the observed state of the composition\nrevision.",
+      "type": "object"
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
     }
   ],
   "provenance": {
     "owner": "core",
     "source": "generated-built-in",
     "upstreamReleaseTag": "v1.20.7",
-    "upstreamSourcePath": "apiextensions.crossplane.io_compositions.yaml",
-    "upstreamSHA256": "bf05e4ba6b676d95ade3b122ed9d2004f3d681b62b306874ad743cdc0fac0d6f"
+    "upstreamSourcePath": "apiextensions.crossplane.io_compositionrevisions.yaml",
+    "upstreamSHA256": "6127560eefbefe251287f7a45464eae0bbe0f56d5e883ce0c5ef124594fbfa03"
   }
 }

@@ -1,0 +1,312 @@
+{
+  "release": "v2.2.1",
+  "apiVersion": "ops.crossplane.io/v1alpha1",
+  "kind": "CronOperation",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "CronOperationSpec specifies the desired state of a CronOperation.",
+      "type": "object"
+    },
+    {
+      "path": "spec.concurrencyPolicy",
+      "description": "ConcurrencyPolicy specifies how to treat concurrent executions of an\noperation.",
+      "type": "string",
+      "default": "Allow",
+      "enum": [
+        "Allow",
+        "Forbid",
+        "Replace"
+      ]
+    },
+    {
+      "path": "spec.failedHistoryLimit",
+      "description": "FailedHistoryLimit is the number of failed Operations to retain.",
+      "type": "integer",
+      "default": 1
+    },
+    {
+      "path": "spec.operationTemplate",
+      "description": "OperationTemplate is the template for the Operation to be created.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.metadata",
+      "description": "Standard object metadata.",
+      "type": "object"
+    },
+    {
+      "path": "spec.operationTemplate.spec",
+      "description": "Spec is the specification of the Operation to be created.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.mode",
+      "description": "Mode controls what type or \"mode\" of operation will be used.\n\n\"Pipeline\" indicates that an Operation specifies a pipeline of\nfunctions, each of which is responsible for implementing its logic.",
+      "type": "string",
+      "required": true,
+      "default": "Pipeline",
+      "enum": [
+        "Pipeline"
+      ]
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[]",
+      "description": "Pipeline is a list of operation function steps that will be used when\nthis operation runs.",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[]",
+      "description": "Credentials are optional credentials that the operation function needs.",
+      "type": "array"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[].name",
+      "description": "Name of this set of credentials.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[].secretRef",
+      "description": "A SecretRef is a reference to a secret containing credentials that should\nbe supplied to the function.",
+      "type": "object"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[].secretRef.name",
+      "description": "Name of the secret.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[].secretRef.namespace",
+      "description": "Namespace of the secret.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].credentials[].source",
+      "description": "Source of the function credentials.",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "None",
+        "Secret"
+      ]
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].functionRef",
+      "description": "FunctionRef is a reference to the function this step should\nexecute.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].functionRef.name",
+      "description": "Name of the referenced function.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].input",
+      "description": "Input is an optional, arbitrary Kubernetes resource (i.e. a resource\nwith an apiVersion and kind) that will be passed to the unction as\nthe 'input' of its RunFunctionRequest.",
+      "type": "object"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements",
+      "description": "Requirements are resource requirements that will be satisfied before\nthis pipeline step is called for the first time. This allows\npre-populating required resources without requiring a function to\nrequest them first.",
+      "type": "object"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[]",
+      "description": "RequiredResources that will be fetched before this pipeline step\nis called for the first time.",
+      "type": "array"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].apiVersion",
+      "description": "APIVersion of resources to select.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].kind",
+      "description": "Kind of resources to select.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].matchLabels",
+      "description": "MatchLabels matches resources by label selector. Only one of Name or\nMatchLabels may be specified.",
+      "type": "object"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].name",
+      "description": "Name matches a single resource by name. Only one of Name or\nMatchLabels may be specified.",
+      "type": "string"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].namespace",
+      "description": "Namespace to search for resources. Optional for cluster-scoped resources.",
+      "type": "string"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredResources[].requirementName",
+      "description": "RequirementName uniquely identifies this group of resources.\nThis name will be used as the key in RunFunctionRequest.required_resources.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredSchemas[]",
+      "description": "RequiredSchemas that will be fetched before this pipeline step\nis called for the first time.",
+      "type": "array"
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredSchemas[].apiVersion",
+      "description": "APIVersion of the resource kind whose schema is required, e.g. \"example.org/v1\".",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredSchemas[].kind",
+      "description": "Kind of resource whose schema is required, e.g. \"MyResource\".",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].requirements.requiredSchemas[].requirementName",
+      "description": "RequirementName uniquely identifies this schema.\nThis name will be used as the key in RunFunctionRequest.required_schemas.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.pipeline[].step",
+      "description": "Step name. Must be unique within its Pipeline.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.operationTemplate.spec.retryLimit",
+      "description": "RetryLimit configures how many times the operation may fail. When the\nfailure limit is exceeded, the operation will not be retried.",
+      "type": "integer"
+    },
+    {
+      "path": "spec.schedule",
+      "description": "Schedule is the cron schedule for the operation.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.startingDeadlineSeconds",
+      "description": "StartingDeadlineSeconds is the deadline in seconds for starting the\noperation if it misses its scheduled time for any reason.",
+      "type": "integer"
+    },
+    {
+      "path": "spec.successfulHistoryLimit",
+      "description": "SuccessfulHistoryLimit is the number of successful Operations to retain.",
+      "type": "integer",
+      "default": 3
+    },
+    {
+      "path": "status",
+      "description": "CronOperationStatus represents the observed state of a CronOperation.",
+      "type": "object"
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.lastScheduleTime",
+      "description": "LastScheduleTime is the last time the CronOperation was scheduled.",
+      "type": "string"
+    },
+    {
+      "path": "status.lastSuccessfulTime",
+      "description": "LastSuccessfulTime is the last time the CronOperation was successfully\ncompleted.",
+      "type": "string"
+    },
+    {
+      "path": "status.runningOperationRefs[]",
+      "description": "RunningOperationRefs is a list of currently running Operations.",
+      "type": "array"
+    },
+    {
+      "path": "status.runningOperationRefs[].name",
+      "description": "Name of the active operation.",
+      "type": "string",
+      "required": true
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v2.2.1",
+    "upstreamSourcePath": "ops.crossplane.io_cronoperations.yaml",
+    "upstreamSHA256": "c1294414ba1efb4c7876a83fdf2c041c6763b784b0e35d4bea083dda55b60886"
+  }
+}

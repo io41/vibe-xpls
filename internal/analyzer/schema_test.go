@@ -1,7 +1,11 @@
 package analyzer
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
@@ -32,6 +36,17 @@ func TestEmbeddedSchemaBundleLoadsFixture(t *testing.T) {
 	if doc.Type != "string" || !doc.Required {
 		t.Fatalf("field = %#v, want string required field", doc)
 	}
+}
+
+func TestGeneratedSchemaBundleIsCurrent(t *testing.T) {
+	tmp := t.TempDir()
+	cmd := exec.Command("go", "run", "../../cmd/vibe-xpls-schema-gen", "--config", "schemadata/config.json", "--out", tmp)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("regenerate bundle: %v\n%s", err, output)
+	}
+	assertDirectoriesEqual(t, "schemadata/manifest.json", filepath.Join(tmp, "manifest.json"))
+	assertDirectoriesEqual(t, "schemadata/schemas", filepath.Join(tmp, "schemas"))
 }
 
 func TestInvalidBundleFormatDisablesGeneratedBuiltIns(t *testing.T) {
@@ -301,5 +316,34 @@ func TestFieldDocumentationMarkdownOmitsWhitespaceOnlyFacts(t *testing.T) {
 	want := "Readable description."
 	if got != want {
 		t.Fatalf("documentation = %q, want %q", got, want)
+	}
+}
+
+func assertDirectoriesEqual(t *testing.T, wantPath, gotPath string) {
+	t.Helper()
+	wantInfo, err := os.Stat(wantPath)
+	if err != nil {
+		t.Fatalf("stat want path %s: %v", wantPath, err)
+	}
+	if !wantInfo.IsDir() {
+		want, err := os.ReadFile(wantPath)
+		if err != nil {
+			t.Fatalf("read want file %s: %v", wantPath, err)
+		}
+		got, err := os.ReadFile(gotPath)
+		if err != nil {
+			t.Fatalf("read got file %s: %v", gotPath, err)
+		}
+		if !bytes.Equal(want, got) {
+			t.Fatalf("%s is stale", wantPath)
+		}
+		return
+	}
+	entries, err := os.ReadDir(wantPath)
+	if err != nil {
+		t.Fatalf("read want dir %s: %v", wantPath, err)
+	}
+	for _, entry := range entries {
+		assertDirectoriesEqual(t, filepath.Join(wantPath, entry.Name()), filepath.Join(gotPath, entry.Name()))
 	}
 }
