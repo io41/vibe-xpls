@@ -73,6 +73,20 @@ func (s *DocumentStore) GetByFilePath(path string) (Document, bool) {
 	return best, bestOK
 }
 
+func (s *DocumentStore) FilePaths() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	paths := make([]string, 0, len(s.docs))
+	for _, doc := range s.docs {
+		path, ok := filePathFromURI(doc.URI)
+		if !ok {
+			continue
+		}
+		paths = append(paths, filepath.Clean(path))
+	}
+	return paths
+}
+
 func (s *DocumentStore) set(uri, text string, closed bool) Document {
 	s.mu.Lock()
 	defer s.mu.Unlock()

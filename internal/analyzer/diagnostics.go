@@ -35,6 +35,7 @@ func (a *Analyzer) Diagnostics(uri string) []Diagnostic {
 		diagnostic.URI = uri
 		diagnostics = append(diagnostics, diagnostic)
 	}
+	diagnostics = append(diagnostics, a.workspaceSchemaDiagnosticsForURI(uri)...)
 	if max := a.limits.MaxDiagnosticsPerDoc; max > 0 && len(diagnostics) > max {
 		diagnostics = diagnostics[:max]
 	}

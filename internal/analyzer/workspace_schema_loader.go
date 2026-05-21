@@ -91,7 +91,7 @@ func (a *Analyzer) workspaceSchemasForPackage(pkg PackageRoot) []Schema {
 		return nil
 	}
 	var schemas []Schema
-	for _, path := range workspaceYAMLFiles(pkg.Root, a.limits) {
+	for _, path := range a.workspaceSchemaSourcePaths(pkg) {
 		raw, ok := a.workspaceSchemaSource(path)
 		if !ok {
 			continue
@@ -99,6 +99,27 @@ func (a *Analyzer) workspaceSchemasForPackage(pkg PackageRoot) []Schema {
 		schemas = append(schemas, workspaceSchemasFromRaw(path, raw)...)
 	}
 	return schemas
+}
+
+func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
+	paths := map[string]struct{}{}
+	for _, path := range workspaceYAMLFiles(pkg.Root, a.limits) {
+		paths[path] = struct{}{}
+	}
+	for _, path := range a.docs.FilePaths() {
+		if !isWorkspaceYAMLFile(path) {
+			continue
+		}
+		if path == pkg.Root || strings.HasPrefix(path, pkg.Root+string(filepath.Separator)) {
+			paths[path] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(paths))
+	for path := range paths {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (a *Analyzer) workspaceSchemaSource(path string) ([]byte, bool) {
@@ -148,6 +169,24 @@ func (a *Analyzer) workspaceSchemaForURI(uri string, gvk SourceGVK) (Schema, boo
 		return Schema{}, false
 	}
 	return copySchema(schema), true
+}
+
+func (a *Analyzer) workspaceSchemaDiagnosticsForURI(uri string) []Diagnostic {
+	path, ok := filePathFromURI(uri)
+	if !ok {
+		return nil
+	}
+	pkg, ok := a.workspace.PackageForFile(path)
+	if !ok {
+		return nil
+	}
+	diagnostics := a.workspaceSchemaDiagnostics[pkg.Root]
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	result := make([]Diagnostic, len(diagnostics))
+	copy(result, diagnostics)
+	return result
 }
 
 func fieldsFromSchema(schema Schema) []FieldDoc {
