@@ -1,9 +1,13 @@
 package analyzer
 
 import (
+	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+var schemaArrayIndexPattern = regexp.MustCompile(`\[\d+\]`)
 
 type Completion struct {
 	Items  []CompletionItem
@@ -14,6 +18,7 @@ type CompletionItem struct {
 	Label         string
 	Path          string
 	Documentation string
+	SortText      string
 	TextEdit      *CompletionTextEdit
 }
 
@@ -32,14 +37,15 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 		return Completion{}
 	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	schemaParentPath := schemaPathFromParsedPath(parentPath)
 	if a.schemas.HasWorkspaceSchema(gvk) {
-		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, parentPath)
+		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, schemaParentPath)
 	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Completion{Reason: resolution.Reason}
 	}
-	return completionFromSchema(a.schemas, resolution.Release, root.apiVersion, root.kind, parentPath)
+	return completionFromSchema(a.schemas, resolution.Release, root.apiVersion, root.kind, schemaParentPath)
 }
 
 func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
@@ -71,10 +77,11 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 			continue
 		}
 		var candidate Completion
+		schemaParentPath := schemaPathFromParsedPath(parentPath)
 		if workspaceSchema {
-			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, parentPath)
+			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, schemaParentPath)
 		} else {
-			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, parentPath)
+			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, schemaParentPath)
 		}
 		if i > 0 {
 			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
@@ -100,12 +107,12 @@ func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, d
 	existing := map[string]struct{}{}
 	for _, occurrence := range parsed.occurrences {
 		if occurrence.DocumentIndex == documentIndex {
-			existing[occurrence.Path] = struct{}{}
+			existing[schemaPathFromParsedPath(occurrence.Path)] = struct{}{}
 		}
 	}
 	items := completion.Items[:0]
 	for _, item := range completion.Items {
-		if _, ok := existing[item.Path]; ok {
+		if _, ok := existing[schemaPathFromParsedPath(item.Path)]; ok {
 			continue
 		}
 		items = append(items, item)
@@ -204,9 +211,16 @@ func completionFromWorkspaceSchema(schemas *SchemaIndex, apiVersion, kind, paren
 	return completionFromFields(schemas.Fields(apiVersion, kind), parentPath)
 }
 
+type completionCandidate struct {
+	label         string
+	path          string
+	documentation string
+	required      bool
+}
+
 func completionFromFields(fields []FieldDoc, parentPath string) Completion {
-	var items []CompletionItem
-	seen := map[string]struct{}{}
+	parentPath = schemaPathFromParsedPath(parentPath)
+	candidates := map[string]completionCandidate{}
 	prefix := parentPath
 	if prefix != "" {
 		prefix += "."
@@ -219,24 +233,93 @@ func completionFromFields(fields []FieldDoc, parentPath string) Completion {
 		if rest == "" {
 			continue
 		}
-		label := rest
-		path := prefix + label
-		documentation := field.Description
-		if split := strings.IndexAny(rest, ".["); split >= 0 {
-			label = rest[:split]
-			path = prefix + label
-			documentation = ""
-		}
+		label := immediateCompletionLabel(rest)
 		if label == "" {
 			continue
 		}
-		if _, ok := seen[label]; ok {
+		if parentPath == "" && label == "status" {
 			continue
 		}
-		seen[label] = struct{}{}
-		items = append(items, CompletionItem{Label: label, Path: path, Documentation: documentation})
+		path := prefix + label
+		candidate := candidates[label]
+		if candidate.label == "" {
+			candidate = completionCandidate{label: label, path: path}
+		}
+		if fieldIsImmediateCompletionChild(field.Path, prefix, label) {
+			candidate.required = field.Required
+			candidate.documentation = fieldCompletionDocumentation(field)
+		}
+		candidates[label] = candidate
 	}
+	items := completionItemsFromCandidates(parentPath, candidates)
 	return Completion{Items: items}
+}
+
+func schemaPathFromParsedPath(path string) string {
+	return schemaArrayIndexPattern.ReplaceAllString(path, "[]")
+}
+
+func immediateCompletionLabel(rest string) string {
+	split := strings.IndexAny(rest, ".[")
+	if split < 0 {
+		return rest
+	}
+	return rest[:split]
+}
+
+func fieldIsImmediateCompletionChild(fieldPath, prefix, label string) bool {
+	rest := strings.TrimPrefix(fieldPath, prefix)
+	return rest == label || rest == label+"[]"
+}
+
+func completionItemsFromCandidates(parentPath string, candidates map[string]completionCandidate) []CompletionItem {
+	sorted := make([]completionCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		sorted = append(sorted, candidate)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		leftRank := rootCompletionRank(parentPath, sorted[i].label)
+		rightRank := rootCompletionRank(parentPath, sorted[j].label)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		if sorted[i].required != sorted[j].required {
+			return sorted[i].required
+		}
+		return sorted[i].label < sorted[j].label
+	})
+	items := make([]CompletionItem, 0, len(sorted))
+	for i, candidate := range sorted {
+		items = append(items, CompletionItem{
+			Label:         candidate.label,
+			Path:          candidate.path,
+			Documentation: candidate.documentation,
+			SortText:      completionSortText(parentPath, candidate, i),
+		})
+	}
+	return items
+}
+
+func rootCompletionRank(parentPath, label string) int {
+	if parentPath != "" {
+		return 100
+	}
+	switch label {
+	case "apiVersion":
+		return 0
+	case "kind":
+		return 1
+	case "metadata":
+		return 2
+	case "spec":
+		return 3
+	default:
+		return 100
+	}
+}
+
+func completionSortText(parentPath string, item completionCandidate, index int) string {
+	return fmt.Sprintf("%04d_%s", index, item.label)
 }
 
 func completionParentPaths(parentPath string) []string {

@@ -140,6 +140,7 @@ type completionItem struct {
 	Label          string    `json:"label"`
 	Kind           int       `json:"kind"`
 	Documentation  string    `json:"documentation,omitempty"`
+	SortText       string    `json:"sortText,omitempty"`
 	TextEdit       *textEdit `json:"textEdit,omitempty"`
 	InsertTextMode int       `json:"insertTextMode,omitempty"`
 }
@@ -308,6 +309,7 @@ func (s *Server) handleCompletion(msg Message) error {
 			Label:         item.Label,
 			Kind:          completionItemKindProperty,
 			Documentation: item.Documentation,
+			SortText:      item.SortText,
 		}
 		if item.TextEdit != nil {
 			out.TextEdit = &textEdit{

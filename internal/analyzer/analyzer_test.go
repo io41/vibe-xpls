@@ -3,6 +3,7 @@ package analyzer
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -54,6 +55,78 @@ func TestAnalyzerStartupServesCompositeTypeRefAPIVersionDocs(t *testing.T) {
 	}
 	if !strings.Contains(item.Documentation, "API version of the composite resource type this Composition renders.") {
 		t.Fatalf("apiVersion completion documentation = %q", item.Documentation)
+	}
+}
+
+func TestAnalyzerCompletionSortsRootAndRequiredKeys(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	rootCompletion := a.Completion(uri, "")
+	if got := completionLabels(rootCompletion.Items[:4]); !reflect.DeepEqual(got, []string{"apiVersion", "kind", "metadata", "spec"}) {
+		t.Fatalf("root labels = %#v", got)
+	}
+	specCompletion := a.Completion(uri, "spec.compositeTypeRef")
+	got := completionLabels(specCompletion.Items)
+	if len(got) < 2 || got[0] != "apiVersion" || got[1] != "kind" {
+		t.Fatalf("required compositeTypeRef labels should sort first, got %#v", got)
+	}
+}
+
+func TestAnalyzerCompletionUsesArrayItemSchemaPath(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-pipeline.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - functionRef:\n        n"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "name") {
+		t.Fatalf("array item completion missing name: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionSuppressesRootStatusOnly(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	if containsCompletion(a.Completion(uri, "").Items, "status") {
+		t.Fatal("root status should be suppressed")
+	}
+}
+
+func TestCompletionDoesNotSuppressNestedStatusSchemaPath(t *testing.T) {
+	idx := NewSchemaIndex()
+	release := CrossplaneRelease{Tag: "v2.2.1"}
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: release,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "CompositeResourceDefinition"},
+		Fields: map[string]FieldDoc{
+			"spec.versions[].schema.openAPIV3Schema.properties.status": {
+				Path:        "spec.versions[].schema.openAPIV3Schema.properties.status",
+				Description: "Status schema property.",
+			},
+		},
+	})
+
+	completion := completionFromSchema(idx, release, "apiextensions.crossplane.io/v1", "CompositeResourceDefinition", "spec.versions[].schema.openAPIV3Schema.properties")
+	if !containsCompletion(completion.Items, "status") {
+		t.Fatalf("nested schema status should not be suppressed: %#v", completion.Items)
 	}
 }
 
@@ -929,6 +1002,14 @@ func containsCompletion(items []CompletionItem, label string) bool {
 		}
 	}
 	return false
+}
+
+func completionLabels(items []CompletionItem) []string {
+	labels := make([]string, len(items))
+	for i, item := range items {
+		labels[i] = item.Label
+	}
+	return labels
 }
 
 func completionItemByLabel(items []CompletionItem, label string) (CompletionItem, bool) {
