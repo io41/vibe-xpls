@@ -207,11 +207,16 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 		if _, ok := item["detail"]; ok {
 			t.Fatalf("completion item %#v detail = %#v, want omitted generic detail", item["label"], item["detail"])
 		}
-		if item["sortText"] == "" {
+		sortText, ok := item["sortText"]
+		if !ok {
 			t.Fatalf("completion item %#v missing sortText", item["label"])
 		}
-		if item["label"] == "apiVersion" && item["sortText"] != "0000_apiVersion" {
-			t.Fatalf("apiVersion sortText = %#v, want 0000_apiVersion", item["sortText"])
+		sortTextString, ok := sortText.(string)
+		if !ok || sortTextString == "" {
+			t.Fatalf("completion item %#v sortText = %#v, want non-empty string", item["label"], sortText)
+		}
+		if item["label"] == "apiVersion" && sortTextString != "0000_apiVersion" {
+			t.Fatalf("apiVersion sortText = %#v, want 0000_apiVersion", sortTextString)
 		}
 	}
 	item := completionItemByLabelForTest(t, items, "apiVersion")

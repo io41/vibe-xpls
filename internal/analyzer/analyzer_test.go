@@ -69,6 +69,9 @@ func TestAnalyzerCompletionSortsRootAndRequiredKeys(t *testing.T) {
 	a.OpenDocument(uri, text)
 
 	rootCompletion := a.Completion(uri, "")
+	if len(rootCompletion.Items) < 4 {
+		t.Fatalf("root completion has %d items, want at least 4: %#v", len(rootCompletion.Items), rootCompletion.Items)
+	}
 	if got := completionLabels(rootCompletion.Items[:4]); !reflect.DeepEqual(got, []string{"apiVersion", "kind", "metadata", "spec"}) {
 		t.Fatalf("root labels = %#v", got)
 	}
