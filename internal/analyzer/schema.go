@@ -79,51 +79,6 @@ func NewSchemaIndex() *SchemaIndex {
 
 func (idx *SchemaIndex) LoadBuiltIns() {
 	idx.bundleStatus = idx.LoadGeneratedBuiltIns()
-	idx.loadCompatibilityBuiltIns()
-}
-
-func (idx *SchemaIndex) loadCompatibilityBuiltIns() {
-	idx.overlayBuiltInFields(SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"}, map[string]FieldDoc{
-		"apiVersion":                       {Path: "apiVersion", Description: "API version of the Composition resource.", Type: "string"},
-		"kind":                             {Path: "kind", Description: "Resource kind, normally Composition.", Type: "string"},
-		"metadata.name":                    {Path: "metadata.name", Description: "Name of the Composition.", Type: "string"},
-		"spec.compositeTypeRef.apiVersion": {Path: "spec.compositeTypeRef.apiVersion", Description: "API version of the composite resource type this Composition renders.", Type: "string", Required: true},
-		"spec.compositeTypeRef.kind":       {Path: "spec.compositeTypeRef.kind", Description: "Kind of the composite resource type this Composition renders.", Type: "string", Required: true},
-	})
-	idx.addCompatibilityBuiltInSchema(Schema{
-		GVK: SourceGVK{APIVersion: "meta.pkg.crossplane.io/v1", Kind: "Configuration"},
-		Fields: map[string]FieldDoc{
-			"apiVersion":              {Path: "apiVersion", Description: "API version of the Configuration metadata resource.", Type: "string"},
-			"kind":                    {Path: "kind", Description: "Resource kind, normally Configuration.", Type: "string"},
-			"metadata.name":           {Path: "metadata.name", Description: "Name of the Configuration package.", Type: "string"},
-			"spec.dependsOn.provider": {Path: "spec.dependsOn.provider", Description: "Provider package dependency required by this Configuration."},
-		},
-		Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-	})
-}
-
-func (idx *SchemaIndex) overlayBuiltInFields(gvk SourceGVK, fields map[string]FieldDoc) {
-	schema, ok := idx.schemas[gvk]
-	if !ok {
-		schema = Schema{
-			GVK:        gvk,
-			Fields:     map[string]FieldDoc{},
-			Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-		}
-	}
-	if schema.Fields == nil {
-		schema.Fields = map[string]FieldDoc{}
-	}
-	for path, field := range fields {
-		schema.Fields[path] = copyFieldDoc(field)
-	}
-	idx.schemas[gvk] = copySchema(schema)
-	idx.builtIns[gvk] = struct{}{}
-}
-
-func (idx *SchemaIndex) addCompatibilityBuiltInSchema(schema Schema) {
-	idx.schemas[schema.GVK] = copySchema(schema)
-	idx.builtIns[schema.GVK] = struct{}{}
 }
 
 func (idx *SchemaIndex) AddWorkspaceSchema(schema Schema) {

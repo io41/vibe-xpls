@@ -157,6 +157,7 @@ func generateRelease(release ReleaseConfig, outDir string) ([]string, error) {
 						UpstreamSHA256:     sha,
 					},
 				}
+				applyCompatibilityFieldDocs(&schema)
 				filename, err := schemaFilename(apiVersion, doc.Spec.Names.Kind)
 				if err != nil {
 					return nil, fmt.Errorf("schema filename for %s %s: %w", apiVersion, doc.Spec.Names.Kind, err)
@@ -169,7 +170,95 @@ func generateRelease(release ReleaseConfig, outDir string) ([]string, error) {
 			}
 		}
 	}
+	compatibilitySchemas, err := generatedCompatibilitySchemas(release)
+	if err != nil {
+		return nil, err
+	}
+	for _, schema := range compatibilitySchemas {
+		filename, err := schemaFilename(schema.APIVersion, schema.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("compatibility schema filename for %s %s: %w", schema.APIVersion, schema.Kind, err)
+		}
+		relSchemaPath := filepath.ToSlash(filepath.Join("schemas", safeReleaseTag, filename))
+		if err := writeJSONUnder(outDir, relSchemaPath, schema); err != nil {
+			return nil, err
+		}
+		schemaPaths = append(schemaPaths, relSchemaPath)
+	}
 	return schemaPaths, nil
+}
+
+func applyCompatibilityFieldDocs(schema *schemaDocumentJSON) {
+	overrides := compatibilityFieldDocs(schema.APIVersion, schema.Kind)
+	if len(overrides) == 0 {
+		return
+	}
+	seen := map[string]struct{}{}
+	for i := range schema.Fields {
+		seen[schema.Fields[i].Path] = struct{}{}
+		override, ok := overrides[schema.Fields[i].Path]
+		if !ok {
+			continue
+		}
+		schema.Fields[i].Description = override.Description
+		if override.Type != "" {
+			schema.Fields[i].Type = override.Type
+		}
+		if override.Required {
+			schema.Fields[i].Required = true
+		}
+	}
+	for path, override := range overrides {
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		schema.Fields = append(schema.Fields, fieldDocJSON{
+			Path:        override.Path,
+			Description: override.Description,
+			Type:        override.Type,
+			Required:    override.Required,
+			Default:     override.Default,
+			Enum:        override.Enum,
+			Deprecated:  override.Deprecated,
+		})
+	}
+	sort.Slice(schema.Fields, func(i, j int) bool {
+		return schema.Fields[i].Path < schema.Fields[j].Path
+	})
+}
+
+func generatedCompatibilitySchemas(release ReleaseConfig) ([]schemaDocumentJSON, error) {
+	fields := []analyzer.FieldDoc{
+		{Path: "apiVersion", Description: "API version of the Configuration metadata resource.", Type: "string"},
+		{Path: "kind", Description: "Resource kind, normally Configuration.", Type: "string"},
+		{Path: "metadata.name", Description: "Name of the Configuration package.", Type: "string"},
+		{Path: "spec.dependsOn.provider", Description: "Provider package dependency required by this Configuration."},
+	}
+	return []schemaDocumentJSON{{
+		Release:    release.Tag,
+		APIVersion: "meta.pkg.crossplane.io/v1",
+		Kind:       "Configuration",
+		Fields:     toFieldDocJSON(fields),
+		Provenance: schemaProvenanceJSON{
+			Owner:              string(analyzer.SchemaOwnerCore),
+			Source:             string(analyzer.SchemaSourceGeneratedBuiltIn),
+			UpstreamReleaseTag: release.Tag,
+			UpstreamSourcePath: "generated/compatibility/meta.pkg.crossplane.io_v1_Configuration.json",
+		},
+	}}, nil
+}
+
+func compatibilityFieldDocs(apiVersion, kind string) map[string]analyzer.FieldDoc {
+	if apiVersion != "apiextensions.crossplane.io/v1" || kind != "Composition" {
+		return nil
+	}
+	return map[string]analyzer.FieldDoc{
+		"apiVersion":                       {Path: "apiVersion", Description: "API version of the Composition resource.", Type: "string"},
+		"kind":                             {Path: "kind", Description: "Resource kind, normally Composition.", Type: "string"},
+		"metadata.name":                    {Path: "metadata.name", Description: "Name of the Composition.", Type: "string"},
+		"spec.compositeTypeRef.apiVersion": {Path: "spec.compositeTypeRef.apiVersion", Description: "API version of the composite resource type this Composition renders.", Type: "string", Required: true},
+		"spec.compositeTypeRef.kind":       {Path: "spec.compositeTypeRef.kind", Description: "Kind of the composite resource type this Composition renders.", Type: "string", Required: true},
+	}
 }
 
 func yamlFiles(root string) ([]string, error) {

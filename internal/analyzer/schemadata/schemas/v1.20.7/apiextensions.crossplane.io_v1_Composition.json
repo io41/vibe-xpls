@@ -5,12 +5,12 @@
   "fields": [
     {
       "path": "apiVersion",
-      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "description": "API version of the Composition resource.",
       "type": "string"
     },
     {
       "path": "kind",
-      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "description": "Resource kind, normally Composition.",
       "type": "string"
     },
     {
@@ -29,7 +29,7 @@
     },
     {
       "path": "metadata.name",
-      "description": "Object name.",
+      "description": "Name of the Composition.",
       "type": "string"
     },
     {
@@ -45,13 +45,13 @@
     },
     {
       "path": "spec.compositeTypeRef.apiVersion",
-      "description": "APIVersion of the type.",
+      "description": "API version of the composite resource type this Composition renders.",
       "type": "string",
       "required": true
     },
     {
       "path": "spec.compositeTypeRef.kind",
-      "description": "Kind of the type.",
+      "description": "Kind of the composite resource type this Composition renders.",
       "type": "string",
       "required": true
     },
