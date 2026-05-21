@@ -58,6 +58,41 @@ func TestGenerateRejectsReleaseTagPathEscape(t *testing.T) {
 	}
 }
 
+func TestGenerateRejectsCRDDerivedFilenamePathEscape(t *testing.T) {
+	base := t.TempDir()
+	out := filepath.Join(base, "out")
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: ../../../../escape
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                name:
+                  type: string
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	err := Generate(cfg, out)
+	if err == nil {
+		t.Fatal("Generate succeeded with path traversal CRD kind")
+	}
+	if _, statErr := os.Stat(filepath.Join(base, "escape.json")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("outside output path stat err = %v, want not exist", statErr)
+	}
+}
+
 func TestLoadConfigFileRejectsCWDRelativeFallback(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	raw := `{
@@ -77,6 +112,30 @@ func TestLoadConfigFileRejectsCWDRelativeFallback(t *testing.T) {
 
 	if _, err := LoadConfigFile(configPath); err == nil {
 		t.Fatal("LoadConfigFile succeeded with missing config-relative paths")
+	}
+}
+
+func TestLoadConfigFileResolvesFixturePathsRelativeToConfig(t *testing.T) {
+	t.Chdir(filepath.Join("..", ".."))
+	configPath := filepath.Join("internal", "schemagen", "testdata", "config.json")
+	cfg, err := LoadConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(cfg.Releases) != 1 {
+		t.Fatalf("release count = %d, want 1", len(cfg.Releases))
+	}
+	fixtureDir := filepath.Clean(filepath.Join("internal", "schemagen", "testdata"))
+	rawCRDDir := filepath.Clean(cfg.Releases[0].RawCRDDir)
+	crossplaneGoMod := filepath.Clean(cfg.Releases[0].CrossplaneGoMod)
+	if rel, err := filepath.Rel(fixtureDir, rawCRDDir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("RawCRDDir = %q, want under %q", cfg.Releases[0].RawCRDDir, fixtureDir)
+	}
+	if rel, err := filepath.Rel(fixtureDir, crossplaneGoMod); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("CrossplaneGoMod = %q, want under %q", cfg.Releases[0].CrossplaneGoMod, fixtureDir)
+	}
+	if err := Generate(cfg, t.TempDir()); err != nil {
+		t.Fatalf("generate from loaded config: %v", err)
 	}
 }
 
