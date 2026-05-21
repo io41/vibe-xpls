@@ -3,6 +3,8 @@ package analyzer
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type SourceGVK struct {
@@ -132,6 +134,31 @@ func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, 
 	return copyFieldDoc(doc), ok
 }
 
+func (idx *SchemaIndex) ReleasesForGVK(gvk SourceGVK) []CrossplaneRelease {
+	seen := map[CrossplaneRelease]struct{}{}
+	releases := []CrossplaneRelease{}
+	for key := range idx.releaseSchemas {
+		if key.APIVersion != gvk.APIVersion || key.Kind != gvk.Kind {
+			continue
+		}
+		if _, ok := seen[key.Release]; ok {
+			continue
+		}
+		seen[key.Release] = struct{}{}
+		releases = append(releases, key.Release)
+	}
+	sortCrossplaneReleases(releases)
+	return releases
+}
+
+func (idx *SchemaIndex) DefaultReleaseForGVK(gvk SourceGVK) (CrossplaneRelease, bool) {
+	releases := idx.ReleasesForGVK(gvk)
+	if len(releases) == 0 {
+		return CrossplaneRelease{}, false
+	}
+	return releases[len(releases)-1], true
+}
+
 func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
 	schema, ok := idx.schemas[SourceGVK{APIVersion: apiVersion, Kind: kind}]
 	if !ok {
@@ -186,4 +213,93 @@ func copyFieldDoc(doc FieldDoc) FieldDoc {
 		doc.Enum = append([]string(nil), doc.Enum...)
 	}
 	return doc
+}
+
+type schemaSemVer struct {
+	major int
+	minor int
+	patch int
+	pre   string
+	ok    bool
+}
+
+func sortCrossplaneReleases(releases []CrossplaneRelease) {
+	sort.Slice(releases, func(i, j int) bool {
+		return compareCrossplaneReleases(releases[i], releases[j]) < 0
+	})
+}
+
+func compareCrossplaneReleases(left, right CrossplaneRelease) int {
+	leftVersion := parseSchemaSemVer(left.Tag)
+	rightVersion := parseSchemaSemVer(right.Tag)
+	if leftVersion.ok && rightVersion.ok {
+		return compareSchemaSemVer(leftVersion, rightVersion)
+	}
+	if leftVersion.ok != rightVersion.ok {
+		if leftVersion.ok {
+			return 1
+		}
+		return -1
+	}
+	return strings.Compare(left.Tag, right.Tag)
+}
+
+func parseSchemaSemVer(tag string) schemaSemVer {
+	tag = strings.TrimSpace(tag)
+	tag = strings.TrimPrefix(tag, "v")
+	pre := ""
+	if split := strings.Index(tag, "-"); split >= 0 {
+		pre = tag[split+1:]
+		tag = tag[:split]
+	}
+	parts := strings.Split(tag, ".")
+	if len(parts) != 3 {
+		return schemaSemVer{}
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	return schemaSemVer{major: major, minor: minor, patch: patch, pre: pre, ok: true}
+}
+
+func compareSchemaSemVer(left, right schemaSemVer) int {
+	if left.major != right.major {
+		return compareInts(left.major, right.major)
+	}
+	if left.minor != right.minor {
+		return compareInts(left.minor, right.minor)
+	}
+	if left.patch != right.patch {
+		return compareInts(left.patch, right.patch)
+	}
+	if left.pre == right.pre {
+		return 0
+	}
+	if left.pre == "" {
+		return 1
+	}
+	if right.pre == "" {
+		return -1
+	}
+	return strings.Compare(left.pre, right.pre)
+}
+
+func compareInts(left, right int) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
+	}
 }

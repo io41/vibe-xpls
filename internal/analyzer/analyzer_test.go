@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -412,6 +413,25 @@ func TestAnalyzerCompletionAtOffsetDoesNotCompleteAfterParentColon(t *testing.T)
 
 	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
 		t.Fatalf("parent-colon completion = %#v, want none", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionUsesPackageCrossplaneVersionConstraint(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v1.20.0 <v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  r"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "resources") {
+		t.Fatalf("v1 constrained package should offer resources when present in v1 schema: %#v", completion.Items)
 	}
 }
 

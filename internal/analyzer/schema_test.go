@@ -185,6 +185,24 @@ func TestSchemaIndexLooksUpByReleaseAndGVK(t *testing.T) {
 	}
 }
 
+func TestResolveReleaseNoPackageByExactGVK(t *testing.T) {
+	idx := NewSchemaIndex()
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	idx.AddGeneratedBuiltIn(Schema{Release: v1, GVK: SourceGVK{APIVersion: "example.io/v1", Kind: "OnlyV1"}, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}})
+	idx.AddGeneratedBuiltIn(Schema{Release: v1, GVK: SourceGVK{APIVersion: "example.io/v1", Kind: "Both"}, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}})
+	idx.AddGeneratedBuiltIn(Schema{Release: v2, GVK: SourceGVK{APIVersion: "example.io/v1", Kind: "Both"}, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}})
+
+	got, ok := idx.DefaultReleaseForGVK(SourceGVK{APIVersion: "example.io/v1", Kind: "OnlyV1"})
+	if !ok || got != v1 {
+		t.Fatalf("OnlyV1 release = %#v ok=%v, want v1", got, ok)
+	}
+	got, ok = idx.DefaultReleaseForGVK(SourceGVK{APIVersion: "example.io/v1", Kind: "Both"})
+	if !ok || got != v2 {
+		t.Fatalf("Both release = %#v ok=%v, want v2", got, ok)
+	}
+}
+
 func TestFieldDocumentationMarkdown(t *testing.T) {
 	def := json.RawMessage("5")
 	field := FieldDoc{

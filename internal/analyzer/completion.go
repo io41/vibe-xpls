@@ -6,7 +6,8 @@ import (
 )
 
 type Completion struct {
-	Items []CompletionItem
+	Items  []CompletionItem
+	Reason SuppressionReason
 }
 
 type CompletionItem struct {
@@ -30,7 +31,12 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if !ok {
 		return Completion{}
 	}
-	return completionFromSchema(a.schemas, root.apiVersion, root.kind, parentPath)
+	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	resolution := a.resolveSchemaRelease(uri, gvk)
+	if !resolution.OK {
+		return Completion{Reason: resolution.Reason}
+	}
+	return completionFromSchema(a.schemas, resolution.Release, root.apiVersion, root.kind, parentPath)
 }
 
 func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
@@ -45,14 +51,19 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	apiVersion, apiOK := parsed.RootValueForOccurrence(context.rootOccurrence, "apiVersion")
 	kind, kindOK := parsed.RootValueForOccurrence(context.rootOccurrence, "kind")
 	if !apiOK || !kindOK {
-		return Completion{}
+		return Completion{Reason: SuppressionMissingRootGVK}
+	}
+	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
+	resolution := a.resolveSchemaRelease(uri, gvk)
+	if !resolution.OK {
+		return Completion{Reason: resolution.Reason}
 	}
 	completion := Completion{}
 	for i, parentPath := range completionParentPaths(context.parentPath) {
 		if parentPath != "" && !parsed.IsStablePath(parentPath) {
 			continue
 		}
-		candidate := completionFromSchema(a.schemas, apiVersion, kind, parentPath)
+		candidate := completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, parentPath)
 		if i > 0 {
 			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
 		}
@@ -87,7 +98,7 @@ func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, d
 		}
 		items = append(items, item)
 	}
-	return Completion{Items: items}
+	return Completion{Items: items, Reason: completion.Reason}
 }
 
 type completionContext struct {
@@ -173,14 +184,14 @@ func pathExists(parsed YAMLDocument, path string) bool {
 	return false
 }
 
-func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath string) Completion {
+func completionFromSchema(schemas *SchemaIndex, release CrossplaneRelease, apiVersion, kind, parentPath string) Completion {
 	var items []CompletionItem
 	seen := map[string]struct{}{}
 	prefix := parentPath
 	if prefix != "" {
 		prefix += "."
 	}
-	for _, field := range schemas.Fields(apiVersion, kind) {
+	for _, field := range schemas.FieldsForRelease(release, apiVersion, kind) {
 		if !strings.HasPrefix(field.Path, prefix) {
 			continue
 		}
@@ -238,7 +249,7 @@ func filterCompletion(completion Completion, prefix string) Completion {
 			items = append(items, item)
 		}
 	}
-	return Completion{Items: items}
+	return Completion{Items: items, Reason: completion.Reason}
 }
 
 func offsetInTemplateActionForCompletion(parsed YAMLDocument, offset int) bool {
