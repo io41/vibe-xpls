@@ -75,10 +75,23 @@ spec:
 	if start < 0 {
 		t.Fatalf("test setup: %q value not found", value)
 	}
-	for i := 0; i < len(value); i++ {
+	for i := 0; i <= len(value); i++ {
 		hover, ok := a.HoverAtOffset(uri, start+i)
 		if !ok || !strings.Contains(hover.Markdown, "Composite kind") {
 			t.Fatalf("hover at value offset %d = %#v ok=%v", i, hover, ok)
+		}
+	}
+
+	rootKind := "Composition"
+	rootKindStart := strings.Index(text, "kind: "+rootKind)
+	if rootKindStart < 0 {
+		t.Fatalf("test setup: root kind value not found")
+	}
+	rootKindStart += len("kind: ")
+	for i := 0; i <= len(rootKind); i++ {
+		hover, ok := a.HoverAtOffset(uri, rootKindStart+i)
+		if !ok || !strings.Contains(hover.Markdown, "Resource kind, normally Composition.") {
+			t.Fatalf("root kind hover at value offset %d = %#v ok=%v", i, hover, ok)
 		}
 	}
 }

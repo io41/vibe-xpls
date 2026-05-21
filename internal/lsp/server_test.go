@@ -238,7 +238,11 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 			"textDocument": map[string]any{"uri": uri},
 			"position":     positionAtSubstring(t, text, "CompositeBucket", source.EncodingUTF16),
 		}),
-		requestFrame(t, 3, "textDocument/completion", map[string]any{
+		requestFrame(t, 3, "textDocument/hover", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, strings.Index(text, "CompositeBucket")+len("CompositeBucket"), source.EncodingUTF16),
+		}),
+		requestFrame(t, 4, "textDocument/completion", map[string]any{
 			"textDocument": map[string]any{"uri": uri},
 			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
 		}),
@@ -249,7 +253,12 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 	if !strings.Contains(contents["value"].(string), "Composite kind") {
 		t.Fatalf("hover contents = %q, want analyzer docs", contents["value"])
 	}
-	completion := resultMap(t, responseForID(t, messages, 3))
+	boundaryHover := resultMap(t, responseForID(t, messages, 3))
+	boundaryContents := asMap(t, boundaryHover["contents"])
+	if !strings.Contains(boundaryContents["value"].(string), "Composite kind") {
+		t.Fatalf("boundary hover contents = %q, want analyzer docs", boundaryContents["value"])
+	}
+	completion := resultMap(t, responseForID(t, messages, 4))
 	if !itemsContainLabel(asSlice(t, completion["items"]), "kind") {
 		t.Fatalf("completion items = %#v, want kind", completion["items"])
 	}

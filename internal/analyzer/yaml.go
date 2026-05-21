@@ -165,7 +165,7 @@ func (d YAMLDocument) pathOccurrenceAtScalarValueOffset(offset int) (PathOccurre
 			}
 			start := lineStart + search + idx
 			span := Span{Start: start, End: start + len(occurrence.Value)}
-			if spanContains(span, offset) {
+			if spanContainsValueBoundary(span, offset) {
 				spanLen := span.End - span.Start
 				depth := pathDepth(occurrence.Path)
 				if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
@@ -875,6 +875,10 @@ func spansOverlap(a, b Span) bool {
 
 func spanContains(span Span, offset int) bool {
 	return span.Start <= offset && offset < span.End
+}
+
+func spanContainsValueBoundary(span Span, offset int) bool {
+	return span.Start <= offset && offset <= span.End
 }
 
 func unionSpan(a, b Span) Span {
