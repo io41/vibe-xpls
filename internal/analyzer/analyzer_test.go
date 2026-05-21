@@ -1015,6 +1015,49 @@ func TestAnalyzerSurfacesPackageWorkspaceSchemaDuplicateDiagnostics(t *testing.T
 	}
 }
 
+func TestAnalyzerKeepsGeneratedBuiltInSchemaWhenWorkspaceCRDDuplicatesCoreGVK(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	crdPath := filepath.Join(root, "api", "composition-crd.yaml")
+	analyzerWriteFile(t, crdPath, workspaceCompositionDuplicateCRD())
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+
+	compositionURI := "file://" + filepath.Join(root, "api", "composition.yaml")
+	compositionText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: CompositeBucket\n"
+	a.OpenDocument(compositionURI, compositionText)
+
+	hover, ok := a.Hover(compositionURI, "spec.compositeTypeRef.kind")
+	if !ok || !strings.Contains(hover.Markdown, "Kind of the composite resource type this Composition renders.") {
+		t.Fatalf("hover = %#v ok=%v, want generated built-in documentation", hover, ok)
+	}
+	if strings.Contains(hover.Markdown, "Workspace duplicate kind documentation.") {
+		t.Fatalf("hover = %#v, want generated built-in documentation instead of workspace duplicate", hover)
+	}
+	completion := a.Completion(compositionURI, "spec")
+	if containsCompletion(completion.Items, "workspaceOnly") {
+		t.Fatalf("completion contains workspace duplicate-only field: %#v", completion.Items)
+	}
+	item, ok := completionItemByLabel(a.Completion(compositionURI, "spec.compositeTypeRef").Items, "kind")
+	if !ok || !strings.Contains(item.Documentation, "Kind of the composite resource type this Composition renders.") {
+		t.Fatalf("kind completion = %#v, want generated built-in documentation", item)
+	}
+
+	crdURI := "file://" + crdPath
+	a.OpenDocument(crdURI, workspaceCompositionDuplicateCRD())
+	diagnostics := a.Diagnostics(crdURI)
+	if !containsDiagnosticMessage(diagnostics, "workspace schema duplicates built-in Crossplane core schema") {
+		t.Fatalf("diagnostics = %#v, want duplicate built-in warning", diagnostics)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Message == "workspace schema duplicates built-in Crossplane core schema" && diagnostic.URI != crdURI {
+			t.Fatalf("duplicate built-in diagnostic URI = %q, want %q", diagnostic.URI, crdURI)
+		}
+	}
+}
+
 func TestAnalyzerKeepsSameGVKWorkspaceSchemaDiagnosticsPackageScoped(t *testing.T) {
 	root := t.TempDir()
 	pkgA := filepath.Join(root, "packages", "a")
@@ -1620,6 +1663,40 @@ spec:
                           name:
                             type: string
                             description: ` + description + `
+`
+}
+
+func workspaceCompositionDuplicateCRD() string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: compositions.apiextensions.crossplane.io
+spec:
+  group: apiextensions.crossplane.io
+  names:
+    kind: Composition
+    plural: compositions
+  scope: Cluster
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                workspaceOnly:
+                  type: string
+                  description: Workspace duplicate-only field.
+                compositeTypeRef:
+                  type: object
+                  properties:
+                    kind:
+                      type: string
+                      description: Workspace duplicate kind documentation.
 `
 }
 
