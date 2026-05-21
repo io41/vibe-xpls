@@ -17,7 +17,10 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 	}
 	root, ok := rootContextForExistingPath(parsed, fieldPath)
 	if !ok {
-		return Hover{}, false
+		root, ok = singleStableRootContext(parsed)
+		if !ok {
+			return Hover{}, false
+		}
 	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
 	if a.schemas.HasWorkspaceSchema(gvk) {

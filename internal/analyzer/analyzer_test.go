@@ -801,14 +801,38 @@ func TestAnalyzerWorkspaceSchemaCompletionAndHover(t *testing.T) {
 	}
 }
 
+func TestAnalyzerLoadsWorkspaceProviderCRDSchema(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.forProvider")
+	if !containsCompletion(completion.Items, "bucketName") {
+		t.Fatalf("workspace provider CRD completion missing bucketName: %#v", completion.Items)
+	}
+	item, ok := completionItemByLabel(completion.Items, "bucketName")
+	if !ok || !strings.Contains(item.Documentation, "BucketName is the provider bucket name.") {
+		t.Fatalf("bucketName completion = %#v, want provider CRD documentation", item)
+	}
+	hover, ok := a.Hover(uri, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(hover.Markdown, "BucketName is the provider bucket name.") {
+		t.Fatalf("hover = %#v ok=%v, want provider CRD documentation", hover, ok)
+	}
+}
+
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
 	if err != nil {
 		t.Fatalf("new analyzer: %v", err)
 	}
-	uri := "file://" + filepath.Join(root, "api", "bucket.yaml")
-	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n"
+	uri := "file://" + filepath.Join(root, "api", "vpc.yaml")
+	text := "apiVersion: ec2.aws.upbound.io/v1beta1\nkind: VPC\nspec:\n  forProvider:\n"
 	a.OpenDocument(uri, text)
 
 	completion := a.Completion(uri, "spec.forProvider")

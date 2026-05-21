@@ -31,12 +31,14 @@ func New(options Options) (*Analyzer, error) {
 	} else {
 		schemas.LoadBuiltIns()
 	}
-	return &Analyzer{
+	analyzer := &Analyzer{
 		workspace: workspace,
 		limits:    defaultLimits(options.Limits),
 		docs:      NewDocumentStore(),
 		schemas:   schemas,
-	}, nil
+	}
+	analyzer.loadWorkspaceSchemas()
+	return analyzer, nil
 }
 
 func (a *Analyzer) SchemaBundleStatus() SchemaBundleStatus {
