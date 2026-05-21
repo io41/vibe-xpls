@@ -1,0 +1,11 @@
+{
+  "bundleFormatVersion": 1,
+  "releases": [
+    {
+      "tag": "v1.20.7",
+      "commit": "5fae6c1ab967e57b1dc792b5c52c97bceda12953",
+      "rawCRDDir": "internal/schemagen/testdata",
+      "crossplaneGoMod": "internal/schemagen/testdata/go.mod"
+    }
+  ]
+}
