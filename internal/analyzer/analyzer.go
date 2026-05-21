@@ -37,6 +37,14 @@ func New(options Options) (*Analyzer, error) {
 	}, nil
 }
 
+func (a *Analyzer) SchemaBundleStatus() SchemaBundleStatus {
+	return a.schemas.bundleStatus
+}
+
+func (a *Analyzer) SetSchemaBundleStatusForTest(status SchemaBundleStatus) {
+	a.schemas.bundleStatus = status
+}
+
 func (a *Analyzer) OpenDocument(uri, text string) Document {
 	return a.docs.Open(uri, text)
 }

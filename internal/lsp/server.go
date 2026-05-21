@@ -27,11 +27,16 @@ const (
 
 var nullResult = json.RawMessage("null")
 
+type analyzerFactory func(analyzer.Options) (*analyzer.Analyzer, error)
+
 type Server struct {
 	in                             *bufio.Reader
 	out                            io.Writer
 	errOut                         io.Writer
 	analyzer                       *analyzer.Analyzer
+	newAnalyzer                    analyzerFactory
+	loggedSuppression              map[string]struct{}
+	bundleWarningShown             bool
 	positionEncoding               source.Encoding
 	completionInsertTextModeAsIsOK bool
 }
@@ -159,10 +164,12 @@ type diagnostic struct {
 
 func NewServer(in io.Reader, out io.Writer, errOut io.Writer) *Server {
 	return &Server{
-		in:               bufio.NewReader(in),
-		out:              out,
-		errOut:           errOut,
-		positionEncoding: source.EncodingUTF16,
+		in:                bufio.NewReader(in),
+		out:               out,
+		errOut:            errOut,
+		newAnalyzer:       analyzer.New,
+		loggedSuppression: map[string]struct{}{},
+		positionEncoding:  source.EncodingUTF16,
 	}
 }
 
@@ -219,11 +226,20 @@ func (s *Server) handleInitialize(msg Message) error {
 	insertTextModes := params.Capabilities.TextDocument.Completion.CompletionItem.InsertTextModeSupport.ValueSet
 	s.completionInsertTextModeAsIsOK = supportsInsertTextModeAsIs(insertTextModes)
 
-	a, err := analyzer.New(analyzer.Options{WorkspaceRoot: rootFromInitialize(params), Limits: analyzer.DefaultLimits()})
+	a, err := s.newAnalyzer(analyzer.Options{WorkspaceRoot: rootFromInitialize(params), Limits: analyzer.DefaultLimits()})
 	if err != nil {
 		return s.respond(msg.ID, nil, &ResponseError{Code: invalidParams, Message: err.Error()})
 	}
 	s.analyzer = a
+	if status := s.analyzer.SchemaBundleStatus(); !status.OK && !s.bundleWarningShown {
+		s.bundleWarningShown = true
+		if err := s.notify("window/showMessage", map[string]any{
+			"type":    2,
+			"message": "Crossplane schema completions are disabled: " + status.Message,
+		}); err != nil {
+			return err
+		}
+	}
 
 	return s.respond(msg.ID, initializeResult{
 		Capabilities: serverCapabilities{
@@ -303,6 +319,9 @@ func (s *Server) handleCompletion(msg Message) error {
 	if !ok {
 		return s.respond(msg.ID, emptyCompletionList(), nil)
 	}
+	if len(completion.Items) == 0 {
+		s.logSuppression(snapshot.URI, snapshot.Generation, completion.Reason)
+	}
 	items := make([]completionItem, 0, len(completion.Items))
 	for _, item := range completion.Items {
 		out := completionItem{
@@ -323,6 +342,21 @@ func (s *Server) handleCompletion(msg Message) error {
 		items = append(items, out)
 	}
 	return s.respond(msg.ID, completionList{IsIncomplete: false, Items: items}, nil)
+}
+
+func (s *Server) logSuppression(uri string, generation analyzer.Generation, reason analyzer.SuppressionReason) {
+	if reason == "" {
+		return
+	}
+	key := string(reason)
+	if reason != analyzer.SuppressionBundleDisabled {
+		key = fmt.Sprintf("%s:%d:%s", uri, generation, reason)
+	}
+	if _, ok := s.loggedSuppression[key]; ok {
+		return
+	}
+	s.loggedSuppression[key] = struct{}{}
+	fmt.Fprintf(s.errOut, "completion suppressed: uri=%s reason=%s\n", uri, reason)
 }
 
 func supportsInsertTextModeAsIs(valueSet []int) bool {

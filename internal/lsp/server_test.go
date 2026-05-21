@@ -62,6 +62,69 @@ func TestInitializeAdvertisesCapabilitiesAndNegotiatesPositionEncoding(t *testin
 	}
 }
 
+func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
+	var stderr bytes.Buffer
+	in := bytes.NewBuffer(nil)
+	out := bytes.NewBuffer(nil)
+	s := NewServer(in, out, &stderr)
+	s.newAnalyzer = func(options analyzer.Options) (*analyzer.Analyzer, error) {
+		a, err := analyzer.New(options)
+		if err != nil {
+			return nil, err
+		}
+		a.SetSchemaBundleStatusForTest(analyzer.SchemaBundleStatus{Message: "unsupported schema bundle format 99"})
+		return a, nil
+	}
+
+	frames := []string{
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(testRoot(t)), "capabilities": map[string]any{}}),
+		requestFrame(t, 2, "initialize", map[string]any{"rootUri": fileURI(testRoot(t)), "capabilities": map[string]any{}}),
+		notificationFrame(t, "exit", nil),
+	}
+	for _, frame := range frames {
+		if _, err := in.WriteString(frame); err != nil {
+			t.Fatalf("write frame: %v", err)
+		}
+	}
+	if code := s.Run(); code != 0 {
+		t.Fatalf("server exit = %d", code)
+	}
+	messages := readMessages(t, out.Bytes())
+	warnings := 0
+	for _, msg := range messages {
+		if msg.Method == "window/showMessage" {
+			warnings++
+			params := paramsMap(t, msg)
+			if params["type"] != float64(2) || !strings.Contains(params["message"].(string), "schema completions are disabled") {
+				t.Fatalf("warning params = %#v", params)
+			}
+		}
+	}
+	if warnings != 1 {
+		t.Fatalf("warnings = %d, want 1", warnings)
+	}
+}
+
+func TestLogSuppressionThrottlesByReasonScope(t *testing.T) {
+	var stderr bytes.Buffer
+	s := NewServer(bytes.NewReader(nil), io.Discard, &stderr)
+
+	s.logSuppression("file:///one.yaml", 1, "")
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 2, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionBundleDisabled)
+	s.logSuppression("file:///two.yaml", 1, analyzer.SuppressionBundleDisabled)
+
+	logs := stderr.String()
+	if got := strings.Count(logs, "missing-root-gvk"); got != 2 {
+		t.Fatalf("missing-root-gvk logs = %d, want 2; logs=%q", got, logs)
+	}
+	if got := strings.Count(logs, "bundle-disabled"); got != 1 {
+		t.Fatalf("bundle-disabled logs = %d, want 1; logs=%q", got, logs)
+	}
+}
+
 func TestShutdownReturnsNullResult(t *testing.T) {
 	messages := runServerFrames(t,
 		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(testRoot(t)), "capabilities": map[string]any{}}),

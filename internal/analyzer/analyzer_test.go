@@ -201,6 +201,37 @@ func TestAnalyzerCompletionAtOffsetUsesMappingKeyContext(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionReportsMissingRootGVKReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "missing-gvk.yaml")
+	a.OpenDocument(uri, "spec:\n  ")
+
+	completion := a.CompletionAtOffset(uri, len("spec:\n  "))
+	if completion.Reason != SuppressionMissingRootGVK {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionMissingRootGVK)
+	}
+}
+
+func TestAnalyzerCompletionReportsMalformedYAMLReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "malformed.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\n  "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason != SuppressionMalformedYAMLContext {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionMalformedYAMLContext)
+	}
+}
+
 func TestAnalyzerCompletionAtOffsetFiltersPartialMappingKey(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

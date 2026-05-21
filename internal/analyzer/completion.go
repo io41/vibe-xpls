@@ -53,6 +53,15 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Completion{}
 	}
+	if !a.schemas.bundleStatus.OK {
+		return Completion{Reason: SuppressionBundleDisabled}
+	}
+	if malformedYAMLContextAtOffset(parsed, offset) {
+		return Completion{Reason: SuppressionMalformedYAMLContext}
+	}
+	if offsetInTemplateActionForCompletion(parsed, offset) {
+		return Completion{Reason: SuppressionUnstableTemplatePath}
+	}
 	context, ok := completionContextAtOffset(parsed, offset)
 	if !ok {
 		return Completion{}
@@ -98,6 +107,20 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 	}
 	return completion
+}
+
+func malformedYAMLContextAtOffset(parsed YAMLDocument, offset int) bool {
+	currentLineStart := lineStartForOffset(parsed.Mixed.RawText, offset)
+	for _, diagnostic := range parsed.Diagnostics {
+		if diagnostic.Source != "yaml" || diagnostic.Severity != "error" {
+			continue
+		}
+		diagnosticLineStart := lineStartForOffset(parsed.Mixed.RawText, diagnostic.Span.Start)
+		if diagnosticLineStart < currentLineStart {
+			return true
+		}
+	}
+	return false
 }
 
 func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, documentIndex int) Completion {
