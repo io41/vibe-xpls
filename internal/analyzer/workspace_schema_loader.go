@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -186,7 +187,8 @@ func (a *Analyzer) workspaceSchemaDiagnosticsForURI(uri string) []Diagnostic {
 	}
 	result := make([]Diagnostic, 0, len(diagnostics))
 	for _, diagnostic := range diagnostics {
-		if diagnostic.URI != uri {
+		diagnosticPath, ok := filePathFromURI(diagnostic.URI)
+		if !ok || filepath.Clean(diagnosticPath) != filepath.Clean(path) {
 			continue
 		}
 		result = append(result, diagnostic)
@@ -319,7 +321,7 @@ func workspaceSchemasFromRaw(path string, raw []byte) ([]Schema, []Diagnostic) {
 }
 
 func fileURIFromPath(path string) string {
-	return "file://" + filepath.ToSlash(path)
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Clean(path))}).String()
 }
 
 func collectWorkspaceFields(schema workspaceOpenAPISchema) map[string]FieldDoc {

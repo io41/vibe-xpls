@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1059,6 +1060,39 @@ func TestAnalyzerSurfacesMalformedWorkspaceProviderCRDDiagnostic(t *testing.T) {
 		if diagnostic.Source == "schema" && strings.Contains(diagnostic.Message, "parse workspace schema source") && diagnostic.URI != crdURI {
 			t.Fatalf("malformed diagnostic URI = %q, want %q", diagnostic.URI, crdURI)
 		}
+	}
+}
+
+func TestAnalyzerWorkspaceSchemaDiagnosticMatchesEscapedFileURI(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "package with space")
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	crdPath := filepath.Join(root, "api", "provider crd.yaml")
+	crdURI := (&url.URL{Scheme: "file", Path: crdPath}).String()
+	a.OpenDocument(crdURI, "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec:\n  group: [unterminated\n")
+
+	diagnostics := a.Diagnostics(crdURI)
+	if !containsDiagnosticSourceMessage(diagnostics, "schema", "parse workspace schema source") {
+		t.Fatalf("diagnostics = %#v, want schema parse diagnostic for escaped URI %q", diagnostics, crdURI)
+	}
+}
+
+func TestAnalyzerWorkspaceSchemaDiagnosticMatchesLocalhostFileURI(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	crdURI := "file://localhost" + filepath.ToSlash(filepath.Join(root, "api", "provider-crd.yaml"))
+	a.OpenDocument(crdURI, "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec:\n  group: [unterminated\n")
+
+	diagnostics := a.Diagnostics(crdURI)
+	if !containsDiagnosticSourceMessage(diagnostics, "schema", "parse workspace schema source") {
+		t.Fatalf("diagnostics = %#v, want schema parse diagnostic for localhost URI %q", diagnostics, crdURI)
 	}
 }
 
