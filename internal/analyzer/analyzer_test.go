@@ -896,7 +896,7 @@ func TestAnalyzerSkipsNestedPackageWorkspaceProviderCRDSchema(t *testing.T) {
 	analyzerWriteFile(t, filepath.Join(parent, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: parent\n")
 	analyzerWriteFile(t, filepath.Join(child, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: child\n")
 	analyzerWriteFile(t, filepath.Join(parent, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Parent bucket name."))
-	analyzerWriteFile(t, filepath.Join(child, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Child bucket name."))
+	analyzerWriteFile(t, filepath.Join(child, "api", "provider-crd.yaml"), workspaceProviderCRD("childOnlyName", "Child bucket name."))
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
 	if err != nil {
 		t.Fatalf("new analyzer: %v", err)
@@ -911,12 +911,36 @@ func TestAnalyzerSkipsNestedPackageWorkspaceProviderCRDSchema(t *testing.T) {
 	if !ok || !strings.Contains(parentHover.Markdown, "Parent bucket name.") || strings.Contains(parentHover.Markdown, "Child bucket name.") {
 		t.Fatalf("parent hover = %#v ok=%v", parentHover, ok)
 	}
-	childHover, ok := a.Hover(childURI, "spec.forProvider.bucketName")
+	parentCompletion := a.Completion(parentURI, "spec.forProvider")
+	if containsCompletion(parentCompletion.Items, "childOnlyName") {
+		t.Fatalf("parent completion contains nested child CRD field: %#v", parentCompletion.Items)
+	}
+	assertBucketCompletionDoc(t, parentCompletion, "bucketName", "Parent bucket name.")
+	parentSchema, ok := a.workspaceSchemas[workspaceSchemaKey{
+		PackageRoot: parent,
+		GVK:         SourceGVK{APIVersion: "s3.aws.upbound.io/v1beta1", Kind: "Bucket"},
+	}]
+	if !ok {
+		t.Fatal("parent workspace schema missing")
+	}
+	if _, ok := parentSchema.Fields["spec.forProvider.childOnlyName"]; ok {
+		t.Fatalf("parent workspace schema ingested nested child CRD fields: %#v", parentSchema.Fields)
+	}
+
+	childHover, ok := a.Hover(childURI, "spec.forProvider.childOnlyName")
 	if !ok || !strings.Contains(childHover.Markdown, "Child bucket name.") || strings.Contains(childHover.Markdown, "Parent bucket name.") {
 		t.Fatalf("child hover = %#v ok=%v", childHover, ok)
 	}
+	childCompletion := a.Completion(childURI, "spec.forProvider")
+	if containsCompletion(childCompletion.Items, "bucketName") {
+		t.Fatalf("child completion contains parent CRD field: %#v", childCompletion.Items)
+	}
+	assertBucketCompletionDoc(t, childCompletion, "childOnlyName", "Child bucket name.")
 	if diagnostics := a.Diagnostics(parentURI); containsDiagnosticMessage(diagnostics, "workspace schema conflicts with another workspace schema") {
 		t.Fatalf("parent diagnostics = %#v, want no nested child conflict", diagnostics)
+	}
+	if diagnostics := a.workspaceSchemaDiagnostics[parent]; containsDiagnosticMessage(diagnostics, "workspace schema conflicts with another workspace schema") {
+		t.Fatalf("parent package schema diagnostics = %#v, want no nested child conflict", diagnostics)
 	}
 }
 
