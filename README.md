@@ -1,5 +1,7 @@
 # vibe-xpls
 
+> **Project status:** `vibe-xpls` is a very early-stage experimental language server. Expect rough edges, incomplete Crossplane coverage, and breaking changes while the core editor experience is still being shaped.
+
 `vibe-xpls` is an experimental Crossplane language server. It currently focuses on local Crossplane package detection, YAML-aware diagnostics, hover, and completion for Crossplane package authoring.
 
 ## Built-In Crossplane Schemas
