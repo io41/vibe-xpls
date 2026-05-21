@@ -48,7 +48,11 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 }
 
 func hoverFromField(field FieldDoc) Hover {
-	return Hover{Markdown: fmt.Sprintf("**%s**\n\n%s", hoverTitle(field.Path), field.Description)}
+	body := fieldCompletionDocumentation(field)
+	if body == "" {
+		return Hover{Markdown: "**" + hoverTitle(field.Path) + "**"}
+	}
+	return Hover{Markdown: fmt.Sprintf("**%s**\n\n%s", hoverTitle(field.Path), body)}
 }
 
 type rootContext struct {

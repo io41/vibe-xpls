@@ -1,6 +1,9 @@
 package analyzer
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestBuiltInCrossplaneSchemas(t *testing.T) {
 	idx := NewSchemaIndex()
@@ -54,5 +57,56 @@ func TestCoreDuplicateDoesNotOverrideBuiltIn(t *testing.T) {
 	}
 	if len(idx.Diagnostics()) != 1 {
 		t.Fatalf("diagnostics = %d, want 1", len(idx.Diagnostics()))
+	}
+}
+
+func TestSchemaIndexLooksUpByReleaseAndGVK(t *testing.T) {
+	idx := NewSchemaIndex()
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: v1,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
+		Fields: map[string]FieldDoc{
+			"spec.resources[]": {Path: "spec.resources[]", Description: "v1 resources mode"},
+		},
+		Provenance: SchemaProvenance{Owner: SchemaOwnerCore, Source: SchemaSourceGeneratedBuiltIn},
+	})
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: v2,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
+		Fields: map[string]FieldDoc{
+			"spec.pipeline[]": {Path: "spec.pipeline[]", Description: "v2 pipeline mode"},
+		},
+		Provenance: SchemaProvenance{Owner: SchemaOwnerCore, Source: SchemaSourceGeneratedBuiltIn},
+	})
+
+	if _, ok := idx.FieldDocumentationForRelease(v1, "apiextensions.crossplane.io/v1", "Composition", "spec.resources[]"); !ok {
+		t.Fatal("expected v1 resources field")
+	}
+	if _, ok := idx.FieldDocumentationForRelease(v1, "apiextensions.crossplane.io/v1", "Composition", "spec.pipeline[]"); ok {
+		t.Fatal("v1 lookup returned v2-only field")
+	}
+	if _, ok := idx.FieldDocumentationForRelease(v2, "apiextensions.crossplane.io/v1", "Composition", "spec.pipeline[]"); !ok {
+		t.Fatal("expected v2 pipeline field")
+	}
+}
+
+func TestFieldDocumentationMarkdown(t *testing.T) {
+	def := json.RawMessage("5")
+	field := FieldDoc{
+		Path:        "spec.revisionHistoryLimit",
+		Description: "Number of inactive revisions to retain.\n\nUsed by package managers.",
+		Type:        "integer",
+		Required:    true,
+		Default:     &def,
+		Enum:        []string{"1", "5"},
+		Deprecated:  "Use spec.revisionActivationPolicy instead.",
+	}
+
+	got := fieldCompletionDocumentation(field)
+	want := "Number of inactive revisions to retain.\n\nUsed by package managers.\n\n_Type: integer_\n_Required_\n_Default: 5_\n_Allowed: 1, 5_\n_Deprecated: Use spec.revisionActivationPolicy instead._"
+	if got != want {
+		t.Fatalf("documentation = %q, want %q", got, want)
 	}
 }

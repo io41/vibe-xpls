@@ -1,10 +1,17 @@
 package analyzer
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+)
 
 type SourceGVK struct {
 	APIVersion string
 	Kind       string
+}
+
+type CrossplaneRelease struct {
+	Tag string
 }
 
 type SchemaOwner string
@@ -15,32 +22,57 @@ const (
 	SchemaOwnerUser     SchemaOwner = "user"
 )
 
+type SchemaSource string
+
+const (
+	SchemaSourceGeneratedBuiltIn SchemaSource = "generated-built-in"
+	SchemaSourceWorkspace        SchemaSource = "workspace"
+)
+
 type FieldDoc struct {
 	Path        string
 	Description string
+	Type        string
+	Required    bool
+	Default     *json.RawMessage
+	Enum        []string
+	Deprecated  string
 }
 
 type SchemaProvenance struct {
-	Path  string
-	Owner SchemaOwner
+	Path               string
+	Owner              SchemaOwner
+	Source             SchemaSource
+	UpstreamReleaseTag string
+	UpstreamSourcePath string
+	UpstreamSHA256     string
 }
 
 type Schema struct {
+	Release    CrossplaneRelease
 	GVK        SourceGVK
 	Fields     map[string]FieldDoc
 	Provenance SchemaProvenance
 }
 
 type SchemaIndex struct {
-	schemas     map[SourceGVK]Schema
-	builtIns    map[SourceGVK]struct{}
-	diagnostics []Diagnostic
+	schemas        map[SourceGVK]Schema
+	releaseSchemas map[releaseGVK]Schema
+	builtIns       map[SourceGVK]struct{}
+	diagnostics    []Diagnostic
+}
+
+type releaseGVK struct {
+	Release    CrossplaneRelease
+	APIVersion string
+	Kind       string
 }
 
 func NewSchemaIndex() *SchemaIndex {
 	return &SchemaIndex{
-		schemas:  map[SourceGVK]Schema{},
-		builtIns: map[SourceGVK]struct{}{},
+		schemas:        map[SourceGVK]Schema{},
+		releaseSchemas: map[releaseGVK]Schema{},
+		builtIns:       map[SourceGVK]struct{}{},
 	}
 }
 
@@ -89,8 +121,29 @@ func (idx *SchemaIndex) AddWorkspaceSchema(schema Schema) {
 	idx.schemas[schema.GVK] = copySchema(schema)
 }
 
+func (idx *SchemaIndex) AddGeneratedBuiltIn(schema Schema) {
+	idx.releaseSchemas[releaseGVK{
+		Release:    schema.Release,
+		APIVersion: schema.GVK.APIVersion,
+		Kind:       schema.GVK.Kind,
+	}] = copySchema(schema)
+	idx.builtIns[schema.GVK] = struct{}{}
+	if _, ok := idx.schemas[schema.GVK]; !ok {
+		idx.schemas[schema.GVK] = copySchema(schema)
+	}
+}
+
 func (idx *SchemaIndex) FieldDocumentation(apiVersion, kind, fieldPath string) (FieldDoc, bool) {
 	schema, ok := idx.schemas[SourceGVK{APIVersion: apiVersion, Kind: kind}]
+	if !ok {
+		return FieldDoc{}, false
+	}
+	doc, ok := schema.Fields[fieldPath]
+	return doc, ok
+}
+
+func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, apiVersion, kind, fieldPath string) (FieldDoc, bool) {
+	schema, ok := idx.releaseSchemas[releaseGVK{Release: release, APIVersion: apiVersion, Kind: kind}]
 	if !ok {
 		return FieldDoc{}, false
 	}
@@ -113,6 +166,21 @@ func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
 	return fields
 }
 
+func (idx *SchemaIndex) FieldsForRelease(release CrossplaneRelease, apiVersion, kind string) []FieldDoc {
+	schema, ok := idx.releaseSchemas[releaseGVK{Release: release, APIVersion: apiVersion, Kind: kind}]
+	if !ok {
+		return nil
+	}
+	fields := make([]FieldDoc, 0, len(schema.Fields))
+	for _, doc := range schema.Fields {
+		fields = append(fields, doc)
+	}
+	sort.Slice(fields, func(i, j int) bool {
+		return fields[i].Path < fields[j].Path
+	})
+	return fields
+}
+
 func (idx *SchemaIndex) Diagnostics() []Diagnostic {
 	diagnostics := make([]Diagnostic, len(idx.diagnostics))
 	copy(diagnostics, idx.diagnostics)
@@ -120,8 +188,7 @@ func (idx *SchemaIndex) Diagnostics() []Diagnostic {
 }
 
 func (idx *SchemaIndex) addBuiltInSchema(schema Schema) {
-	idx.schemas[schema.GVK] = copySchema(schema)
-	idx.builtIns[schema.GVK] = struct{}{}
+	idx.AddGeneratedBuiltIn(schema)
 }
 
 func copySchema(schema Schema) Schema {
