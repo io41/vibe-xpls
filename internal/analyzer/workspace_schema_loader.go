@@ -40,6 +40,24 @@ type workspaceCRDDocument struct {
 	} `yaml:"spec"`
 }
 
+type workspaceXRDDocument struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind       string `yaml:"kind"`
+	Spec       struct {
+		Group string `yaml:"group"`
+		Names struct {
+			Kind string `yaml:"kind"`
+		} `yaml:"names"`
+		Versions []struct {
+			Name   string `yaml:"name"`
+			Served bool   `yaml:"served"`
+			Schema struct {
+				OpenAPIV3Schema workspaceOpenAPISchema `yaml:"openAPIV3Schema"`
+			} `yaml:"schema"`
+		} `yaml:"versions"`
+	} `yaml:"spec"`
+}
+
 type workspaceOpenAPISchema struct {
 	Type        string                            `yaml:"type"`
 	Description string                            `yaml:"description"`
@@ -308,18 +326,21 @@ func workspaceSchemasFromFile(path string) []Schema {
 
 func workspaceSchemasFromRaw(path string, raw []byte) ([]Schema, []Diagnostic) {
 	hash := sha256.Sum256(raw)
-	provenance := SchemaProvenance{
-		Path:           path,
-		Owner:          SchemaOwnerProvider,
-		Source:         SchemaSourceWorkspace,
-		UpstreamSHA256: hex.EncodeToString(hash[:]),
+	rawSHA256 := hex.EncodeToString(hash[:])
+	provenance := func(owner SchemaOwner) SchemaProvenance {
+		return SchemaProvenance{
+			Path:           path,
+			Owner:          owner,
+			Source:         SchemaSourceWorkspace,
+			UpstreamSHA256: rawSHA256,
+		}
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	var schemas []Schema
 	var diagnostics []Diagnostic
 	for {
-		var doc workspaceCRDDocument
-		err := decoder.Decode(&doc)
+		var node yaml.Node
+		err := decoder.Decode(&node)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -332,28 +353,85 @@ func workspaceSchemasFromRaw(path string, raw []byte) ([]Schema, []Diagnostic) {
 			})
 			return schemas, diagnostics
 		}
-		if doc.APIVersion != "apiextensions.k8s.io/v1" || doc.Kind != "CustomResourceDefinition" {
+		var header struct {
+			APIVersion string `yaml:"apiVersion"`
+			Kind       string `yaml:"kind"`
+		}
+		if err := node.Decode(&header); err != nil {
 			continue
 		}
-		if doc.Spec.Group == "" || doc.Spec.Names.Kind == "" {
-			continue
-		}
-		for _, version := range doc.Spec.Versions {
-			if !version.Served || version.Name == "" {
-				continue
+		switch {
+		case header.APIVersion == "apiextensions.k8s.io/v1" && header.Kind == "CustomResourceDefinition":
+			var doc workspaceCRDDocument
+			if err := node.Decode(&doc); err != nil {
+				diagnostics = append(diagnostics, Diagnostic{
+					URI:      fileURIFromPath(path),
+					Source:   "schema",
+					Severity: "error",
+					Message:  fmt.Sprintf("parse workspace schema source %s: %v", path, err),
+				})
+				return schemas, diagnostics
 			}
-			fields := collectWorkspaceFields(version.Schema.OpenAPIV3Schema)
-			schemas = append(schemas, Schema{
-				GVK: SourceGVK{
-					APIVersion: doc.Spec.Group + "/" + version.Name,
-					Kind:       doc.Spec.Names.Kind,
-				},
-				Fields:     fields,
-				Provenance: provenance,
-			})
+			schemas = append(schemas, workspaceSchemasFromCRDDocument(doc, provenance(SchemaOwnerProvider))...)
+		case header.APIVersion == "apiextensions.crossplane.io/v1" && header.Kind == "CompositeResourceDefinition":
+			var doc workspaceXRDDocument
+			if err := node.Decode(&doc); err != nil {
+				diagnostics = append(diagnostics, Diagnostic{
+					URI:      fileURIFromPath(path),
+					Source:   "schema",
+					Severity: "error",
+					Message:  fmt.Sprintf("parse workspace schema source %s: %v", path, err),
+				})
+				return schemas, diagnostics
+			}
+			schemas = append(schemas, workspaceSchemasFromXRDDocument(doc, provenance(SchemaOwnerUser))...)
 		}
 	}
 	return schemas, diagnostics
+}
+
+func workspaceSchemasFromCRDDocument(doc workspaceCRDDocument, provenance SchemaProvenance) []Schema {
+	if doc.Spec.Group == "" || doc.Spec.Names.Kind == "" {
+		return nil
+	}
+	var schemas []Schema
+	for _, version := range doc.Spec.Versions {
+		if !version.Served || version.Name == "" {
+			continue
+		}
+		fields := collectWorkspaceFields(version.Schema.OpenAPIV3Schema)
+		schemas = append(schemas, Schema{
+			GVK: SourceGVK{
+				APIVersion: doc.Spec.Group + "/" + version.Name,
+				Kind:       doc.Spec.Names.Kind,
+			},
+			Fields:     fields,
+			Provenance: provenance,
+		})
+	}
+	return schemas
+}
+
+func workspaceSchemasFromXRDDocument(doc workspaceXRDDocument, provenance SchemaProvenance) []Schema {
+	if doc.Spec.Group == "" || doc.Spec.Names.Kind == "" {
+		return nil
+	}
+	var schemas []Schema
+	for _, version := range doc.Spec.Versions {
+		if !version.Served || version.Name == "" {
+			continue
+		}
+		fields := collectWorkspaceFields(version.Schema.OpenAPIV3Schema)
+		schemas = append(schemas, Schema{
+			GVK: SourceGVK{
+				APIVersion: doc.Spec.Group + "/" + version.Name,
+				Kind:       doc.Spec.Names.Kind,
+			},
+			Fields:     fields,
+			Provenance: provenance,
+		})
+	}
+	return schemas
 }
 
 func fileURIFromPath(path string) string {

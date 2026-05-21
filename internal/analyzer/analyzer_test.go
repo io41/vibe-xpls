@@ -826,6 +826,29 @@ func TestAnalyzerLoadsWorkspaceProviderCRDSchema(t *testing.T) {
 	}
 }
 
+func TestAnalyzerLoadsWorkspaceXRDSchema(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "xdb.yaml")
+	text := "apiVersion: platform.example.org/v1alpha1\nkind: XDatabase\nspec:\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec")
+	item, ok := completionItemByLabel(completion.Items, "size")
+	if !ok {
+		t.Fatalf("workspace XRD completion missing size: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "Size selects the database capacity class.") {
+		t.Fatalf("size completion = %#v, want XRD documentation", item)
+	}
+	if !strings.Contains(item.Documentation, "_Allowed: small, large_") {
+		t.Fatalf("size completion = %#v, want enum documentation", item)
+	}
+}
+
 func TestAnalyzerScopesWorkspaceProviderCRDSchemaByPackage(t *testing.T) {
 	root := t.TempDir()
 	pkgA := filepath.Join(root, "packages", "a")
