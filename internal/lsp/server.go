@@ -27,11 +27,16 @@ const (
 
 var nullResult = json.RawMessage("null")
 
+type analyzerFactory func(analyzer.Options) (*analyzer.Analyzer, error)
+
 type Server struct {
 	in                             *bufio.Reader
 	out                            io.Writer
 	errOut                         io.Writer
 	analyzer                       *analyzer.Analyzer
+	newAnalyzer                    analyzerFactory
+	loggedSuppression              map[string]struct{}
+	bundleWarningShown             bool
 	positionEncoding               source.Encoding
 	completionInsertTextModeAsIsOK bool
 }
@@ -140,6 +145,7 @@ type completionItem struct {
 	Label          string    `json:"label"`
 	Kind           int       `json:"kind"`
 	Documentation  string    `json:"documentation,omitempty"`
+	SortText       string    `json:"sortText,omitempty"`
 	TextEdit       *textEdit `json:"textEdit,omitempty"`
 	InsertTextMode int       `json:"insertTextMode,omitempty"`
 }
@@ -158,10 +164,12 @@ type diagnostic struct {
 
 func NewServer(in io.Reader, out io.Writer, errOut io.Writer) *Server {
 	return &Server{
-		in:               bufio.NewReader(in),
-		out:              out,
-		errOut:           errOut,
-		positionEncoding: source.EncodingUTF16,
+		in:                bufio.NewReader(in),
+		out:               out,
+		errOut:            errOut,
+		newAnalyzer:       analyzer.New,
+		loggedSuppression: map[string]struct{}{},
+		positionEncoding:  source.EncodingUTF16,
 	}
 }
 
@@ -218,13 +226,13 @@ func (s *Server) handleInitialize(msg Message) error {
 	insertTextModes := params.Capabilities.TextDocument.Completion.CompletionItem.InsertTextModeSupport.ValueSet
 	s.completionInsertTextModeAsIsOK = supportsInsertTextModeAsIs(insertTextModes)
 
-	a, err := analyzer.New(analyzer.Options{WorkspaceRoot: rootFromInitialize(params), Limits: analyzer.DefaultLimits()})
+	a, err := s.newAnalyzer(analyzer.Options{WorkspaceRoot: rootFromInitialize(params), Limits: analyzer.DefaultLimits()})
 	if err != nil {
 		return s.respond(msg.ID, nil, &ResponseError{Code: invalidParams, Message: err.Error()})
 	}
 	s.analyzer = a
 
-	return s.respond(msg.ID, initializeResult{
+	result := initializeResult{
 		Capabilities: serverCapabilities{
 			TextDocumentSync:   1,
 			HoverProvider:      true,
@@ -232,7 +240,18 @@ func (s *Server) handleInitialize(msg Message) error {
 			PositionEncoding:   string(s.positionEncoding),
 		},
 		ServerInfo: serverInfo{Name: "vibe-xpls", Version: app.Version()},
-	}, nil)
+	}
+	if err := s.respond(msg.ID, result, nil); err != nil {
+		return err
+	}
+	if status := s.analyzer.SchemaBundleStatus(); !status.OK && !s.bundleWarningShown {
+		s.bundleWarningShown = true
+		return s.notify("window/showMessage", map[string]any{
+			"type":    2,
+			"message": "Crossplane schema completions and hover are disabled: " + status.Message,
+		})
+	}
+	return nil
 }
 
 func (s *Server) handleDidOpen(raw json.RawMessage) error {
@@ -302,12 +321,16 @@ func (s *Server) handleCompletion(msg Message) error {
 	if !ok {
 		return s.respond(msg.ID, emptyCompletionList(), nil)
 	}
+	if len(completion.Items) == 0 {
+		s.logSuppression(snapshot.URI, snapshot.Generation, completion.Reason)
+	}
 	items := make([]completionItem, 0, len(completion.Items))
 	for _, item := range completion.Items {
 		out := completionItem{
 			Label:         item.Label,
 			Kind:          completionItemKindProperty,
 			Documentation: item.Documentation,
+			SortText:      item.SortText,
 		}
 		if item.TextEdit != nil {
 			out.TextEdit = &textEdit{
@@ -321,6 +344,21 @@ func (s *Server) handleCompletion(msg Message) error {
 		items = append(items, out)
 	}
 	return s.respond(msg.ID, completionList{IsIncomplete: false, Items: items}, nil)
+}
+
+func (s *Server) logSuppression(uri string, generation analyzer.Generation, reason analyzer.SuppressionReason) {
+	if reason == "" {
+		return
+	}
+	key := string(reason)
+	if reason != analyzer.SuppressionBundleDisabled {
+		key = fmt.Sprintf("%s:%s", uri, reason)
+	}
+	if _, ok := s.loggedSuppression[key]; ok {
+		return
+	}
+	s.loggedSuppression[key] = struct{}{}
+	fmt.Fprintf(s.errOut, "completion suppressed: uri=%s reason=%s\n", uri, reason)
 }
 
 func supportsInsertTextModeAsIs(valueSet []int) bool {

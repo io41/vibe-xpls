@@ -235,6 +235,47 @@ func TestPathOccurrenceAtOffsetUsesLocalValues(t *testing.T) {
 	}
 }
 
+func TestPathOccurrenceAtOffsetUsesRawSpansAfterLeadingComments(t *testing.T) {
+	text := strings.Repeat("# leading comment\n", 16) + `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: example
+spec:
+  compositeTypeRef:
+    apiVersion: example.org/v1alpha1
+    kind: XExample
+  mode: Pipeline
+`
+
+	doc := ParseYAMLDocument(text)
+
+	for _, tc := range []struct {
+		name     string
+		value    string
+		wantPath string
+	}{
+		{name: "root kind", value: "Composition", wantPath: "kind"},
+		{name: "composite kind", value: "XExample", wantPath: "spec.compositeTypeRef.kind"},
+	} {
+		valueStart := strings.Index(text, tc.value)
+		if valueStart < 0 {
+			t.Fatalf("%s value %q not found", tc.name, tc.value)
+		}
+		for _, offset := range []int{valueStart, valueStart + len(tc.value)} {
+			occurrence, ok := doc.PathOccurrenceAtOffset(offset)
+			if !ok {
+				t.Fatalf("%s occurrence not found at offset %d", tc.name, offset)
+			}
+			if occurrence.Path != tc.wantPath {
+				t.Fatalf("%s path at offset %d = %q, want %q", tc.name, offset, occurrence.Path, tc.wantPath)
+			}
+			if got := occurrence.ValueSpan; got != (Span{Start: valueStart, End: valueStart + len(tc.value)}) {
+				t.Fatalf("%s value span = %#v, want exact raw value span", tc.name, got)
+			}
+		}
+	}
+}
+
 func TestRootValueForOccurrenceUsesOccurrenceDocument(t *testing.T) {
 	text := "apiVersion: first.example/v1\nkind: First\nmetadata:\n  name: one\n---\napiVersion: second.example/v1\nkind: Second\nmetadata:\n  name: two\n"
 

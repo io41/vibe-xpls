@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/lexer"
@@ -113,6 +114,9 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 	if offset < 0 || offset >= len(d.Mixed.RawText) {
 		return PathOccurrence{}, false
 	}
+	if occurrence, ok := d.pathOccurrenceAtScalarValueBoundary(offset); ok {
+		return occurrence, true
+	}
 
 	var best PathOccurrence
 	bestLen := math.MaxInt
@@ -135,6 +139,74 @@ func (d YAMLDocument) PathOccurrenceAtOffset(offset int) (PathOccurrence, bool) 
 			best = occurrence
 			bestLen = spanLen
 			bestDepth = depth
+		}
+	}
+	if best.Path == "" {
+		return d.pathOccurrenceAtScalarValueOffset(offset)
+	}
+	return best, true
+}
+
+func (d YAMLDocument) pathOccurrenceAtScalarValueBoundary(offset int) (PathOccurrence, bool) {
+	var best PathOccurrence
+	bestLen := math.MaxInt
+	bestDepth := -1
+	for _, occurrence := range d.occurrences {
+		if !occurrence.ValueOK || occurrence.Value == "" || !occurrence.ValueSpanOK {
+			continue
+		}
+		if occurrence.ValueSpan.Start == occurrence.ValueSpan.End {
+			continue
+		}
+		if !spanContainsValueBoundary(occurrence.ValueSpan, offset) {
+			continue
+		}
+		spanLen := occurrence.ValueSpan.End - occurrence.ValueSpan.Start
+		depth := pathDepth(occurrence.Path)
+		if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
+			best = occurrence
+			bestLen = spanLen
+			bestDepth = depth
+		}
+	}
+	if best.Path == "" {
+		return PathOccurrence{}, false
+	}
+	return best, true
+}
+
+func (d YAMLDocument) pathOccurrenceAtScalarValueOffset(offset int) (PathOccurrence, bool) {
+	lineStart := lineStartForOffset(d.Mixed.RawText, offset)
+	lineEnd := lineContentEndForOffset(d.Mixed.RawText, offset)
+	line := d.Mixed.RawText[lineStart:lineEnd]
+
+	var best PathOccurrence
+	bestLen := math.MaxInt
+	bestDepth := -1
+	for _, occurrence := range d.occurrences {
+		if !occurrence.ValueOK || occurrence.Value == "" || !occurrence.ValueSpanOK {
+			continue
+		}
+		if lineStartForOffset(d.Mixed.RawText, occurrence.ValueSpan.Start) != lineStart {
+			continue
+		}
+		for search := 0; search <= len(line); {
+			idx := strings.Index(line[search:], occurrence.Value)
+			if idx < 0 {
+				break
+			}
+			start := lineStart + search + idx
+			span := Span{Start: start, End: start + len(occurrence.Value)}
+			if spanContainsValueBoundary(span, offset) {
+				spanLen := span.End - span.Start
+				depth := pathDepth(occurrence.Path)
+				if spanLen < bestLen || (spanLen == bestLen && depth > bestDepth) {
+					best = occurrence
+					bestLen = spanLen
+					bestDepth = depth
+				}
+			}
+			search += idx + len(occurrence.Value)
 		}
 	}
 	if best.Path == "" {
@@ -267,7 +339,9 @@ func (d YAMLDocument) nilValueHasExplicitSameLineToken(entry *ast.MappingValueNo
 	if !ok {
 		return false
 	}
-	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) && valueSpan.Start >= colonSpan.End
+	return lineStartForOffset(d.Mixed.RawText, colonSpan.Start) == lineStartForOffset(d.Mixed.RawText, valueSpan.Start) &&
+		valueSpan.Start >= colonSpan.End &&
+		valueSpan.Start < lineContentEndForOffset(d.Mixed.RawText, colonSpan.End)
 }
 
 func (d YAMLDocument) mappingValueTemplateLookupSpan(entry *ast.MappingValueNode, keySpan Span, keyOK bool) (Span, bool) {
@@ -555,7 +629,10 @@ func (d YAMLDocument) tokenSpanWithWidth(tk *token.Token, width int) (Span, bool
 	if tk == nil || tk.Position == nil {
 		return Span{}, false
 	}
-	start := tk.Position.Offset - 1
+	start, ok := offsetFromYAMLPosition(d.Mixed.RawText, tk.Position)
+	if !ok {
+		start = tk.Position.Offset - 1
+	}
 	if start < 0 || start > len(d.Mixed.RawText) {
 		return Span{}, false
 	}
@@ -600,7 +677,10 @@ func spanFromToken(tk *token.Token, text string) Span {
 	if tk == nil || tk.Position == nil {
 		return Span{Start: 0, End: 0}
 	}
-	start := tk.Position.Offset - 1
+	start, ok := offsetFromYAMLPosition(text, tk.Position)
+	if !ok {
+		start = tk.Position.Offset - 1
+	}
 	if start < 0 {
 		start = 0
 	}
@@ -616,6 +696,33 @@ func spanFromToken(tk *token.Token, text string) Span {
 		end = len(text)
 	}
 	return Span{Start: start, End: end}
+}
+
+// The parser's offset can point before the raw token in comment-heavy files.
+// Line and column stay aligned with the source text, so derive byte offsets from them first.
+func offsetFromYAMLPosition(text string, position *token.Position) (int, bool) {
+	if position == nil || position.Line <= 0 || position.Column <= 0 {
+		return 0, false
+	}
+	offset := 0
+	for line := 1; line < position.Line; line++ {
+		next := strings.IndexByte(text[offset:], '\n')
+		if next < 0 {
+			return 0, false
+		}
+		offset += next + 1
+	}
+	for column := 1; column < position.Column; column++ {
+		if offset >= len(text) || text[offset] == '\n' {
+			return 0, false
+		}
+		_, size := utf8.DecodeRuneInString(text[offset:])
+		if size <= 0 {
+			return 0, false
+		}
+		offset += size
+	}
+	return offset, true
 }
 
 func tokenTextWidth(tk *token.Token) int {
@@ -835,6 +942,10 @@ func spansOverlap(a, b Span) bool {
 
 func spanContains(span Span, offset int) bool {
 	return span.Start <= offset && offset < span.End
+}
+
+func spanContainsValueBoundary(span Span, offset int) bool {
+	return span.Start <= offset && offset <= span.End
 }
 
 func unionSpan(a, b Span) Span {

@@ -1,0 +1,262 @@
+{
+  "release": "v2.2.1",
+  "apiVersion": "apiextensions.crossplane.io/v1",
+  "kind": "CompositionRevision",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "CompositionRevisionSpec specifies the desired state of the composition\nrevision.",
+      "type": "object"
+    },
+    {
+      "path": "spec.compositeTypeRef",
+      "description": "CompositeTypeRef specifies the type of composite resource that this\ncomposition is compatible with.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.compositeTypeRef.apiVersion",
+      "description": "APIVersion of the type.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.compositeTypeRef.kind",
+      "description": "Kind of the type.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.mode",
+      "description": "Mode controls what type or \"mode\" of Composition will be used.\n\n\"Pipeline\" indicates that a Composition specifies a pipeline of\nfunctions, each of which is responsible for producing composed\nresources that Crossplane should create or update.",
+      "type": "string",
+      "default": "Pipeline",
+      "enum": [
+        "Pipeline"
+      ]
+    },
+    {
+      "path": "spec.pipeline[]",
+      "description": "Pipeline is a list of function steps that will be used when a\ncomposite resource referring to this composition is created.\n\nThe Pipeline is only used by the \"Pipeline\" mode of Composition. It is\nignored by other modes.",
+      "type": "array"
+    },
+    {
+      "path": "spec.pipeline[].credentials[]",
+      "description": "Credentials are optional credentials that the function needs.",
+      "type": "array"
+    },
+    {
+      "path": "spec.pipeline[].credentials[].name",
+      "description": "Name of this set of credentials.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].credentials[].secretRef",
+      "description": "A SecretRef is a reference to a secret containing credentials that should\nbe supplied to the function.",
+      "type": "object"
+    },
+    {
+      "path": "spec.pipeline[].credentials[].secretRef.name",
+      "description": "Name of the secret.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].credentials[].secretRef.namespace",
+      "description": "Namespace of the secret.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].credentials[].source",
+      "description": "Source of the function credentials.",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "None",
+        "Secret"
+      ]
+    },
+    {
+      "path": "spec.pipeline[].functionRef",
+      "description": "FunctionRef is a reference to the function this step should\nexecute.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].functionRef.name",
+      "description": "Name of the referenced Function.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].input",
+      "description": "Input is an optional, arbitrary Kubernetes resource (i.e. a resource\nwith an apiVersion and kind) that will be passed to the function as\nthe 'input' of its RunFunctionRequest.",
+      "type": "object"
+    },
+    {
+      "path": "spec.pipeline[].requirements",
+      "description": "Requirements are resource requirements that will be satisfied before\nthis pipeline step is called for the first time. This allows\npre-populating required resources without requiring a function to\nrequest them first.",
+      "type": "object"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[]",
+      "description": "RequiredResources is a list of resources that must be fetched before\nthis function is called.",
+      "type": "array"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].apiVersion",
+      "description": "APIVersion of the required resource.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].kind",
+      "description": "Kind of the required resource.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].matchLabels",
+      "description": "MatchLabels specifies the set of labels to match for finding the\nrequired resource. When specified, Name is ignored.",
+      "type": "object"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].name",
+      "description": "Name of the required resource.",
+      "type": "string"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].namespace",
+      "description": "Namespace of the required resource if it is namespaced.",
+      "type": "string"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredResources[].requirementName",
+      "description": "RequirementName is the unique name to identify this required resource\nin the Required Resources map in the function request.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredSchemas[]",
+      "description": "RequiredSchemas is a list of OpenAPI schemas that must be fetched before\nthis function is called.",
+      "type": "array"
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredSchemas[].apiVersion",
+      "description": "APIVersion of the resource kind whose schema is required, e.g. \"example.org/v1\".",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredSchemas[].kind",
+      "description": "Kind of resource whose schema is required, e.g. \"MyResource\".",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].requirements.requiredSchemas[].requirementName",
+      "description": "RequirementName is the unique name to identify this required schema\nin the Required Schemas map in the function request.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.pipeline[].step",
+      "description": "Step name. Must be unique within its Pipeline.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.revision",
+      "description": "Revision number. Newer revisions have larger numbers.\n\nThis number can change. When a Composition transitions from state A\n-\u003e B -\u003e A there will be only two CompositionRevisions. Crossplane will\nedit the original CompositionRevision to change its revision number from\n0 to 2.",
+      "type": "integer",
+      "required": true
+    },
+    {
+      "path": "spec.writeConnectionSecretsToNamespace",
+      "description": "WriteConnectionSecretsToNamespace specifies the namespace in which the\nconnection secrets of composite resource dynamically provisioned using\nthis composition will be created.",
+      "type": "string"
+    },
+    {
+      "path": "status",
+      "description": "CompositionRevisionStatus shows the observed state of the composition\nrevision.",
+      "type": "object"
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v2.2.1",
+    "upstreamSourcePath": "apiextensions.crossplane.io_compositionrevisions.yaml",
+    "upstreamSHA256": "34228ec5d6f81a331ae64f5964a2ba25f979f455961ca249fa843329e933666f"
+  }
+}

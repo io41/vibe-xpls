@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/io41/vibe-xpls/internal/analyzer"
 	"github.com/io41/vibe-xpls/internal/source"
@@ -59,6 +60,82 @@ func TestInitializeAdvertisesCapabilitiesAndNegotiatesPositionEncoding(t *testin
 				t.Fatalf("serverInfo = %#v", info)
 			}
 		})
+	}
+}
+
+func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
+	var stderr bytes.Buffer
+	in := bytes.NewBuffer(nil)
+	out := bytes.NewBuffer(nil)
+	s := NewServer(in, out, &stderr)
+	s.newAnalyzer = func(options analyzer.Options) (*analyzer.Analyzer, error) {
+		options.SchemaBundleFS = fstest.MapFS{
+			"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
+		}
+		return analyzer.New(options)
+	}
+
+	frames := []string{
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(testRoot(t)), "capabilities": map[string]any{}}),
+		requestFrame(t, 2, "initialize", map[string]any{"rootUri": fileURI(testRoot(t)), "capabilities": map[string]any{}}),
+		notificationFrame(t, "exit", nil),
+	}
+	for _, frame := range frames {
+		if _, err := in.WriteString(frame); err != nil {
+			t.Fatalf("write frame: %v", err)
+		}
+	}
+	if code := s.Run(); code != 0 {
+		t.Fatalf("server exit = %d", code)
+	}
+	messages := readMessages(t, out.Bytes())
+	warnings := 0
+	firstInitializeResponse := -1
+	firstWarning := -1
+	for i, msg := range messages {
+		if sameID(msg.ID, 1) {
+			firstInitializeResponse = i
+		}
+		if msg.Method == "window/showMessage" {
+			if firstWarning < 0 {
+				firstWarning = i
+			}
+			warnings++
+			params := paramsMap(t, msg)
+			if params["type"] != float64(2) || !strings.Contains(params["message"].(string), "schema completions and hover are disabled") {
+				t.Fatalf("warning params = %#v", params)
+			}
+		}
+	}
+	if warnings != 1 {
+		t.Fatalf("warnings = %d, want 1", warnings)
+	}
+	if firstInitializeResponse < 0 || firstWarning < 0 || firstWarning <= firstInitializeResponse {
+		t.Fatalf("initialize warning ordering invalid: response index=%d warning index=%d messages=%#v", firstInitializeResponse, firstWarning, messages)
+	}
+}
+
+func TestLogSuppressionThrottlesByReasonScope(t *testing.T) {
+	var stderr bytes.Buffer
+	s := NewServer(bytes.NewReader(nil), io.Discard, &stderr)
+
+	s.logSuppression("file:///one.yaml", 1, "")
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 2, analyzer.SuppressionMissingRootGVK)
+	s.logSuppression("file:///one.yaml", 3, analyzer.SuppressionMalformedYAMLContext)
+	s.logSuppression("file:///one.yaml", 1, analyzer.SuppressionBundleDisabled)
+	s.logSuppression("file:///two.yaml", 1, analyzer.SuppressionBundleDisabled)
+
+	logs := stderr.String()
+	if got := strings.Count(logs, "missing-root-gvk"); got != 1 {
+		t.Fatalf("missing-root-gvk logs = %d, want 1; logs=%q", got, logs)
+	}
+	if got := strings.Count(logs, "malformed-yaml-context"); got != 1 {
+		t.Fatalf("malformed-yaml-context logs = %d, want 1; logs=%q", got, logs)
+	}
+	if got := strings.Count(logs, "bundle-disabled"); got != 1 {
+		t.Fatalf("bundle-disabled logs = %d, want 1; logs=%q", got, logs)
 	}
 }
 
@@ -161,7 +238,11 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 			"textDocument": map[string]any{"uri": uri},
 			"position":     positionAtSubstring(t, text, "CompositeBucket", source.EncodingUTF16),
 		}),
-		requestFrame(t, 3, "textDocument/completion", map[string]any{
+		requestFrame(t, 3, "textDocument/hover", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, strings.Index(text, "CompositeBucket")+len("CompositeBucket"), source.EncodingUTF16),
+		}),
+		requestFrame(t, 4, "textDocument/completion", map[string]any{
 			"textDocument": map[string]any{"uri": uri},
 			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
 		}),
@@ -172,7 +253,12 @@ func TestHoverAndCompletionUseAnalyzer(t *testing.T) {
 	if !strings.Contains(contents["value"].(string), "Composite kind") {
 		t.Fatalf("hover contents = %q, want analyzer docs", contents["value"])
 	}
-	completion := resultMap(t, responseForID(t, messages, 3))
+	boundaryHover := resultMap(t, responseForID(t, messages, 3))
+	boundaryContents := asMap(t, boundaryHover["contents"])
+	if !strings.Contains(boundaryContents["value"].(string), "Composite kind") {
+		t.Fatalf("boundary hover contents = %q, want analyzer docs", boundaryContents["value"])
+	}
+	completion := resultMap(t, responseForID(t, messages, 4))
 	if !itemsContainLabel(asSlice(t, completion["items"]), "kind") {
 		t.Fatalf("completion items = %#v, want kind", completion["items"])
 	}
@@ -207,10 +293,22 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 		if _, ok := item["detail"]; ok {
 			t.Fatalf("completion item %#v detail = %#v, want omitted generic detail", item["label"], item["detail"])
 		}
+		sortText, ok := item["sortText"]
+		if !ok {
+			t.Fatalf("completion item %#v missing sortText", item["label"])
+		}
+		sortTextString, ok := sortText.(string)
+		if !ok || sortTextString == "" {
+			t.Fatalf("completion item %#v sortText = %#v, want non-empty string", item["label"], sortText)
+		}
+		if item["label"] == "apiVersion" && sortTextString != "0000_apiVersion" {
+			t.Fatalf("apiVersion sortText = %#v, want 0000_apiVersion", sortTextString)
+		}
 	}
 	item := completionItemByLabelForTest(t, items, "apiVersion")
-	if item["documentation"] != "API version of the Composition resource." {
-		t.Fatalf("apiVersion documentation = %#v, want existing analyzer documentation", item["documentation"])
+	wantDocumentation := "API version of the Composition resource.\n\n_Type: string_"
+	if item["documentation"] != wantDocumentation {
+		t.Fatalf("apiVersion documentation = %#v, want %#v", item["documentation"], wantDocumentation)
 	}
 }
 

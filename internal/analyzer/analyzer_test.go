@@ -1,9 +1,12 @@
 package analyzer
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/io41/vibe-xpls/internal/testkit"
 )
@@ -29,6 +32,166 @@ func TestAnalyzerDiagnosticsHoverAndCompletion(t *testing.T) {
 	completion := a.Completion(uri, "spec.compositeTypeRef")
 	if !containsCompletion(completion.Items, "kind") {
 		t.Fatalf("completion missing kind: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerHoverIgnoresCommentsAndCoversCompositeRefValue(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  # This Composition implements the XServiceBusNamespace composite behind IstaServiceBusNamespace.
+  name: xservice
+spec:
+  # IstaServiceBusNamespace claims create XServiceBusNamespace composites. XTopic references these
+  # XServiceBusNamespace objects through spec.serviceBusNamespaceRef.
+  compositeTypeRef:
+    apiVersion: asb.platform.ista.com/v1alpha1
+    kind: XServiceBusNamespace
+`
+	a.OpenDocument(uri, text)
+
+	for _, needle := range []string{
+		"This Composition implements",
+		"IstaServiceBusNamespace claims",
+		"XServiceBusNamespace objects",
+	} {
+		offset := strings.Index(text, needle)
+		if offset < 0 {
+			t.Fatalf("test setup: %q not found", needle)
+		}
+		if hover, ok := a.HoverAtOffset(uri, offset); ok {
+			t.Fatalf("comment hover at %q = %#v, want none", needle, hover)
+		}
+	}
+
+	value := "XServiceBusNamespace"
+	start := strings.LastIndex(text, value)
+	if start < 0 {
+		t.Fatalf("test setup: %q value not found", value)
+	}
+	for i := 0; i <= len(value); i++ {
+		hover, ok := a.HoverAtOffset(uri, start+i)
+		if !ok || !strings.Contains(hover.Markdown, "Composite kind") {
+			t.Fatalf("hover at value offset %d = %#v ok=%v", i, hover, ok)
+		}
+	}
+
+	rootKind := "Composition"
+	rootKindStart := strings.Index(text, "kind: "+rootKind)
+	if rootKindStart < 0 {
+		t.Fatalf("test setup: root kind value not found")
+	}
+	rootKindStart += len("kind: ")
+	for i := 0; i <= len(rootKind); i++ {
+		hover, ok := a.HoverAtOffset(uri, rootKindStart+i)
+		if !ok || !strings.Contains(hover.Markdown, "Resource kind, normally Composition.") {
+			t.Fatalf("root kind hover at value offset %d = %#v ok=%v", i, hover, ok)
+		}
+	}
+}
+
+func TestAnalyzerStartupServesCompositeTypeRefAPIVersionDocs(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    apiVersion: example.org/v1\n"
+	a.OpenDocument(uri, text)
+
+	hover, ok := a.Hover(uri, "spec.compositeTypeRef.apiVersion")
+	if !ok || !strings.Contains(hover.Markdown, "API version of the composite resource type this Composition renders.") {
+		t.Fatalf("hover = %#v ok=%v", hover, ok)
+	}
+	completion := a.Completion(uri, "spec.compositeTypeRef")
+	item, ok := completionItemByLabel(completion.Items, "apiVersion")
+	if !ok {
+		t.Fatalf("completion missing apiVersion: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "API version of the composite resource type this Composition renders.") {
+		t.Fatalf("apiVersion completion documentation = %q", item.Documentation)
+	}
+}
+
+func TestAnalyzerCompletionSortsRootAndRequiredKeys(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	rootCompletion := a.Completion(uri, "")
+	if len(rootCompletion.Items) < 4 {
+		t.Fatalf("root completion has %d items, want at least 4: %#v", len(rootCompletion.Items), rootCompletion.Items)
+	}
+	if got := completionLabels(rootCompletion.Items[:4]); !reflect.DeepEqual(got, []string{"apiVersion", "kind", "metadata", "spec"}) {
+		t.Fatalf("root labels = %#v", got)
+	}
+	specCompletion := a.Completion(uri, "spec.compositeTypeRef")
+	got := completionLabels(specCompletion.Items)
+	if len(got) < 2 || got[0] != "apiVersion" || got[1] != "kind" {
+		t.Fatalf("required compositeTypeRef labels should sort first, got %#v", got)
+	}
+}
+
+func TestAnalyzerCompletionUsesArrayItemSchemaPath(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-pipeline.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - functionRef:\n        n"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "name") {
+		t.Fatalf("array item completion missing name: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionSuppressesRootStatusOnly(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\n"
+	a.OpenDocument(uri, text)
+
+	if containsCompletion(a.Completion(uri, "").Items, "status") {
+		t.Fatal("root status should be suppressed")
+	}
+}
+
+func TestCompletionDoesNotSuppressNestedStatusSchemaPath(t *testing.T) {
+	idx := NewSchemaIndex()
+	release := CrossplaneRelease{Tag: "v2.2.1"}
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: release,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "CompositeResourceDefinition"},
+		Fields: map[string]FieldDoc{
+			"spec.versions[].schema.openAPIV3Schema.properties.status": {
+				Path:        "spec.versions[].schema.openAPIV3Schema.properties.status",
+				Description: "Status schema property.",
+			},
+		},
+	})
+
+	completion := completionFromSchema(idx, release, "apiextensions.crossplane.io/v1", "CompositeResourceDefinition", "spec.versions[].schema.openAPIV3Schema.properties")
+	if !containsCompletion(completion.Items, "status") {
+		t.Fatalf("nested schema status should not be suppressed: %#v", completion.Items)
 	}
 }
 
@@ -97,6 +260,141 @@ func TestAnalyzerCompletionAtOffsetUsesMappingKeyContext(t *testing.T) {
 	completion := a.CompletionAtOffset(uri, len(text))
 	if !containsCompletion(completion.Items, "kind") {
 		t.Fatalf("blank child-key completion missing kind: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionReportsMissingRootGVKReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "missing-gvk.yaml")
+	a.OpenDocument(uri, "spec:\n  ")
+
+	completion := a.CompletionAtOffset(uri, len("spec:\n  "))
+	if completion.Reason != SuppressionMissingRootGVK {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionMissingRootGVK)
+	}
+}
+
+func TestAnalyzerCompletionReportsMalformedYAMLReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "malformed.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\n  "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason != SuppressionMalformedYAMLContext {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionMalformedYAMLContext)
+	}
+}
+
+func TestAnalyzerCompletionReportsUnstableTemplatePathReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "template-key.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    {{ .Key }}\n"
+	a.OpenDocument(uri, text)
+	offset := strings.Index(text, "{{ .Key }}") + len("{{ ")
+	if offset < len("{{ ") {
+		t.Fatal("test setup: template action not found")
+	}
+
+	completion := a.CompletionAtOffset(uri, offset)
+	if completion.Reason != SuppressionUnstableTemplatePath {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionUnstableTemplatePath)
+	}
+}
+
+func TestAnalyzerCompletionSuppressionReasonsRequireKeyContext(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+
+	malformedURI := "file://" + filepath.Join(root, "api", "malformed-value.yaml")
+	malformedText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\nmetadata:\n  name: demo\n"
+	a.OpenDocument(malformedURI, malformedText)
+	malformedOffset := strings.Index(malformedText, "demo")
+	if malformedOffset < 0 {
+		t.Fatal("test setup: demo not found")
+	}
+	if completion := a.CompletionAtOffset(malformedURI, malformedOffset); completion.Reason != "" {
+		t.Fatalf("malformed value-context reason = %q, want empty", completion.Reason)
+	}
+
+	templateURI := "file://" + filepath.Join(root, "api", "template-value.yaml")
+	templateText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: {{ .Kind }}\n"
+	a.OpenDocument(templateURI, templateText)
+	templateOffset := strings.Index(templateText, "{{ .Kind }}") + len("{{ ")
+	if templateOffset < len("{{ ") {
+		t.Fatal("test setup: template action not found")
+	}
+	if completion := a.CompletionAtOffset(templateURI, templateOffset); completion.Reason != "" {
+		t.Fatalf("template value-context reason = %q, want empty", completion.Reason)
+	}
+
+	disabled, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits(), SchemaBundleFS: unsupportedSchemaBundleFS()})
+	if err != nil {
+		t.Fatalf("new analyzer with disabled bundle: %v", err)
+	}
+	bundleURI := "file://" + filepath.Join(root, "api", "bundle-value.yaml")
+	bundleText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: demo\n"
+	disabled.OpenDocument(bundleURI, bundleText)
+	bundleOffset := strings.Index(bundleText, "demo")
+	if bundleOffset < 0 {
+		t.Fatal("test setup: demo not found")
+	}
+	if completion := disabled.CompletionAtOffset(bundleURI, bundleOffset); completion.Reason != "" {
+		t.Fatalf("bundle-disabled value-context reason = %q, want empty", completion.Reason)
+	}
+}
+
+func TestAnalyzerCompletionMalformedEarlierDocumentDoesNotClassifyLaterDocument(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "malformed-before-valid.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\n---\napiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason == SuppressionMalformedYAMLContext {
+		t.Fatalf("later document reason = %q, want non-malformed", completion.Reason)
+	}
+	if len(completion.Items) != 0 && !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("later document completion = %#v, want kind when items are available", completion.Items)
+	}
+}
+
+func TestAnalyzerNewAllowsDisabledSchemaBundle(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits(), SchemaBundleFS: unsupportedSchemaBundleFS()})
+	if err != nil {
+		t.Fatalf("new analyzer with disabled bundle: %v", err)
+	}
+	status := a.SchemaBundleStatus()
+	if status.OK || !strings.Contains(status.Message, "unsupported schema bundle format 99") {
+		t.Fatalf("bundle status = %#v, want disabled unsupported-format status", status)
+	}
+
+	uri := "file://" + filepath.Join(root, "api", "disabled-bundle.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    "
+	a.OpenDocument(uri, text)
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason != SuppressionBundleDisabled {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionBundleDisabled)
 	}
 }
 
@@ -388,6 +686,118 @@ func TestAnalyzerCompletionAtOffsetDoesNotCompleteAfterParentColon(t *testing.T)
 
 	if completion := a.CompletionAtOffset(uri, len(text)); len(completion.Items) != 0 {
 		t.Fatalf("parent-colon completion = %#v, want none", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionUsesPackageCrossplaneVersionConstraint(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v1.20.0 <v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  r"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "resources") {
+		t.Fatalf("v1 constrained package should offer resources when present in v1 schema: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionUsesOpenPackageMarkerVersion(t *testing.T) {
+	root := t.TempDir()
+	markerPath := filepath.Join(root, "crossplane.yaml")
+	if err := os.WriteFile(markerPath, []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	a.OpenDocument("file://localhost"+filepath.ToSlash(markerPath), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v1.20.0 <v2.0.0\"\n")
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  r"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "resources") {
+		t.Fatalf("open package metadata should override disk marker version: %#v", completion.Items)
+	}
+}
+
+func TestResolveSchemaReleaseSupportsLowerBoundRange(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	before := CrossplaneRelease{Tag: "v1.12.0"}
+	after := CrossplaneRelease{Tag: "v1.12.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, ">=v1.12.1-0", []Schema{
+		{Release: before, GVK: gvk, Fields: map[string]FieldDoc{"spec.before": {Path: "spec.before"}}},
+		{Release: after, GVK: gvk, Fields: map[string]FieldDoc{"spec.after": {Path: "spec.after"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != after {
+		t.Fatalf("release = %#v, want %#v", got, after)
+	}
+}
+
+func TestResolveSchemaReleaseSupportsBoundedRange(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, ">=v1.20.0 <v2.0.0", []Schema{
+		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
+		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != v1 {
+		t.Fatalf("release = %#v, want %#v", got, v1)
+	}
+}
+
+func TestResolveSchemaReleaseUnsupportedRangeFallsBackToLatestGVK(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, "^1.20.0", []Schema{
+		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
+		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != v2 {
+		t.Fatalf("release = %#v, want latest exact-GVK release %#v", got, v2)
+	}
+}
+
+func TestAnalyzerWorkspaceSchemaCompletionAndHover(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	a.schemas.AddWorkspaceSchema(Schema{
+		GVK: SourceGVK{APIVersion: "s3.aws.upbound.io/v1beta1", Kind: "Bucket"},
+		Fields: map[string]FieldDoc{
+			"spec.forProvider.bucketName": {Path: "spec.forProvider.bucketName", Description: "Workspace bucket name."},
+		},
+		Provenance: SchemaProvenance{Path: "provider-crd.yaml", Owner: SchemaOwnerProvider, Source: SchemaSourceWorkspace},
+	})
+	uri := "file://" + filepath.Join(root, "api", "bucket.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n    bucketName: example\n"
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.forProvider")
+	if !containsCompletion(completion.Items, "bucketName") {
+		t.Fatalf("workspace schema completion missing bucketName: %#v", completion.Items)
+	}
+	hover, ok := a.Hover(uri, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(hover.Markdown, "Workspace bucket name.") {
+		t.Fatalf("workspace schema hover = %#v ok=%v", hover, ok)
 	}
 }
 
@@ -761,6 +1171,36 @@ func TestNoRootCrossplaneFilenameActivatesDiagnostics(t *testing.T) {
 	}
 }
 
+func analyzerWithPackageMarkerAndGeneratedSchemas(t *testing.T, versionRange string, schemas []Schema) *Analyzer {
+	t.Helper()
+	root := t.TempDir()
+	marker := "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \"" + versionRange + "\"\n"
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte(marker), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	workspace, err := DetectWorkspace(root)
+	if err != nil {
+		t.Fatalf("detect workspace: %v", err)
+	}
+	idx := NewSchemaIndex()
+	idx.bundleStatus = SchemaBundleStatus{OK: true}
+	for _, schema := range schemas {
+		idx.AddGeneratedBuiltIn(schema)
+	}
+	return &Analyzer{
+		workspace: workspace,
+		limits:    DefaultLimits(),
+		docs:      NewDocumentStore(),
+		schemas:   idx,
+	}
+}
+
+func unsupportedSchemaBundleFS() fstest.MapFS {
+	return fstest.MapFS{
+		"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
+	}
+}
+
 func containsCompletion(items []CompletionItem, label string) bool {
 	for _, item := range items {
 		if item.Label == label {
@@ -768,6 +1208,14 @@ func containsCompletion(items []CompletionItem, label string) bool {
 		}
 	}
 	return false
+}
+
+func completionLabels(items []CompletionItem) []string {
+	labels := make([]string, len(items))
+	for i, item := range items {
+		labels[i] = item.Label
+	}
+	return labels
 }
 
 func completionItemByLabel(items []CompletionItem, label string) (CompletionItem, bool) {

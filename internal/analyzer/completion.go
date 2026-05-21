@@ -1,18 +1,24 @@
 package analyzer
 
 import (
+	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
 
+var schemaArrayIndexPattern = regexp.MustCompile(`\[\d+\]`)
+
 type Completion struct {
-	Items []CompletionItem
+	Items  []CompletionItem
+	Reason SuppressionReason
 }
 
 type CompletionItem struct {
 	Label         string
 	Path          string
 	Documentation string
+	SortText      string
 	TextEdit      *CompletionTextEdit
 }
 
@@ -30,7 +36,16 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if !ok {
 		return Completion{}
 	}
-	return completionFromSchema(a.schemas, root.apiVersion, root.kind, parentPath)
+	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	schemaParentPath := schemaPathFromParsedPath(parentPath)
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, schemaParentPath)
+	}
+	resolution := a.resolveSchemaRelease(uri, gvk)
+	if !resolution.OK {
+		return Completion{Reason: resolution.Reason}
+	}
+	return completionFromSchema(a.schemas, resolution.Release, root.apiVersion, root.kind, schemaParentPath)
 }
 
 func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
@@ -38,21 +53,42 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Completion{}
 	}
-	context, ok := completionContextAtOffset(parsed, offset)
+	context, reason, ok := completionContextAtOffset(parsed, offset)
 	if !ok {
-		return Completion{}
+		return Completion{Reason: reason}
+	}
+	if malformedYAMLContextAtOffset(parsed, offset) {
+		return Completion{Reason: SuppressionMalformedYAMLContext}
 	}
 	apiVersion, apiOK := parsed.RootValueForOccurrence(context.rootOccurrence, "apiVersion")
 	kind, kindOK := parsed.RootValueForOccurrence(context.rootOccurrence, "kind")
 	if !apiOK || !kindOK {
-		return Completion{}
+		return Completion{Reason: SuppressionMissingRootGVK}
+	}
+	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
+	workspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
+	var resolution schemaResolution
+	if !workspaceSchema {
+		if !a.schemas.bundleStatus.OK {
+			return Completion{Reason: SuppressionBundleDisabled}
+		}
+		resolution = a.resolveSchemaRelease(uri, gvk)
+		if !resolution.OK {
+			return Completion{Reason: resolution.Reason}
+		}
 	}
 	completion := Completion{}
 	for i, parentPath := range completionParentPaths(context.parentPath) {
 		if parentPath != "" && !parsed.IsStablePath(parentPath) {
 			continue
 		}
-		candidate := completionFromSchema(a.schemas, apiVersion, kind, parentPath)
+		var candidate Completion
+		schemaParentPath := schemaPathFromParsedPath(parentPath)
+		if workspaceSchema {
+			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, schemaParentPath)
+		} else {
+			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, schemaParentPath)
+		}
 		if i > 0 {
 			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
 		}
@@ -70,6 +106,20 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	return completion
 }
 
+func malformedYAMLContextAtOffset(parsed YAMLDocument, offset int) bool {
+	currentLineStart := lineStartForOffset(parsed.Mixed.RawText, offset)
+	for _, diagnostic := range parsed.Diagnostics {
+		if diagnostic.Source != "yaml" || diagnostic.Severity != "error" {
+			continue
+		}
+		diagnosticLineStart := lineStartForOffset(parsed.Mixed.RawText, diagnostic.Span.Start)
+		if diagnosticLineStart < currentLineStart && !documentSeparatorBetween(parsed.Mixed.RawText, diagnostic.Span.Start, offset) {
+			return true
+		}
+	}
+	return false
+}
+
 func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, documentIndex int) Completion {
 	if len(completion.Items) == 0 {
 		return completion
@@ -77,17 +127,17 @@ func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, d
 	existing := map[string]struct{}{}
 	for _, occurrence := range parsed.occurrences {
 		if occurrence.DocumentIndex == documentIndex {
-			existing[occurrence.Path] = struct{}{}
+			existing[schemaPathFromParsedPath(occurrence.Path)] = struct{}{}
 		}
 	}
 	items := completion.Items[:0]
 	for _, item := range completion.Items {
-		if _, ok := existing[item.Path]; ok {
+		if _, ok := existing[schemaPathFromParsedPath(item.Path)]; ok {
 			continue
 		}
 		items = append(items, item)
 	}
-	return Completion{Items: items}
+	return Completion{Items: items, Reason: completion.Reason}
 }
 
 type completionContext struct {
@@ -98,10 +148,10 @@ type completionContext struct {
 	indent         string
 }
 
-func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, bool) {
+func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, SuppressionReason, bool) {
 	text := parsed.Mixed.RawText
 	if len(text) == 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	if offset < 0 {
 		offset = 0
@@ -109,41 +159,41 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 	if offset > len(text) {
 		offset = len(text)
 	}
-	if offsetInTemplateActionForCompletion(parsed, offset) {
-		return completionContext{}, false
-	}
 
 	lineStart := lineStartForOffset(text, offset)
 	lineEnd := lineContentEndForOffset(text, offset)
 	beforeCursor := text[lineStart:offset]
 	if colon := strings.LastIndex(beforeCursor, ":"); colon >= 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 
 	indentEnd := completionLineIndentEnd(text, lineStart, lineEnd)
 	if lineIsBlockScalarContent(text, lineStart, indentEnd-lineStart) {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	rawPrefix := text[indentEnd:offset]
 	if strings.HasPrefix(strings.TrimLeft(rawPrefix, " \t"), "-") {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	keyCandidate := rawPrefix
+	if offsetInTemplateActionForCompletion(parsed, offset) {
+		return completionContext{}, SuppressionUnstableTemplatePath, false
+	}
 	afterCursor := text[offset:lineEnd]
 	if colon := strings.Index(afterCursor, ":"); colon >= 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	} else if strings.TrimSpace(afterCursor) != "" {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	prefix := strings.TrimSpace(rawPrefix)
 	keyCandidate = strings.TrimSpace(keyCandidate)
 	if !isBareCompletionKeyPrefix(prefix) || !isBareCompletionKeyPrefix(keyCandidate) {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 
 	parentPath, rootOccurrence, ok := parentCompletionContext(parsed, lineStart, indentEnd-lineStart)
 	if !ok {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	return completionContext{
 		parentPath:     parentPath,
@@ -151,7 +201,7 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 		rootOccurrence: rootOccurrence,
 		replace:        Span{Start: lineStart, End: offset},
 		indent:         text[lineStart:indentEnd],
-	}, true
+	}, "", true
 }
 
 func rootContextForCompletionParent(parsed YAMLDocument, parentPath string) (rootContext, bool) {
@@ -173,14 +223,29 @@ func pathExists(parsed YAMLDocument, path string) bool {
 	return false
 }
 
-func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath string) Completion {
-	var items []CompletionItem
-	seen := map[string]struct{}{}
+func completionFromSchema(schemas *SchemaIndex, release CrossplaneRelease, apiVersion, kind, parentPath string) Completion {
+	return completionFromFields(schemas.FieldsForRelease(release, apiVersion, kind), parentPath)
+}
+
+func completionFromWorkspaceSchema(schemas *SchemaIndex, apiVersion, kind, parentPath string) Completion {
+	return completionFromFields(schemas.Fields(apiVersion, kind), parentPath)
+}
+
+type completionCandidate struct {
+	label         string
+	path          string
+	documentation string
+	required      bool
+}
+
+func completionFromFields(fields []FieldDoc, parentPath string) Completion {
+	parentPath = schemaPathFromParsedPath(parentPath)
+	candidates := map[string]completionCandidate{}
 	prefix := parentPath
 	if prefix != "" {
 		prefix += "."
 	}
-	for _, field := range schemas.Fields(apiVersion, kind) {
+	for _, field := range fields {
 		if !strings.HasPrefix(field.Path, prefix) {
 			continue
 		}
@@ -188,24 +253,93 @@ func completionFromSchema(schemas *SchemaIndex, apiVersion, kind, parentPath str
 		if rest == "" {
 			continue
 		}
-		label := rest
-		path := prefix + label
-		documentation := field.Description
-		if split := strings.IndexAny(rest, ".["); split >= 0 {
-			label = rest[:split]
-			path = prefix + label
-			documentation = ""
-		}
+		label := immediateCompletionLabel(rest)
 		if label == "" {
 			continue
 		}
-		if _, ok := seen[label]; ok {
+		if parentPath == "" && label == "status" {
 			continue
 		}
-		seen[label] = struct{}{}
-		items = append(items, CompletionItem{Label: label, Path: path, Documentation: documentation})
+		path := prefix + label
+		candidate := candidates[label]
+		if candidate.label == "" {
+			candidate = completionCandidate{label: label, path: path}
+		}
+		if fieldIsImmediateCompletionChild(field.Path, prefix, label) {
+			candidate.required = field.Required
+			candidate.documentation = fieldCompletionDocumentation(field)
+		}
+		candidates[label] = candidate
 	}
+	items := completionItemsFromCandidates(parentPath, candidates)
 	return Completion{Items: items}
+}
+
+func schemaPathFromParsedPath(path string) string {
+	return schemaArrayIndexPattern.ReplaceAllString(path, "[]")
+}
+
+func immediateCompletionLabel(rest string) string {
+	split := strings.IndexAny(rest, ".[")
+	if split < 0 {
+		return rest
+	}
+	return rest[:split]
+}
+
+func fieldIsImmediateCompletionChild(fieldPath, prefix, label string) bool {
+	rest := strings.TrimPrefix(fieldPath, prefix)
+	return rest == label || rest == label+"[]"
+}
+
+func completionItemsFromCandidates(parentPath string, candidates map[string]completionCandidate) []CompletionItem {
+	sorted := make([]completionCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		sorted = append(sorted, candidate)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		leftRank := rootCompletionRank(parentPath, sorted[i].label)
+		rightRank := rootCompletionRank(parentPath, sorted[j].label)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		if sorted[i].required != sorted[j].required {
+			return sorted[i].required
+		}
+		return sorted[i].label < sorted[j].label
+	})
+	items := make([]CompletionItem, 0, len(sorted))
+	for i, candidate := range sorted {
+		items = append(items, CompletionItem{
+			Label:         candidate.label,
+			Path:          candidate.path,
+			Documentation: candidate.documentation,
+			SortText:      completionSortText(parentPath, candidate, i),
+		})
+	}
+	return items
+}
+
+func rootCompletionRank(parentPath, label string) int {
+	if parentPath != "" {
+		return 100
+	}
+	switch label {
+	case "apiVersion":
+		return 0
+	case "kind":
+		return 1
+	case "metadata":
+		return 2
+	case "spec":
+		return 3
+	default:
+		return 100
+	}
+}
+
+func completionSortText(parentPath string, item completionCandidate, index int) string {
+	return fmt.Sprintf("%04d_%s", index, item.label)
 }
 
 func completionParentPaths(parentPath string) []string {
@@ -238,7 +372,7 @@ func filterCompletion(completion Completion, prefix string) Completion {
 			items = append(items, item)
 		}
 	}
-	return Completion{Items: items}
+	return Completion{Items: items, Reason: completion.Reason}
 }
 
 func offsetInTemplateActionForCompletion(parsed YAMLDocument, offset int) bool {

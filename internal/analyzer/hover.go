@@ -19,7 +19,19 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 	if !ok {
 		return Hover{}, false
 	}
-	field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, fieldPath)
+	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, fieldPath)
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(field), true
+	}
+	resolution := a.resolveSchemaRelease(uri, gvk)
+	if !resolution.OK {
+		return Hover{}, false
+	}
+	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, root.apiVersion, root.kind, fieldPath)
 	if !ok {
 		return Hover{}, false
 	}
@@ -31,6 +43,9 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Hover{}, false
 	}
+	if offsetInFullLineYAMLComment(parsed.Mixed.RawText, offset) {
+		return Hover{}, false
+	}
 	occurrence, ok := parsed.PathOccurrenceAtOffset(offset)
 	if !ok || !occurrence.Stable || parsed.offsetInTemplateAction(offset) {
 		return Hover{}, false
@@ -40,15 +55,39 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 	if !apiOK || !kindOK {
 		return Hover{}, false
 	}
-	field, ok := a.schemas.FieldDocumentation(apiVersion, kind, occurrence.Path)
+	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		field, ok := a.schemas.FieldDocumentation(apiVersion, kind, occurrence.Path)
+		if !ok {
+			return Hover{}, false
+		}
+		return hoverFromField(field), true
+	}
+	resolution := a.resolveSchemaRelease(uri, gvk)
+	if !resolution.OK {
+		return Hover{}, false
+	}
+	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, apiVersion, kind, occurrence.Path)
 	if !ok {
 		return Hover{}, false
 	}
 	return hoverFromField(field), true
 }
 
+func offsetInFullLineYAMLComment(text string, offset int) bool {
+	lineStart := lineStartForOffset(text, offset)
+	lineEnd := lineContentEndForOffset(text, offset)
+	line := text[lineStart:lineEnd]
+	trimmed := strings.TrimLeft(line, " \t")
+	return strings.HasPrefix(trimmed, "#")
+}
+
 func hoverFromField(field FieldDoc) Hover {
-	return Hover{Markdown: fmt.Sprintf("**%s**\n\n%s", hoverTitle(field.Path), field.Description)}
+	body := fieldCompletionDocumentation(field)
+	if body == "" {
+		return Hover{Markdown: "**" + hoverTitle(field.Path) + "**"}
+	}
+	return Hover{Markdown: fmt.Sprintf("**%s**\n\n%s", hoverTitle(field.Path), body)}
 }
 
 type rootContext struct {

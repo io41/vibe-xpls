@@ -1,0 +1,213 @@
+{
+  "release": "v1.20.7",
+  "apiVersion": "pkg.crossplane.io/v1",
+  "kind": "Provider",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "ProviderSpec specifies details about a request to install a provider to\nCrossplane.",
+      "type": "object"
+    },
+    {
+      "path": "spec.commonLabels",
+      "description": "Map of string keys and values that can be used to organize and categorize\n(scope and select) objects. May match selectors of replication controllers\nand services.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "type": "object"
+    },
+    {
+      "path": "spec.controllerConfigRef",
+      "description": "ControllerConfigRef references a ControllerConfig resource that will be\nused to configure the packaged controller Deployment.\n\nDeprecated: Use RuntimeConfigReference instead.",
+      "type": "object"
+    },
+    {
+      "path": "spec.controllerConfigRef.name",
+      "description": "Name of the ControllerConfig.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.ignoreCrossplaneConstraints",
+      "description": "IgnoreCrossplaneConstraints indicates to the package manager whether to\nhonor Crossplane version constrains specified by the package.\nDefault is false.",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "spec.package",
+      "description": "Package is the name of the package that is being requested.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.packagePullPolicy",
+      "description": "PackagePullPolicy defines the pull policy for the package.\nDefault is IfNotPresent.",
+      "type": "string",
+      "default": "IfNotPresent"
+    },
+    {
+      "path": "spec.packagePullSecrets[]",
+      "description": "PackagePullSecrets are named secrets in the same namespace that can be used\nto fetch packages from private registries.",
+      "type": "array"
+    },
+    {
+      "path": "spec.packagePullSecrets[].name",
+      "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "path": "spec.revisionActivationPolicy",
+      "description": "RevisionActivationPolicy specifies how the package controller should\nupdate from one revision to the next. Options are Automatic or Manual.\nDefault is Automatic.",
+      "type": "string",
+      "default": "Automatic"
+    },
+    {
+      "path": "spec.revisionHistoryLimit",
+      "description": "RevisionHistoryLimit dictates how the package controller cleans up old\ninactive package revisions.\nDefaults to 1. Can be disabled by explicitly setting to 0.",
+      "type": "integer",
+      "default": 1
+    },
+    {
+      "path": "spec.runtimeConfigRef",
+      "description": "RuntimeConfigRef references a RuntimeConfig resource that will be used\nto configure the package runtime.",
+      "type": "object",
+      "default": {
+        "name": "default"
+      }
+    },
+    {
+      "path": "spec.runtimeConfigRef.apiVersion",
+      "description": "API version of the referent.",
+      "type": "string",
+      "default": "pkg.crossplane.io/v1beta1"
+    },
+    {
+      "path": "spec.runtimeConfigRef.kind",
+      "description": "Kind of the referent.",
+      "type": "string",
+      "default": "DeploymentRuntimeConfig"
+    },
+    {
+      "path": "spec.runtimeConfigRef.name",
+      "description": "Name of the RuntimeConfig.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.skipDependencyResolution",
+      "description": "SkipDependencyResolution indicates to the package manager whether to skip\nresolving dependencies for a package. Setting this value to true may have\nunintended consequences.\nDefault is false.",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "path": "status",
+      "description": "ProviderStatus represents the observed state of a Provider.",
+      "type": "object"
+    },
+    {
+      "path": "status.appliedImageConfigRefs[]",
+      "description": "AppliedImageConfigRefs records any image configs that were applied in\nreconciling this package, and what they were used for.",
+      "type": "array"
+    },
+    {
+      "path": "status.appliedImageConfigRefs[].name",
+      "description": "Name is the name of the image config.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.appliedImageConfigRefs[].reason",
+      "description": "Reason indicates what the image config was used for.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.currentIdentifier",
+      "description": "CurrentIdentifier is the most recent package source that was used to\nproduce a revision. The package manager uses this field to determine\nwhether to check for package updates for a given source when\npackagePullPolicy is set to IfNotPresent. Manually removing this field\nwill cause the package manager to check that the current revision is\ncorrect for the given package source.",
+      "type": "string"
+    },
+    {
+      "path": "status.currentRevision",
+      "description": "CurrentRevision is the name of the current package revision. It will\nreflect the most up to date revision, whether it has been activated or\nnot.",
+      "type": "string"
+    },
+    {
+      "path": "status.resolvedPackage",
+      "description": "ResolvedPackage is the name of the package that was used for version\nresolution. It may be different from spec.package if the package path was\nrewritten using an image config.",
+      "type": "string"
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v1.20.7",
+    "upstreamSourcePath": "pkg.crossplane.io_providers.yaml",
+    "upstreamSHA256": "01ad5bf336d3b8d7804a82561b29ff489be63a9e8fdf8411d06f86b2680809d4"
+  }
+}

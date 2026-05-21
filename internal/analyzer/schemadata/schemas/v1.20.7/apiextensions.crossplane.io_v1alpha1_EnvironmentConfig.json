@@ -1,0 +1,48 @@
+{
+  "release": "v1.20.7",
+  "apiVersion": "apiextensions.crossplane.io/v1alpha1",
+  "kind": "EnvironmentConfig",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "data",
+      "description": "The data of this EnvironmentConfig.\nThis may contain any kind of structure that can be serialized into JSON.",
+      "type": "object"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v1.20.7",
+    "upstreamSourcePath": "apiextensions.crossplane.io_environmentconfigs.yaml",
+    "upstreamSHA256": "2e20fda939f486a221488cabbc36925e42e8d13390345696a3373f04ebe682c5"
+  }
+}

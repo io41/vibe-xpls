@@ -1,14 +1,16 @@
 package analyzer
 
 import (
+	"io/fs"
 	"net/url"
 	"path/filepath"
 	"strings"
 )
 
 type Options struct {
-	WorkspaceRoot string
-	Limits        Limits
+	WorkspaceRoot  string
+	Limits         Limits
+	SchemaBundleFS fs.FS
 }
 
 type Analyzer struct {
@@ -24,13 +26,21 @@ func New(options Options) (*Analyzer, error) {
 		return nil, err
 	}
 	schemas := NewSchemaIndex()
-	schemas.LoadBuiltIns()
+	if options.SchemaBundleFS != nil {
+		schemas.bundleStatus = schemas.loadGeneratedBuiltInsFromFS(options.SchemaBundleFS)
+	} else {
+		schemas.LoadBuiltIns()
+	}
 	return &Analyzer{
 		workspace: workspace,
 		limits:    defaultLimits(options.Limits),
 		docs:      NewDocumentStore(),
 		schemas:   schemas,
 	}, nil
+}
+
+func (a *Analyzer) SchemaBundleStatus() SchemaBundleStatus {
+	return a.schemas.bundleStatus
 }
 
 func (a *Analyzer) OpenDocument(uri, text string) Document {

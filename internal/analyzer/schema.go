@@ -1,10 +1,19 @@
 package analyzer
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+	"strconv"
+	"strings"
+)
 
 type SourceGVK struct {
 	APIVersion string
 	Kind       string
+}
+
+type CrossplaneRelease struct {
+	Tag string
 }
 
 type SchemaOwner string
@@ -15,57 +24,63 @@ const (
 	SchemaOwnerUser     SchemaOwner = "user"
 )
 
+type SchemaSource string
+
+const (
+	SchemaSourceGeneratedBuiltIn SchemaSource = "generated-built-in"
+	SchemaSourceWorkspace        SchemaSource = "workspace"
+)
+
 type FieldDoc struct {
 	Path        string
 	Description string
+	Type        string
+	Required    bool
+	Default     *json.RawMessage
+	Enum        []string
+	Deprecated  string
 }
 
 type SchemaProvenance struct {
-	Path  string
-	Owner SchemaOwner
+	Path               string
+	Owner              SchemaOwner
+	Source             SchemaSource
+	UpstreamReleaseTag string
+	UpstreamSourcePath string
+	UpstreamSHA256     string
 }
 
 type Schema struct {
+	Release    CrossplaneRelease
 	GVK        SourceGVK
 	Fields     map[string]FieldDoc
 	Provenance SchemaProvenance
 }
 
 type SchemaIndex struct {
-	schemas     map[SourceGVK]Schema
-	builtIns    map[SourceGVK]struct{}
-	diagnostics []Diagnostic
+	schemas        map[SourceGVK]Schema
+	releaseSchemas map[releaseGVK]Schema
+	builtIns       map[SourceGVK]struct{}
+	diagnostics    []Diagnostic
+	bundleStatus   SchemaBundleStatus
+}
+
+type releaseGVK struct {
+	Release    CrossplaneRelease
+	APIVersion string
+	Kind       string
 }
 
 func NewSchemaIndex() *SchemaIndex {
 	return &SchemaIndex{
-		schemas:  map[SourceGVK]Schema{},
-		builtIns: map[SourceGVK]struct{}{},
+		schemas:        map[SourceGVK]Schema{},
+		releaseSchemas: map[releaseGVK]Schema{},
+		builtIns:       map[SourceGVK]struct{}{},
 	}
 }
 
 func (idx *SchemaIndex) LoadBuiltIns() {
-	idx.addBuiltInSchema(Schema{
-		GVK: SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
-		Fields: map[string]FieldDoc{
-			"apiVersion":                       {Path: "apiVersion", Description: "API version of the Composition resource."},
-			"kind":                             {Path: "kind", Description: "Resource kind, normally Composition."},
-			"metadata.name":                    {Path: "metadata.name", Description: "Name of the Composition."},
-			"spec.compositeTypeRef.apiVersion": {Path: "spec.compositeTypeRef.apiVersion", Description: "API version of the composite resource type this Composition renders."},
-			"spec.compositeTypeRef.kind":       {Path: "spec.compositeTypeRef.kind", Description: "Kind of the composite resource type this Composition renders."},
-		},
-		Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-	})
-	idx.addBuiltInSchema(Schema{
-		GVK: SourceGVK{APIVersion: "meta.pkg.crossplane.io/v1", Kind: "Configuration"},
-		Fields: map[string]FieldDoc{
-			"apiVersion":              {Path: "apiVersion", Description: "API version of the Configuration metadata resource."},
-			"kind":                    {Path: "kind", Description: "Resource kind, normally Configuration."},
-			"metadata.name":           {Path: "metadata.name", Description: "Name of the Configuration package."},
-			"spec.dependsOn.provider": {Path: "spec.dependsOn.provider", Description: "Provider package dependency required by this Configuration."},
-		},
-		Provenance: SchemaProvenance{Owner: SchemaOwnerCore},
-	})
+	idx.bundleStatus = idx.LoadGeneratedBuiltIns()
 }
 
 func (idx *SchemaIndex) AddWorkspaceSchema(schema Schema) {
@@ -89,13 +104,67 @@ func (idx *SchemaIndex) AddWorkspaceSchema(schema Schema) {
 	idx.schemas[schema.GVK] = copySchema(schema)
 }
 
+func (idx *SchemaIndex) AddGeneratedBuiltIn(schema Schema) {
+	idx.releaseSchemas[releaseGVK{
+		Release:    schema.Release,
+		APIVersion: schema.GVK.APIVersion,
+		Kind:       schema.GVK.Kind,
+	}] = copySchema(schema)
+	idx.builtIns[schema.GVK] = struct{}{}
+	if _, ok := idx.schemas[schema.GVK]; !ok {
+		idx.schemas[schema.GVK] = copySchema(schema)
+	}
+}
+
 func (idx *SchemaIndex) FieldDocumentation(apiVersion, kind, fieldPath string) (FieldDoc, bool) {
 	schema, ok := idx.schemas[SourceGVK{APIVersion: apiVersion, Kind: kind}]
 	if !ok {
 		return FieldDoc{}, false
 	}
 	doc, ok := schema.Fields[fieldPath]
-	return doc, ok
+	return copyFieldDoc(doc), ok
+}
+
+func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, apiVersion, kind, fieldPath string) (FieldDoc, bool) {
+	schema, ok := idx.releaseSchemas[releaseGVK{Release: release, APIVersion: apiVersion, Kind: kind}]
+	if !ok {
+		return FieldDoc{}, false
+	}
+	doc, ok := schema.Fields[fieldPath]
+	return copyFieldDoc(doc), ok
+}
+
+func (idx *SchemaIndex) HasWorkspaceSchema(gvk SourceGVK) bool {
+	if _, ok := idx.schemas[gvk]; !ok {
+		return false
+	}
+	_, builtIn := idx.builtIns[gvk]
+	return !builtIn
+}
+
+func (idx *SchemaIndex) ReleasesForGVK(gvk SourceGVK) []CrossplaneRelease {
+	seen := map[CrossplaneRelease]struct{}{}
+	releases := []CrossplaneRelease{}
+	for key := range idx.releaseSchemas {
+		if key.APIVersion != gvk.APIVersion || key.Kind != gvk.Kind {
+			continue
+		}
+		if _, ok := seen[key.Release]; ok {
+			continue
+		}
+		seen[key.Release] = struct{}{}
+		releases = append(releases, key.Release)
+	}
+	sortCrossplaneReleases(releases)
+	return releases
+}
+
+func (idx *SchemaIndex) DefaultReleaseForGVK(gvk SourceGVK) (CrossplaneRelease, bool) {
+	releases := idx.ReleasesForGVK(gvk)
+	if len(releases) == 0 {
+		return CrossplaneRelease{}, false
+	}
+	return releases[len(releases)-1], true
 }
 
 func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
@@ -105,7 +174,22 @@ func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
 	}
 	fields := make([]FieldDoc, 0, len(schema.Fields))
 	for _, doc := range schema.Fields {
-		fields = append(fields, doc)
+		fields = append(fields, copyFieldDoc(doc))
+	}
+	sort.Slice(fields, func(i, j int) bool {
+		return fields[i].Path < fields[j].Path
+	})
+	return fields
+}
+
+func (idx *SchemaIndex) FieldsForRelease(release CrossplaneRelease, apiVersion, kind string) []FieldDoc {
+	schema, ok := idx.releaseSchemas[releaseGVK{Release: release, APIVersion: apiVersion, Kind: kind}]
+	if !ok {
+		return nil
+	}
+	fields := make([]FieldDoc, 0, len(schema.Fields))
+	for _, doc := range schema.Fields {
+		fields = append(fields, copyFieldDoc(doc))
 	}
 	sort.Slice(fields, func(i, j int) bool {
 		return fields[i].Path < fields[j].Path
@@ -119,16 +203,111 @@ func (idx *SchemaIndex) Diagnostics() []Diagnostic {
 	return diagnostics
 }
 
-func (idx *SchemaIndex) addBuiltInSchema(schema Schema) {
-	idx.schemas[schema.GVK] = copySchema(schema)
-	idx.builtIns[schema.GVK] = struct{}{}
-}
-
 func copySchema(schema Schema) Schema {
 	fields := make(map[string]FieldDoc, len(schema.Fields))
 	for path, doc := range schema.Fields {
-		fields[path] = doc
+		fields[path] = copyFieldDoc(doc)
 	}
 	schema.Fields = fields
 	return schema
+}
+
+func copyFieldDoc(doc FieldDoc) FieldDoc {
+	if doc.Default != nil {
+		raw := append(json.RawMessage(nil), (*doc.Default)...)
+		doc.Default = &raw
+	}
+	if doc.Enum != nil {
+		doc.Enum = append([]string(nil), doc.Enum...)
+	}
+	return doc
+}
+
+type schemaSemVer struct {
+	major int
+	minor int
+	patch int
+	pre   string
+	ok    bool
+}
+
+func sortCrossplaneReleases(releases []CrossplaneRelease) {
+	sort.Slice(releases, func(i, j int) bool {
+		return compareCrossplaneReleases(releases[i], releases[j]) < 0
+	})
+}
+
+func compareCrossplaneReleases(left, right CrossplaneRelease) int {
+	leftVersion := parseSchemaSemVer(left.Tag)
+	rightVersion := parseSchemaSemVer(right.Tag)
+	if leftVersion.ok && rightVersion.ok {
+		return compareSchemaSemVer(leftVersion, rightVersion)
+	}
+	if leftVersion.ok != rightVersion.ok {
+		if leftVersion.ok {
+			return 1
+		}
+		return -1
+	}
+	return strings.Compare(left.Tag, right.Tag)
+}
+
+func parseSchemaSemVer(tag string) schemaSemVer {
+	tag = strings.TrimSpace(tag)
+	tag = strings.TrimPrefix(tag, "v")
+	pre := ""
+	if split := strings.Index(tag, "-"); split >= 0 {
+		pre = tag[split+1:]
+		tag = tag[:split]
+	}
+	parts := strings.Split(tag, ".")
+	if len(parts) != 3 {
+		return schemaSemVer{}
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return schemaSemVer{}
+	}
+	return schemaSemVer{major: major, minor: minor, patch: patch, pre: pre, ok: true}
+}
+
+func compareSchemaSemVer(left, right schemaSemVer) int {
+	if left.major != right.major {
+		return compareInts(left.major, right.major)
+	}
+	if left.minor != right.minor {
+		return compareInts(left.minor, right.minor)
+	}
+	if left.patch != right.patch {
+		return compareInts(left.patch, right.patch)
+	}
+	if left.pre == right.pre {
+		return 0
+	}
+	if left.pre == "" {
+		return 1
+	}
+	if right.pre == "" {
+		return -1
+	}
+	return strings.Compare(left.pre, right.pre)
+}
+
+func compareInts(left, right int) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
+	}
 }

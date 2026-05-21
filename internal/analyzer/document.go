@@ -1,6 +1,9 @@
 package analyzer
 
-import "sync"
+import (
+	"path/filepath"
+	"sync"
+)
 
 type Generation uint64
 
@@ -45,6 +48,29 @@ func (s *DocumentStore) Get(uri string) (Document, bool) {
 	defer s.mu.Unlock()
 	doc, ok := s.docs[uri]
 	return doc, ok
+}
+
+func (s *DocumentStore) GetByFilePath(path string) (Document, bool) {
+	clean, err := filepath.Abs(path)
+	if err != nil {
+		return Document{}, false
+	}
+	clean = filepath.Clean(clean)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var best Document
+	bestOK := false
+	for _, doc := range s.docs {
+		docPath, ok := filePathFromURI(doc.URI)
+		if !ok || filepath.Clean(docPath) != clean {
+			continue
+		}
+		if !bestOK || doc.Generation > best.Generation {
+			best = doc
+			bestOK = true
+		}
+	}
+	return best, bestOK
 }
 
 func (s *DocumentStore) set(uri, text string, closed bool) Document {

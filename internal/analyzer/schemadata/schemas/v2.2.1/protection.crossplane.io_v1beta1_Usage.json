@@ -1,0 +1,201 @@
+{
+  "release": "v2.2.1",
+  "apiVersion": "protection.crossplane.io/v1beta1",
+  "kind": "Usage",
+  "fields": [
+    {
+      "path": "apiVersion",
+      "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+      "type": "string"
+    },
+    {
+      "path": "kind",
+      "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "metadata",
+      "type": "object"
+    },
+    {
+      "path": "metadata.annotations",
+      "description": "Object annotations.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.labels",
+      "description": "Object labels.",
+      "type": "object"
+    },
+    {
+      "path": "metadata.name",
+      "description": "Object name.",
+      "type": "string"
+    },
+    {
+      "path": "metadata.namespace",
+      "description": "Object namespace.",
+      "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "UsageSpec defines the desired state of Usage.",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.by",
+      "description": "By is the resource that is \"using the other resource\".",
+      "type": "object"
+    },
+    {
+      "path": "spec.by.apiVersion",
+      "description": "API version of the referent.",
+      "type": "string"
+    },
+    {
+      "path": "spec.by.kind",
+      "description": "Kind of the referent.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "spec.by.resourceRef",
+      "description": "Reference to the resource.",
+      "type": "object"
+    },
+    {
+      "path": "spec.by.resourceRef.name",
+      "description": "Name of the referent.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.by.resourceSelector",
+      "description": "Selector to the resource.\nThis field will be ignored if ResourceRef is set.",
+      "type": "object"
+    },
+    {
+      "path": "spec.by.resourceSelector.matchControllerRef",
+      "description": "MatchControllerRef ensures an object with the same controller reference\nas the selecting object is selected.",
+      "type": "boolean"
+    },
+    {
+      "path": "spec.by.resourceSelector.matchLabels",
+      "description": "MatchLabels ensures an object with matching labels is selected.",
+      "type": "object"
+    },
+    {
+      "path": "spec.of",
+      "description": "Of is the resource that is \"being used\".",
+      "type": "object",
+      "required": true
+    },
+    {
+      "path": "spec.of.apiVersion",
+      "description": "API version of the referent.",
+      "type": "string"
+    },
+    {
+      "path": "spec.of.kind",
+      "description": "Kind of the referent.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+      "type": "string"
+    },
+    {
+      "path": "spec.of.resourceRef",
+      "description": "Reference to the resource.",
+      "type": "object"
+    },
+    {
+      "path": "spec.of.resourceRef.name",
+      "description": "Name of the referent.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "spec.of.resourceRef.namespace",
+      "description": "Namespace of the referent.",
+      "type": "string"
+    },
+    {
+      "path": "spec.of.resourceSelector",
+      "description": "Selector to the resource.\nThis field will be ignored if ResourceRef is set.",
+      "type": "object"
+    },
+    {
+      "path": "spec.of.resourceSelector.matchControllerRef",
+      "description": "MatchControllerRef ensures an object with the same controller reference\nas the selecting object is selected.",
+      "type": "boolean"
+    },
+    {
+      "path": "spec.of.resourceSelector.matchLabels",
+      "description": "MatchLabels ensures an object with matching labels is selected.",
+      "type": "object"
+    },
+    {
+      "path": "spec.of.resourceSelector.namespace",
+      "description": "Namespace ensures an object in the supplied namespace is selected.\nOmit namespace to only match resources in the Usage's namespace.",
+      "type": "string"
+    },
+    {
+      "path": "spec.reason",
+      "description": "Reason is the reason for blocking deletion of the resource.",
+      "type": "string"
+    },
+    {
+      "path": "spec.replayDeletion",
+      "description": "ReplayDeletion will trigger a deletion on the used resource during the deletion of the usage itself, if it was attempted to be deleted at least once.",
+      "type": "boolean"
+    },
+    {
+      "path": "status",
+      "description": "UsageStatus defines the observed state of Usage.",
+      "type": "object"
+    },
+    {
+      "path": "status.conditions[]",
+      "description": "Conditions of the resource.",
+      "type": "array"
+    },
+    {
+      "path": "status.conditions[].lastTransitionTime",
+      "description": "LastTransitionTime is the last time this condition transitioned from one\nstatus to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].message",
+      "description": "A Message containing details about this condition's last transition from\none status to another, if any.",
+      "type": "string"
+    },
+    {
+      "path": "status.conditions[].observedGeneration",
+      "description": "ObservedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.",
+      "type": "integer"
+    },
+    {
+      "path": "status.conditions[].reason",
+      "description": "A Reason for this condition's last transition from one status to another.",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].status",
+      "description": "Status of this condition; is it currently True, False, or Unknown?",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "status.conditions[].type",
+      "description": "Type of this condition. At most one of each condition type may apply to\na resource at any point in time.",
+      "type": "string",
+      "required": true
+    }
+  ],
+  "provenance": {
+    "owner": "core",
+    "source": "generated-built-in",
+    "upstreamReleaseTag": "v2.2.1",
+    "upstreamSourcePath": "protection.crossplane.io_usages.yaml",
+    "upstreamSHA256": "23fc67d87deaf87b6a2a869334544ee94840917370a3dc55b390778d341fc855"
+  }
+}
