@@ -53,18 +53,12 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if !ok || !a.documentActive(uri, parsed) {
 		return Completion{}
 	}
-	if !a.schemas.bundleStatus.OK {
-		return Completion{Reason: SuppressionBundleDisabled}
+	context, reason, ok := completionContextAtOffset(parsed, offset)
+	if !ok {
+		return Completion{Reason: reason}
 	}
 	if malformedYAMLContextAtOffset(parsed, offset) {
 		return Completion{Reason: SuppressionMalformedYAMLContext}
-	}
-	if offsetInTemplateActionForCompletion(parsed, offset) {
-		return Completion{Reason: SuppressionUnstableTemplatePath}
-	}
-	context, ok := completionContextAtOffset(parsed, offset)
-	if !ok {
-		return Completion{}
 	}
 	apiVersion, apiOK := parsed.RootValueForOccurrence(context.rootOccurrence, "apiVersion")
 	kind, kindOK := parsed.RootValueForOccurrence(context.rootOccurrence, "kind")
@@ -75,6 +69,9 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	workspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
 	var resolution schemaResolution
 	if !workspaceSchema {
+		if !a.schemas.bundleStatus.OK {
+			return Completion{Reason: SuppressionBundleDisabled}
+		}
 		resolution = a.resolveSchemaRelease(uri, gvk)
 		if !resolution.OK {
 			return Completion{Reason: resolution.Reason}
@@ -116,7 +113,7 @@ func malformedYAMLContextAtOffset(parsed YAMLDocument, offset int) bool {
 			continue
 		}
 		diagnosticLineStart := lineStartForOffset(parsed.Mixed.RawText, diagnostic.Span.Start)
-		if diagnosticLineStart < currentLineStart {
+		if diagnosticLineStart < currentLineStart && !documentSeparatorBetween(parsed.Mixed.RawText, diagnostic.Span.Start, offset) {
 			return true
 		}
 	}
@@ -151,10 +148,10 @@ type completionContext struct {
 	indent         string
 }
 
-func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, bool) {
+func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, SuppressionReason, bool) {
 	text := parsed.Mixed.RawText
 	if len(text) == 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	if offset < 0 {
 		offset = 0
@@ -162,41 +159,41 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 	if offset > len(text) {
 		offset = len(text)
 	}
-	if offsetInTemplateActionForCompletion(parsed, offset) {
-		return completionContext{}, false
-	}
 
 	lineStart := lineStartForOffset(text, offset)
 	lineEnd := lineContentEndForOffset(text, offset)
 	beforeCursor := text[lineStart:offset]
 	if colon := strings.LastIndex(beforeCursor, ":"); colon >= 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 
 	indentEnd := completionLineIndentEnd(text, lineStart, lineEnd)
 	if lineIsBlockScalarContent(text, lineStart, indentEnd-lineStart) {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	rawPrefix := text[indentEnd:offset]
 	if strings.HasPrefix(strings.TrimLeft(rawPrefix, " \t"), "-") {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	keyCandidate := rawPrefix
+	if offsetInTemplateActionForCompletion(parsed, offset) {
+		return completionContext{}, SuppressionUnstableTemplatePath, false
+	}
 	afterCursor := text[offset:lineEnd]
 	if colon := strings.Index(afterCursor, ":"); colon >= 0 {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	} else if strings.TrimSpace(afterCursor) != "" {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	prefix := strings.TrimSpace(rawPrefix)
 	keyCandidate = strings.TrimSpace(keyCandidate)
 	if !isBareCompletionKeyPrefix(prefix) || !isBareCompletionKeyPrefix(keyCandidate) {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 
 	parentPath, rootOccurrence, ok := parentCompletionContext(parsed, lineStart, indentEnd-lineStart)
 	if !ok {
-		return completionContext{}, false
+		return completionContext{}, "", false
 	}
 	return completionContext{
 		parentPath:     parentPath,
@@ -204,7 +201,7 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 		rootOccurrence: rootOccurrence,
 		replace:        Span{Start: lineStart, End: offset},
 		indent:         text[lineStart:indentEnd],
-	}, true
+	}, "", true
 }
 
 func rootContextForCompletionParent(parsed YAMLDocument, parentPath string) (rootContext, bool) {

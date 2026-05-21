@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/io41/vibe-xpls/internal/testkit"
 )
@@ -229,6 +230,110 @@ func TestAnalyzerCompletionReportsMalformedYAMLReason(t *testing.T) {
 	completion := a.CompletionAtOffset(uri, len(text))
 	if completion.Reason != SuppressionMalformedYAMLContext {
 		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionMalformedYAMLContext)
+	}
+}
+
+func TestAnalyzerCompletionReportsUnstableTemplatePathReason(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "template-key.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    {{ .Key }}\n"
+	a.OpenDocument(uri, text)
+	offset := strings.Index(text, "{{ .Key }}") + len("{{ ")
+	if offset < len("{{ ") {
+		t.Fatal("test setup: template action not found")
+	}
+
+	completion := a.CompletionAtOffset(uri, offset)
+	if completion.Reason != SuppressionUnstableTemplatePath {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionUnstableTemplatePath)
+	}
+}
+
+func TestAnalyzerCompletionSuppressionReasonsRequireKeyContext(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+
+	malformedURI := "file://" + filepath.Join(root, "api", "malformed-value.yaml")
+	malformedText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\nmetadata:\n  name: demo\n"
+	a.OpenDocument(malformedURI, malformedText)
+	malformedOffset := strings.Index(malformedText, "demo")
+	if malformedOffset < 0 {
+		t.Fatal("test setup: demo not found")
+	}
+	if completion := a.CompletionAtOffset(malformedURI, malformedOffset); completion.Reason != "" {
+		t.Fatalf("malformed value-context reason = %q, want empty", completion.Reason)
+	}
+
+	templateURI := "file://" + filepath.Join(root, "api", "template-value.yaml")
+	templateText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    kind: {{ .Kind }}\n"
+	a.OpenDocument(templateURI, templateText)
+	templateOffset := strings.Index(templateText, "{{ .Kind }}") + len("{{ ")
+	if templateOffset < len("{{ ") {
+		t.Fatal("test setup: template action not found")
+	}
+	if completion := a.CompletionAtOffset(templateURI, templateOffset); completion.Reason != "" {
+		t.Fatalf("template value-context reason = %q, want empty", completion.Reason)
+	}
+
+	disabled, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits(), SchemaBundleFS: unsupportedSchemaBundleFS()})
+	if err != nil {
+		t.Fatalf("new analyzer with disabled bundle: %v", err)
+	}
+	bundleURI := "file://" + filepath.Join(root, "api", "bundle-value.yaml")
+	bundleText := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: demo\n"
+	disabled.OpenDocument(bundleURI, bundleText)
+	bundleOffset := strings.Index(bundleText, "demo")
+	if bundleOffset < 0 {
+		t.Fatal("test setup: demo not found")
+	}
+	if completion := disabled.CompletionAtOffset(bundleURI, bundleOffset); completion.Reason != "" {
+		t.Fatalf("bundle-disabled value-context reason = %q, want empty", completion.Reason)
+	}
+}
+
+func TestAnalyzerCompletionMalformedEarlierDocumentDoesNotClassifyLaterDocument(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "malformed-before-valid.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec: [unterminated\n---\napiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason == SuppressionMalformedYAMLContext {
+		t.Fatalf("later document reason = %q, want non-malformed", completion.Reason)
+	}
+	if len(completion.Items) != 0 && !containsCompletion(completion.Items, "kind") {
+		t.Fatalf("later document completion = %#v, want kind when items are available", completion.Items)
+	}
+}
+
+func TestAnalyzerNewAllowsDisabledSchemaBundle(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits(), SchemaBundleFS: unsupportedSchemaBundleFS()})
+	if err != nil {
+		t.Fatalf("new analyzer with disabled bundle: %v", err)
+	}
+	status := a.SchemaBundleStatus()
+	if status.OK || !strings.Contains(status.Message, "unsupported schema bundle format 99") {
+		t.Fatalf("bundle status = %#v, want disabled unsupported-format status", status)
+	}
+
+	uri := "file://" + filepath.Join(root, "api", "disabled-bundle.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  compositeTypeRef:\n    "
+	a.OpenDocument(uri, text)
+	completion := a.CompletionAtOffset(uri, len(text))
+	if completion.Reason != SuppressionBundleDisabled {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionBundleDisabled)
 	}
 }
 
@@ -1026,6 +1131,12 @@ func analyzerWithPackageMarkerAndGeneratedSchemas(t *testing.T, versionRange str
 		limits:    DefaultLimits(),
 		docs:      NewDocumentStore(),
 		schemas:   idx,
+	}
+}
+
+func unsupportedSchemaBundleFS() fstest.MapFS {
+	return fstest.MapFS{
+		"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
 	}
 }
 

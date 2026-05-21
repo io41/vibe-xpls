@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/io41/vibe-xpls/internal/analyzer"
 	"github.com/io41/vibe-xpls/internal/source"
@@ -68,12 +69,10 @@ func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
 	out := bytes.NewBuffer(nil)
 	s := NewServer(in, out, &stderr)
 	s.newAnalyzer = func(options analyzer.Options) (*analyzer.Analyzer, error) {
-		a, err := analyzer.New(options)
-		if err != nil {
-			return nil, err
+		options.SchemaBundleFS = fstest.MapFS{
+			"schemadata/manifest.json": {Data: []byte(`{"bundleFormatVersion":99}`)},
 		}
-		a.SetSchemaBundleStatusForTest(analyzer.SchemaBundleStatus{Message: "unsupported schema bundle format 99"})
-		return a, nil
+		return analyzer.New(options)
 	}
 
 	frames := []string{
@@ -91,8 +90,16 @@ func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
 	}
 	messages := readMessages(t, out.Bytes())
 	warnings := 0
-	for _, msg := range messages {
+	firstInitializeResponse := -1
+	firstWarning := -1
+	for i, msg := range messages {
+		if sameID(msg.ID, 1) {
+			firstInitializeResponse = i
+		}
 		if msg.Method == "window/showMessage" {
+			if firstWarning < 0 {
+				firstWarning = i
+			}
 			warnings++
 			params := paramsMap(t, msg)
 			if params["type"] != float64(2) || !strings.Contains(params["message"].(string), "schema completions are disabled") {
@@ -102,6 +109,9 @@ func TestInitializeWarnsOnceForBundleFailure(t *testing.T) {
 	}
 	if warnings != 1 {
 		t.Fatalf("warnings = %d, want 1", warnings)
+	}
+	if firstInitializeResponse < 0 || firstWarning < 0 || firstWarning <= firstInitializeResponse {
+		t.Fatalf("initialize warning ordering invalid: response index=%d warning index=%d messages=%#v", firstInitializeResponse, firstWarning, messages)
 	}
 }
 

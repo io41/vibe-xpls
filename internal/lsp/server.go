@@ -231,17 +231,8 @@ func (s *Server) handleInitialize(msg Message) error {
 		return s.respond(msg.ID, nil, &ResponseError{Code: invalidParams, Message: err.Error()})
 	}
 	s.analyzer = a
-	if status := s.analyzer.SchemaBundleStatus(); !status.OK && !s.bundleWarningShown {
-		s.bundleWarningShown = true
-		if err := s.notify("window/showMessage", map[string]any{
-			"type":    2,
-			"message": "Crossplane schema completions are disabled: " + status.Message,
-		}); err != nil {
-			return err
-		}
-	}
 
-	return s.respond(msg.ID, initializeResult{
+	result := initializeResult{
 		Capabilities: serverCapabilities{
 			TextDocumentSync:   1,
 			HoverProvider:      true,
@@ -249,7 +240,18 @@ func (s *Server) handleInitialize(msg Message) error {
 			PositionEncoding:   string(s.positionEncoding),
 		},
 		ServerInfo: serverInfo{Name: "vibe-xpls", Version: app.Version()},
-	}, nil)
+	}
+	if err := s.respond(msg.ID, result, nil); err != nil {
+		return err
+	}
+	if status := s.analyzer.SchemaBundleStatus(); !status.OK && !s.bundleWarningShown {
+		s.bundleWarningShown = true
+		return s.notify("window/showMessage", map[string]any{
+			"type":    2,
+			"message": "Crossplane schema completions are disabled: " + status.Message,
+		})
+	}
+	return nil
 }
 
 func (s *Server) handleDidOpen(raw json.RawMessage) error {
