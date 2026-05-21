@@ -23,15 +23,16 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 		}
 	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
+	schemaFieldPath := schemaPathFromParsedPath(fieldPath)
 	if a.schemas.HasWorkspaceSchema(gvk) {
-		field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, fieldPath)
+		field, ok := a.schemas.FieldDocumentation(root.apiVersion, root.kind, schemaFieldPath)
 		if !ok {
 			return Hover{}, false
 		}
 		return hoverFromField(field), true
 	}
 	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
-		field, ok := schema.Fields[fieldPath]
+		field, ok := schema.Fields[schemaFieldPath]
 		if !ok {
 			return Hover{}, false
 		}
@@ -41,7 +42,7 @@ func (a *Analyzer) Hover(uri, fieldPath string) (Hover, bool) {
 	if !resolution.OK {
 		return Hover{}, false
 	}
-	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, root.apiVersion, root.kind, fieldPath)
+	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, root.apiVersion, root.kind, schemaFieldPath)
 	if !ok {
 		return Hover{}, false
 	}
@@ -66,15 +67,16 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 		return Hover{}, false
 	}
 	gvk := SourceGVK{APIVersion: apiVersion, Kind: kind}
+	schemaFieldPath := schemaPathFromParsedPath(occurrence.Path)
 	if a.schemas.HasWorkspaceSchema(gvk) {
-		field, ok := a.schemas.FieldDocumentation(apiVersion, kind, occurrence.Path)
+		field, ok := a.schemas.FieldDocumentation(apiVersion, kind, schemaFieldPath)
 		if !ok {
 			return Hover{}, false
 		}
 		return hoverFromField(field), true
 	}
 	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
-		field, ok := schema.Fields[occurrence.Path]
+		field, ok := schema.Fields[schemaFieldPath]
 		if !ok {
 			return Hover{}, false
 		}
@@ -84,7 +86,7 @@ func (a *Analyzer) HoverAtOffset(uri string, offset int) (Hover, bool) {
 	if !resolution.OK {
 		return Hover{}, false
 	}
-	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, apiVersion, kind, occurrence.Path)
+	field, ok := a.schemas.FieldDocumentationForRelease(resolution.Release, apiVersion, kind, schemaFieldPath)
 	if !ok {
 		return Hover{}, false
 	}

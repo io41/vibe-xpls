@@ -81,36 +81,31 @@ func (a *Analyzer) refreshWorkspaceSchemasForPackage(pkg PackageRoot) {
 		}
 	}
 	delete(a.workspaceSchemaDiagnostics, pkg.Root)
-	for _, schema := range a.workspaceSchemasForPackage(pkg) {
-		a.addWorkspaceSchemaForPackage(pkg, schema)
-	}
-}
-
-func (a *Analyzer) workspaceSchemasForPackage(pkg PackageRoot) []Schema {
-	if pkg.Root == "" {
-		return nil
-	}
-	var schemas []Schema
 	for _, path := range a.workspaceSchemaSourcePaths(pkg) {
 		raw, ok := a.workspaceSchemaSource(path)
 		if !ok {
 			continue
 		}
-		schemas = append(schemas, workspaceSchemasFromRaw(path, raw)...)
+		schemas, diagnostics := workspaceSchemasFromRaw(path, raw)
+		a.workspaceSchemaDiagnostics[pkg.Root] = append(a.workspaceSchemaDiagnostics[pkg.Root], diagnostics...)
+		for _, schema := range schemas {
+			a.addWorkspaceSchemaForPackage(pkg, schema)
+		}
 	}
-	return schemas
 }
 
 func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
 	paths := map[string]struct{}{}
 	for _, path := range workspaceYAMLFiles(pkg.Root, a.limits) {
-		paths[path] = struct{}{}
+		if a.packageOwnsSchemaSourcePath(pkg, path) {
+			paths[path] = struct{}{}
+		}
 	}
 	for _, path := range a.docs.FilePaths() {
 		if !isWorkspaceYAMLFile(path) {
 			continue
 		}
-		if path == pkg.Root || strings.HasPrefix(path, pkg.Root+string(filepath.Separator)) {
+		if a.packageOwnsSchemaSourcePath(pkg, path) {
 			paths[path] = struct{}{}
 		}
 	}
@@ -120,6 +115,11 @@ func (a *Analyzer) workspaceSchemaSourcePaths(pkg PackageRoot) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+func (a *Analyzer) packageOwnsSchemaSourcePath(pkg PackageRoot, path string) bool {
+	owner, ok := a.workspace.PackageForFile(path)
+	return ok && owner.Root == pkg.Root
 }
 
 func (a *Analyzer) workspaceSchemaSource(path string) ([]byte, bool) {
@@ -136,7 +136,7 @@ func (a *Analyzer) workspaceSchemaSource(path string) ([]byte, bool) {
 func (a *Analyzer) addWorkspaceSchemaForPackage(pkg PackageRoot, schema Schema) {
 	if _, ok := a.schemas.builtIns[schema.GVK]; ok {
 		a.workspaceSchemaDiagnostics[pkg.Root] = append(a.workspaceSchemaDiagnostics[pkg.Root], Diagnostic{
-			URI:      schema.Provenance.Path,
+			URI:      fileURIFromPath(schema.Provenance.Path),
 			Source:   "schema",
 			Severity: "warning",
 			Message:  "workspace schema duplicates built-in Crossplane core schema",
@@ -146,7 +146,7 @@ func (a *Analyzer) addWorkspaceSchemaForPackage(pkg PackageRoot, schema Schema) 
 	key := workspaceSchemaKey{PackageRoot: pkg.Root, GVK: schema.GVK}
 	if _, ok := a.workspaceSchemas[key]; ok {
 		a.workspaceSchemaDiagnostics[pkg.Root] = append(a.workspaceSchemaDiagnostics[pkg.Root], Diagnostic{
-			URI:      schema.Provenance.Path,
+			URI:      fileURIFromPath(schema.Provenance.Path),
 			Source:   "schema",
 			Severity: "warning",
 			Message:  "workspace schema conflicts with another workspace schema",
@@ -184,8 +184,13 @@ func (a *Analyzer) workspaceSchemaDiagnosticsForURI(uri string) []Diagnostic {
 	if len(diagnostics) == 0 {
 		return nil
 	}
-	result := make([]Diagnostic, len(diagnostics))
-	copy(result, diagnostics)
+	result := make([]Diagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic.URI != uri {
+			continue
+		}
+		result = append(result, diagnostic)
+	}
 	return result
 }
 
@@ -208,6 +213,9 @@ func workspaceYAMLFiles(root string, limits Limits) []string {
 			return nil
 		}
 		if entry.IsDir() {
+			if path != root && workspaceDirHasPackageMarker(path) {
+				return filepath.SkipDir
+			}
 			switch entry.Name() {
 			case ".git", ".worktrees", "node_modules", "vendor":
 				if path != root {
@@ -237,6 +245,15 @@ func workspaceYAMLFiles(root string, limits Limits) []string {
 	return files
 }
 
+func workspaceDirHasPackageMarker(path string) bool {
+	for marker := range markerPriority {
+		if _, err := os.Stat(filepath.Join(path, marker)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func isWorkspaceYAMLFile(path string) bool {
 	name := strings.ToLower(filepath.Base(path))
 	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")
@@ -247,10 +264,11 @@ func workspaceSchemasFromFile(path string) []Schema {
 	if err != nil {
 		return nil
 	}
-	return workspaceSchemasFromRaw(path, raw)
+	schemas, _ := workspaceSchemasFromRaw(path, raw)
+	return schemas
 }
 
-func workspaceSchemasFromRaw(path string, raw []byte) []Schema {
+func workspaceSchemasFromRaw(path string, raw []byte) ([]Schema, []Diagnostic) {
 	hash := sha256.Sum256(raw)
 	provenance := SchemaProvenance{
 		Path:           path,
@@ -260,6 +278,7 @@ func workspaceSchemasFromRaw(path string, raw []byte) []Schema {
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	var schemas []Schema
+	var diagnostics []Diagnostic
 	for {
 		var doc workspaceCRDDocument
 		err := decoder.Decode(&doc)
@@ -267,7 +286,13 @@ func workspaceSchemasFromRaw(path string, raw []byte) []Schema {
 			break
 		}
 		if err != nil {
-			return schemas
+			diagnostics = append(diagnostics, Diagnostic{
+				URI:      fileURIFromPath(path),
+				Source:   "schema",
+				Severity: "error",
+				Message:  fmt.Sprintf("parse workspace schema source %s: %v", path, err),
+			})
+			return schemas, diagnostics
 		}
 		if doc.APIVersion != "apiextensions.k8s.io/v1" || doc.Kind != "CustomResourceDefinition" {
 			continue
@@ -290,7 +315,11 @@ func workspaceSchemasFromRaw(path string, raw []byte) []Schema {
 			})
 		}
 	}
-	return schemas
+	return schemas, diagnostics
+}
+
+func fileURIFromPath(path string) string {
+	return "file://" + filepath.ToSlash(path)
 }
 
 func collectWorkspaceFields(schema workspaceOpenAPISchema) map[string]FieldDoc {

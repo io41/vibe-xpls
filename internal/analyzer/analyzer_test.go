@@ -865,6 +865,63 @@ func TestAnalyzerScopesWorkspaceProviderCRDSchemaByPackage(t *testing.T) {
 	}
 }
 
+func TestAnalyzerSkipsNestedPackageWorkspaceProviderCRDSchema(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "parent")
+	child := filepath.Join(parent, "packages", "child")
+	analyzerWriteFile(t, filepath.Join(parent, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: parent\n")
+	analyzerWriteFile(t, filepath.Join(child, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: child\n")
+	analyzerWriteFile(t, filepath.Join(parent, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Parent bucket name."))
+	analyzerWriteFile(t, filepath.Join(child, "api", "provider-crd.yaml"), workspaceProviderCRD("bucketName", "Child bucket name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	parentURI := "file://" + filepath.Join(parent, "api", "bucket-instance.yaml")
+	childURI := "file://" + filepath.Join(child, "api", "bucket-instance.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n"
+	a.OpenDocument(parentURI, text)
+	a.OpenDocument(childURI, text)
+
+	parentHover, ok := a.Hover(parentURI, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(parentHover.Markdown, "Parent bucket name.") || strings.Contains(parentHover.Markdown, "Child bucket name.") {
+		t.Fatalf("parent hover = %#v ok=%v", parentHover, ok)
+	}
+	childHover, ok := a.Hover(childURI, "spec.forProvider.bucketName")
+	if !ok || !strings.Contains(childHover.Markdown, "Child bucket name.") || strings.Contains(childHover.Markdown, "Parent bucket name.") {
+		t.Fatalf("child hover = %#v ok=%v", childHover, ok)
+	}
+	if diagnostics := a.Diagnostics(parentURI); containsDiagnosticMessage(diagnostics, "workspace schema conflicts with another workspace schema") {
+		t.Fatalf("parent diagnostics = %#v, want no nested child conflict", diagnostics)
+	}
+}
+
+func TestAnalyzerWorkspaceProviderCRDArrayItemHover(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "provider-crd.yaml"), workspaceProviderCRDWithArray("Rule name is the provider rule name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "bucket-instance.yaml")
+	text := "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\nspec:\n  forProvider:\n    rules:\n      - name: primary\n"
+	a.OpenDocument(uri, text)
+
+	hover, ok := a.Hover(uri, "spec.forProvider.rules[0].name")
+	if !ok || !strings.Contains(hover.Markdown, "Rule name is the provider rule name.") {
+		t.Fatalf("array direct hover = %#v ok=%v", hover, ok)
+	}
+	offset := strings.Index(text, "primary")
+	if offset < 0 {
+		t.Fatal("test setup: primary value not found")
+	}
+	hover, ok = a.HoverAtOffset(uri, offset)
+	if !ok || !strings.Contains(hover.Markdown, "Rule name is the provider rule name.") {
+		t.Fatalf("array offset hover = %#v ok=%v", hover, ok)
+	}
+}
+
 func TestAnalyzerRefreshesWorkspaceProviderCRDSchemaFromOpenDocument(t *testing.T) {
 	root := t.TempDir()
 	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
@@ -907,18 +964,30 @@ func TestAnalyzerSurfacesPackageWorkspaceSchemaDuplicateDiagnostics(t *testing.T
 	root := t.TempDir()
 	pkg := filepath.Join(root, "packages", "a")
 	analyzerWriteFile(t, filepath.Join(pkg, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package-a\n")
-	analyzerWriteFile(t, filepath.Join(pkg, "api", "provider-crd-a.yaml"), workspaceProviderCRD("bucketName", "First bucket name."))
-	analyzerWriteFile(t, filepath.Join(pkg, "api", "provider-crd-b.yaml"), workspaceProviderCRD("bucketName", "Second bucket name."))
+	firstCRD := filepath.Join(pkg, "api", "provider-crd-a.yaml")
+	secondCRD := filepath.Join(pkg, "api", "provider-crd-b.yaml")
+	analyzerWriteFile(t, firstCRD, workspaceProviderCRD("bucketName", "First bucket name."))
+	analyzerWriteFile(t, secondCRD, workspaceProviderCRD("bucketName", "Second bucket name."))
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
 	if err != nil {
 		t.Fatalf("new analyzer: %v", err)
 	}
-	uri := "file://" + filepath.Join(pkg, "api", "bucket-instance.yaml")
-	a.OpenDocument(uri, "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\n")
+	bucketURI := "file://" + filepath.Join(pkg, "api", "bucket-instance.yaml")
+	a.OpenDocument(bucketURI, "apiVersion: s3.aws.upbound.io/v1beta1\nkind: Bucket\n")
+	crdURI := "file://" + secondCRD
+	a.OpenDocument(crdURI, workspaceProviderCRD("bucketName", "Second bucket name."))
 
-	diagnostics := a.Diagnostics(uri)
+	if diagnostics := a.Diagnostics(bucketURI); containsDiagnosticMessage(diagnostics, "workspace schema conflicts with another workspace schema") {
+		t.Fatalf("bucket diagnostics = %#v, want no source CRD warning", diagnostics)
+	}
+	diagnostics := a.Diagnostics(crdURI)
 	if !containsDiagnosticMessage(diagnostics, "workspace schema conflicts with another workspace schema") {
 		t.Fatalf("diagnostics = %#v, want workspace schema conflict warning", diagnostics)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Message == "workspace schema conflicts with another workspace schema" && diagnostic.URI != crdURI {
+			t.Fatalf("duplicate diagnostic URI = %q, want %q", diagnostic.URI, crdURI)
+		}
 	}
 }
 
@@ -964,6 +1033,33 @@ func TestAnalyzerLoadsUnsavedNewWorkspaceProviderCRDSchema(t *testing.T) {
 	a.OpenDocument(crdURI, workspaceProviderCRD("unsavedName", "Unsaved document bucket name."))
 
 	assertBucketCompletionDoc(t, a.Completion(resourceURI, "spec.forProvider"), "unsavedName", "Unsaved document bucket name.")
+}
+
+func TestAnalyzerSurfacesMalformedWorkspaceProviderCRDDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	crdURI := "file://" + filepath.Join(root, "api", "provider-crd.yaml")
+	a.OpenDocument(crdURI, "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec:\n  group: [unterminated\n")
+
+	diagnostics := a.Diagnostics(crdURI)
+	if !containsDiagnosticSourceMessage(diagnostics, "schema", "parse workspace schema source") {
+		t.Fatalf("diagnostics = %#v, want schema parse diagnostic", diagnostics)
+	}
+
+	a.ChangeDocument(crdURI, "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec:\n  group: [still-unterminated\n")
+	diagnostics = a.Diagnostics(crdURI)
+	if !containsDiagnosticSourceMessage(diagnostics, "schema", "parse workspace schema source") {
+		t.Fatalf("diagnostics after change = %#v, want schema parse diagnostic", diagnostics)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Source == "schema" && strings.Contains(diagnostic.Message, "parse workspace schema source") && diagnostic.URI != crdURI {
+			t.Fatalf("malformed diagnostic URI = %q, want %q", diagnostic.URI, crdURI)
+		}
+	}
 }
 
 func TestAnalyzerUnknownProviderDoesNotInventFields(t *testing.T) {
@@ -1409,6 +1505,42 @@ spec:
 `
 }
 
+func workspaceProviderCRDWithArray(description string) string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: buckets.s3.aws.upbound.io
+spec:
+  group: s3.aws.upbound.io
+  names:
+    kind: Bucket
+    plural: buckets
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                forProvider:
+                  type: object
+                  properties:
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            description: ` + description + `
+`
+}
+
 func assertBucketCompletionDoc(t *testing.T, completion Completion, label, doc string) {
 	t.Helper()
 	item, ok := completionItemByLabel(completion.Items, label)
@@ -1423,6 +1555,15 @@ func assertBucketCompletionDoc(t *testing.T, completion Completion, label, doc s
 func containsDiagnosticMessage(diagnostics []Diagnostic, message string) bool {
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
+func containsDiagnosticSourceMessage(diagnostics []Diagnostic, source, messageSubstring string) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Source == source && strings.Contains(diagnostic.Message, messageSubstring) {
 			return true
 		}
 	}
