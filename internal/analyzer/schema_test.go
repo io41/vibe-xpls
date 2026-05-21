@@ -110,3 +110,128 @@ func TestFieldDocumentationMarkdown(t *testing.T) {
 		t.Fatalf("documentation = %q, want %q", got, want)
 	}
 }
+
+func TestSchemaIndexCopiesFieldDocMetadataOnAdd(t *testing.T) {
+	idx := NewSchemaIndex()
+	release := CrossplaneRelease{Tag: "v2.2.1"}
+	def := json.RawMessage(`"original"`)
+	enum := []string{"original"}
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: release,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
+		Fields: map[string]FieldDoc{
+			"spec.mode": {
+				Path:    "spec.mode",
+				Default: &def,
+				Enum:    enum,
+			},
+		},
+		Provenance: SchemaProvenance{Owner: SchemaOwnerCore, Source: SchemaSourceGeneratedBuiltIn},
+	})
+	enum[0] = "mutated"
+	def = json.RawMessage(`"mutated"`)
+
+	doc, ok := idx.FieldDocumentationForRelease(release, "apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected field documentation")
+	}
+	if doc.Enum[0] != "original" {
+		t.Fatalf("enum = %q, want original", doc.Enum[0])
+	}
+	if got := string(*doc.Default); got != `"original"` {
+		t.Fatalf("default = %q, want %q", got, `"original"`)
+	}
+}
+
+func TestSchemaIndexReturnsCopiedFieldDocMetadata(t *testing.T) {
+	idx := NewSchemaIndex()
+	release := CrossplaneRelease{Tag: "v2.2.1"}
+	def := json.RawMessage(`"original"`)
+	idx.AddGeneratedBuiltIn(Schema{
+		Release: release,
+		GVK:     SourceGVK{APIVersion: "apiextensions.crossplane.io/v1", Kind: "Composition"},
+		Fields: map[string]FieldDoc{
+			"spec.mode": {
+				Path:    "spec.mode",
+				Default: &def,
+				Enum:    []string{"original"},
+			},
+		},
+		Provenance: SchemaProvenance{Owner: SchemaOwnerCore, Source: SchemaSourceGeneratedBuiltIn},
+	})
+
+	doc, ok := idx.FieldDocumentationForRelease(release, "apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected release field documentation")
+	}
+	doc.Enum[0] = "mutated"
+	*doc.Default = json.RawMessage(`"mutated"`)
+
+	again, ok := idx.FieldDocumentationForRelease(release, "apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected release field documentation")
+	}
+	if again.Enum[0] != "original" {
+		t.Fatalf("release enum = %q, want original", again.Enum[0])
+	}
+	if got := string(*again.Default); got != `"original"` {
+		t.Fatalf("release default = %q, want %q", got, `"original"`)
+	}
+
+	fields := idx.FieldsForRelease(release, "apiextensions.crossplane.io/v1", "Composition")
+	if len(fields) != 1 {
+		t.Fatalf("release fields = %d, want 1", len(fields))
+	}
+	fields[0].Enum[0] = "mutated again"
+	*fields[0].Default = json.RawMessage(`"mutated again"`)
+
+	again, ok = idx.FieldDocumentationForRelease(release, "apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected release field documentation")
+	}
+	if again.Enum[0] != "original" {
+		t.Fatalf("release enum after FieldsForRelease mutation = %q, want original", again.Enum[0])
+	}
+	if got := string(*again.Default); got != `"original"` {
+		t.Fatalf("release default after FieldsForRelease mutation = %q, want %q", got, `"original"`)
+	}
+
+	legacyDoc, ok := idx.FieldDocumentation("apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected legacy field documentation")
+	}
+	legacyDoc.Enum[0] = "legacy mutated"
+	*legacyDoc.Default = json.RawMessage(`"legacy mutated"`)
+
+	legacyFields := idx.Fields("apiextensions.crossplane.io/v1", "Composition")
+	if len(legacyFields) != 1 {
+		t.Fatalf("legacy fields = %d, want 1", len(legacyFields))
+	}
+	legacyFields[0].Enum[0] = "legacy mutated again"
+	*legacyFields[0].Default = json.RawMessage(`"legacy mutated again"`)
+
+	again, ok = idx.FieldDocumentationForRelease(release, "apiextensions.crossplane.io/v1", "Composition", "spec.mode")
+	if !ok {
+		t.Fatal("expected release field documentation")
+	}
+	if again.Enum[0] != "original" {
+		t.Fatalf("enum after legacy mutation = %q, want original", again.Enum[0])
+	}
+	if got := string(*again.Default); got != `"original"` {
+		t.Fatalf("default after legacy mutation = %q, want %q", got, `"original"`)
+	}
+}
+
+func TestFieldDocumentationMarkdownOmitsWhitespaceOnlyFacts(t *testing.T) {
+	field := FieldDoc{
+		Description: "Readable description.",
+		Type:        " \t\n",
+		Deprecated:  " \n\t",
+	}
+
+	got := fieldCompletionDocumentation(field)
+	want := "Readable description."
+	if got != want {
+		t.Fatalf("documentation = %q, want %q", got, want)
+	}
+}

@@ -12,8 +12,8 @@ func fieldCompletionDocumentation(field FieldDoc) string {
 		sections = append(sections, desc)
 	}
 	var facts []string
-	if field.Type != "" {
-		facts = append(facts, "_Type: "+field.Type+"_")
+	if fieldType := strings.TrimSpace(field.Type); fieldType != "" {
+		facts = append(facts, "_Type: "+fieldType+"_")
 	}
 	if field.Required {
 		facts = append(facts, "_Required_")
@@ -24,8 +24,8 @@ func fieldCompletionDocumentation(field FieldDoc) string {
 	if len(field.Enum) != 0 {
 		facts = append(facts, "_Allowed: "+strings.Join(field.Enum, ", ")+"_")
 	}
-	if field.Deprecated != "" {
-		facts = append(facts, "_Deprecated: "+strings.TrimSpace(field.Deprecated)+"_")
+	if deprecated := strings.TrimSpace(field.Deprecated); deprecated != "" {
+		facts = append(facts, "_Deprecated: "+deprecated+"_")
 	}
 	if len(facts) != 0 {
 		sections = append(sections, strings.Join(facts, "\n"))

@@ -139,7 +139,7 @@ func (idx *SchemaIndex) FieldDocumentation(apiVersion, kind, fieldPath string) (
 		return FieldDoc{}, false
 	}
 	doc, ok := schema.Fields[fieldPath]
-	return doc, ok
+	return copyFieldDoc(doc), ok
 }
 
 func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, apiVersion, kind, fieldPath string) (FieldDoc, bool) {
@@ -148,7 +148,7 @@ func (idx *SchemaIndex) FieldDocumentationForRelease(release CrossplaneRelease, 
 		return FieldDoc{}, false
 	}
 	doc, ok := schema.Fields[fieldPath]
-	return doc, ok
+	return copyFieldDoc(doc), ok
 }
 
 func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
@@ -158,7 +158,7 @@ func (idx *SchemaIndex) Fields(apiVersion, kind string) []FieldDoc {
 	}
 	fields := make([]FieldDoc, 0, len(schema.Fields))
 	for _, doc := range schema.Fields {
-		fields = append(fields, doc)
+		fields = append(fields, copyFieldDoc(doc))
 	}
 	sort.Slice(fields, func(i, j int) bool {
 		return fields[i].Path < fields[j].Path
@@ -173,7 +173,7 @@ func (idx *SchemaIndex) FieldsForRelease(release CrossplaneRelease, apiVersion, 
 	}
 	fields := make([]FieldDoc, 0, len(schema.Fields))
 	for _, doc := range schema.Fields {
-		fields = append(fields, doc)
+		fields = append(fields, copyFieldDoc(doc))
 	}
 	sort.Slice(fields, func(i, j int) bool {
 		return fields[i].Path < fields[j].Path
@@ -194,8 +194,19 @@ func (idx *SchemaIndex) addBuiltInSchema(schema Schema) {
 func copySchema(schema Schema) Schema {
 	fields := make(map[string]FieldDoc, len(schema.Fields))
 	for path, doc := range schema.Fields {
-		fields[path] = doc
+		fields[path] = copyFieldDoc(doc)
 	}
 	schema.Fields = fields
 	return schema
+}
+
+func copyFieldDoc(doc FieldDoc) FieldDoc {
+	if doc.Default != nil {
+		raw := append(json.RawMessage(nil), (*doc.Default)...)
+		doc.Default = &raw
+	}
+	if doc.Enum != nil {
+		doc.Enum = append([]string(nil), doc.Enum...)
+	}
+	return doc
 }
