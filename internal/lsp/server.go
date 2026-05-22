@@ -142,12 +142,12 @@ type completionList struct {
 }
 
 type completionItem struct {
-	Label          string    `json:"label"`
-	Kind           int       `json:"kind"`
-	Documentation  string    `json:"documentation,omitempty"`
-	SortText       string    `json:"sortText,omitempty"`
-	TextEdit       *textEdit `json:"textEdit,omitempty"`
-	InsertTextMode int       `json:"insertTextMode,omitempty"`
+	Label          string         `json:"label"`
+	Kind           int            `json:"kind"`
+	Documentation  *markupContent `json:"documentation,omitempty"`
+	SortText       string         `json:"sortText,omitempty"`
+	TextEdit       *textEdit      `json:"textEdit,omitempty"`
+	InsertTextMode int            `json:"insertTextMode,omitempty"`
 }
 
 type textEdit struct {
@@ -337,10 +337,12 @@ func (s *Server) handleCompletion(msg Message) error {
 	items := make([]completionItem, 0, len(completion.Items))
 	for _, item := range completion.Items {
 		out := completionItem{
-			Label:         item.Label,
-			Kind:          completionItemKindProperty,
-			Documentation: item.Documentation,
-			SortText:      item.SortText,
+			Label:    item.Label,
+			Kind:     completionItemKindProperty,
+			SortText: item.SortText,
+		}
+		if item.Documentation != "" {
+			out.Documentation = &markupContent{Kind: "markdown", Value: item.Documentation}
 		}
 		if item.TextEdit != nil {
 			out.TextEdit = &textEdit{

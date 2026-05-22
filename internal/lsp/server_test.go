@@ -308,8 +308,14 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 	}
 	item := completionItemByLabelForTest(t, items, "apiVersion")
 	wantDocumentation := "API version of the Composition resource.\n\n_Type: string_"
-	if item["documentation"] != wantDocumentation {
-		t.Fatalf("apiVersion documentation = %#v, want %#v", item["documentation"], wantDocumentation)
+	documentation := asMap(t, item["documentation"])
+	if documentation["kind"] != "markdown" || documentation["value"] != wantDocumentation {
+		t.Fatalf("apiVersion documentation = %#v, want markdown %q", item["documentation"], wantDocumentation)
+	}
+	metadata := completionItemByLabelForTest(t, items, "metadata")
+	metadataDocumentation := asMap(t, metadata["documentation"])
+	if metadataDocumentation["kind"] != "markdown" || metadataDocumentation["value"] != "_Type: object_" {
+		t.Fatalf("metadata documentation = %#v, want markdown type documentation", metadata["documentation"])
 	}
 }
 
