@@ -161,6 +161,108 @@ func TestAnalyzerCompletionUsesArrayItemSchemaPath(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetCompletesFirstArrayItemKey(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-array-item-key.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - f"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "functionRef")
+	if !ok {
+		t.Fatalf("completion missing functionRef: %#v", completion.Items)
+	}
+	if containsCompletion(completion.Items, "step") {
+		t.Fatalf("prefix-filtered completion included step: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("functionRef completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "functionRef:" {
+		t.Fatalf("new text = %q, want functionRef:", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: strings.LastIndex(text, "f"), End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetCompletesBlankArrayItemKey(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-array-item-blank-key.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - "
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	for _, label := range []string{"functionRef", "step", "input", "credentials"} {
+		if !containsCompletion(completion.Items, label) {
+			t.Fatalf("completion missing %s: %#v", label, completion.Items)
+		}
+	}
+	item, ok := completionItemByLabel(completion.Items, "functionRef")
+	if !ok {
+		t.Fatalf("completion missing functionRef: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("functionRef completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "functionRef:" {
+		t.Fatalf("new text = %q, want functionRef:", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: len(text), End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetCompletesArrayItemKeyAfterBareDash(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-array-item-dash-key.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    -"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "functionRef")
+	if !ok {
+		t.Fatalf("completion missing functionRef: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("functionRef completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != " functionRef:" {
+		t.Fatalf("new text = %q, want leading space before functionRef", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: len(text), End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDoesNotFallbackFromArrayItemToParentObject(t *testing.T) {
+	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "completion-array-item-no-parent-fallback.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - m"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if containsCompletion(completion.Items, "mode") {
+		t.Fatalf("array item completion fell back to spec.mode: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerCompletionSuppressesRootStatusOnly(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})

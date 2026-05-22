@@ -82,8 +82,16 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 	}
 	completion := Completion{}
-	for i, parentPath := range completionParentPaths(context.parentPath) {
-		if parentPath != "" && !parsed.IsStablePath(parentPath) {
+	parentPaths := completionParentPaths(context.schemaParentPath)
+	if !context.allowParentPaths && len(parentPaths) > 1 {
+		parentPaths = parentPaths[:1]
+	}
+	for i, parentPath := range parentPaths {
+		stabilityPath := parentPath
+		if i == 0 {
+			stabilityPath = context.parentPath
+		}
+		if stabilityPath != "" && !parsed.IsStablePath(stabilityPath) {
 			continue
 		}
 		var candidate Completion
@@ -106,7 +114,7 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	for i := range completion.Items {
 		completion.Items[i].TextEdit = &CompletionTextEdit{
 			Replace: context.replace,
-			NewText: completionItemIndent(completion.Items[i]) + completion.Items[i].Label + ":",
+			NewText: completionTextEditNewText(context, completion.Items[i]),
 		}
 	}
 	return completion
@@ -147,11 +155,15 @@ func filterExistingCompletionPaths(completion Completion, parsed YAMLDocument, d
 }
 
 type completionContext struct {
-	parentPath     string
-	prefix         string
-	rootOccurrence PathOccurrence
-	replace        Span
-	indent         string
+	parentPath       string
+	schemaParentPath string
+	prefix           string
+	rootOccurrence   PathOccurrence
+	replace          Span
+	indent           string
+	newTextPrefix    string
+	useNewTextPrefix bool
+	allowParentPaths bool
 }
 
 func completionContextAtOffset(parsed YAMLDocument, offset int) (completionContext, SuppressionReason, bool) {
@@ -178,10 +190,21 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 		return completionContext{}, "", false
 	}
 	rawPrefix := text[indentEnd:offset]
-	if strings.HasPrefix(strings.TrimLeft(rawPrefix, " \t"), "-") {
+	sequenceContext, sequenceOK := sequenceItemKeyCompletionContext(text, indentEnd, offset)
+	keyCandidate := rawPrefix
+	prefix := strings.TrimSpace(rawPrefix)
+	replace := Span{Start: lineStart, End: offset}
+	newTextPrefix := ""
+	useNewTextPrefix := false
+	if sequenceOK {
+		keyCandidate = text[sequenceContext.replace.Start:sequenceContext.replace.End]
+		prefix = sequenceContext.prefix
+		replace = sequenceContext.replace
+		newTextPrefix = sequenceContext.newTextPrefix
+		useNewTextPrefix = sequenceContext.useNewTextPrefix
+	} else if strings.HasPrefix(strings.TrimLeft(rawPrefix, " \t"), "-") {
 		return completionContext{}, "", false
 	}
-	keyCandidate := rawPrefix
 	if offsetInTemplateActionForCompletion(parsed, offset) {
 		return completionContext{}, SuppressionUnstableTemplatePath, false
 	}
@@ -191,7 +214,6 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 	} else if strings.TrimSpace(afterCursor) != "" {
 		return completionContext{}, "", false
 	}
-	prefix := strings.TrimSpace(rawPrefix)
 	keyCandidate = strings.TrimSpace(keyCandidate)
 	if !isBareCompletionKeyPrefix(prefix) || !isBareCompletionKeyPrefix(keyCandidate) {
 		return completionContext{}, "", false
@@ -201,13 +223,75 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 	if !ok {
 		return completionContext{}, "", false
 	}
+	schemaParentPath := parentPath
+	if sequenceOK {
+		schemaParentPath = arrayItemSchemaParentPath(parentPath)
+	}
 	return completionContext{
-		parentPath:     parentPath,
-		prefix:         prefix,
-		rootOccurrence: rootOccurrence,
-		replace:        Span{Start: lineStart, End: offset},
-		indent:         text[lineStart:indentEnd],
+		parentPath:       parentPath,
+		schemaParentPath: schemaParentPath,
+		prefix:           prefix,
+		rootOccurrence:   rootOccurrence,
+		replace:          replace,
+		indent:           text[lineStart:indentEnd],
+		newTextPrefix:    newTextPrefix,
+		useNewTextPrefix: useNewTextPrefix,
+		allowParentPaths: !sequenceOK,
 	}, "", true
+}
+
+type sequenceItemKeyContext struct {
+	prefix           string
+	replace          Span
+	newTextPrefix    string
+	useNewTextPrefix bool
+}
+
+func sequenceItemKeyCompletionContext(text string, indentEnd, offset int) (sequenceItemKeyContext, bool) {
+	if indentEnd >= offset || text[indentEnd] != '-' {
+		return sequenceItemKeyContext{}, false
+	}
+	keyStart := indentEnd + 1
+	newTextPrefix := " "
+	if keyStart < offset {
+		switch text[keyStart] {
+		case ' ':
+			keyStart++
+			newTextPrefix = ""
+		case '\t':
+			return sequenceItemKeyContext{}, false
+		default:
+			return sequenceItemKeyContext{}, false
+		}
+	}
+	rawPrefix := text[keyStart:offset]
+	if strings.TrimSpace(rawPrefix) != rawPrefix {
+		return sequenceItemKeyContext{}, false
+	}
+	prefix := strings.TrimSpace(rawPrefix)
+	if !isBareCompletionKeyPrefix(prefix) || !isBareCompletionKeyPrefix(rawPrefix) {
+		return sequenceItemKeyContext{}, false
+	}
+	return sequenceItemKeyContext{
+		prefix:           prefix,
+		replace:          Span{Start: keyStart, End: offset},
+		newTextPrefix:    newTextPrefix,
+		useNewTextPrefix: true,
+	}, true
+}
+
+func arrayItemSchemaParentPath(parentPath string) string {
+	if parentPath == "" {
+		return ""
+	}
+	return parentPath + "[0]"
+}
+
+func completionTextEditNewText(context completionContext, item CompletionItem) string {
+	if context.useNewTextPrefix {
+		return context.newTextPrefix + item.Label + ":"
+	}
+	return completionItemIndent(item) + item.Label + ":"
 }
 
 func rootContextForCompletionParent(parsed YAMLDocument, parentPath string) (rootContext, bool) {
