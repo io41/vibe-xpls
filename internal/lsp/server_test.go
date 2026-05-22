@@ -488,6 +488,42 @@ func TestCompletionTextEditCorrectsIndentedRootKey(t *testing.T) {
 	}
 }
 
+func TestCompletionTextEditCompletesFirstArrayItemKey(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-array-item-edit.yaml"))
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pipeline:\n    - f"
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{
+			"rootUri":      fileURI(root),
+			"capabilities": zedCompletionCapabilities(),
+		}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "functionRef")
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "functionRef:" {
+		t.Fatalf("newText = %#v, want functionRef:", edit["newText"])
+	}
+	if item["insertTextMode"] != float64(1) {
+		t.Fatalf("insertTextMode = %#v, want asIs", item["insertTextMode"])
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(4) || start["character"] != float64(6) || end["line"] != float64(4) || end["character"] != float64(7) {
+		t.Fatalf("textEdit range = %#v, want line 4 char 6..7", rng)
+	}
+}
+
 func TestCompletionDoesNotOfferExistingRootKeyFromNestedFallback(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "completion-nested-fallback.yaml"))
