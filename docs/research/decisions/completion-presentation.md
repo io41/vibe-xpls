@@ -11,7 +11,8 @@ Use LSP completion fields as follows:
 - `kind`: the editor-rendered category or icon. Use this for generic category
   semantics such as field/property.
 - `documentation`: explanatory prose, schema descriptions, and other field
-  documentation.
+  documentation. Documentation content may contain Markdown; the LSP adapter
+  must send it as Markdown `MarkupContent`.
 - `detail`: generally omitted. Use it only when a short, single-line,
   item-specific value meaningfully improves selection beyond `label`, `kind`,
   and `documentation`.
@@ -34,7 +35,8 @@ selection.
 For current Crossplane YAML field completions:
 
 - Emit `kind: 10` (`CompletionItemKind.Property`).
-- Preserve analyzer field descriptions in `documentation`.
+- Preserve analyzer field descriptions in `documentation` and send them as
+  Markdown `MarkupContent` when non-empty.
 - Omit `detail`.
 
 Future schema-derived completions may add `detail` only when it is specific and

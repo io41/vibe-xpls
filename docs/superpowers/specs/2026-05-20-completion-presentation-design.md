@@ -10,7 +10,8 @@ This slice is limited to LSP completion item metadata for fields the analyzer al
 - Keep `textEdit` and `insertTextMode` behavior unchanged.
 - Add `kind: 10`, the LSP wire value for `CompletionItemKind.Property`, for every emitted completion item.
 - Omit generic `detail` values.
-- Preserve the existing full `documentation` value as the same plain string wire shape used today.
+- Preserve the existing full documentation content and send documented fields as
+  Markdown `MarkupContent`.
 
 ## Non-Goals
 
@@ -30,7 +31,8 @@ Implementation should prefer keeping presentation-only metadata in `internal/lsp
 
 - `completionItem.kind` uses the LSP `CompletionItemKind.Property` wire value, `10`.
 - `completionItem.detail` is omitted unless a future slice adds short, item-specific metadata.
-- `completionItem.documentation` continues to carry the analyzer-provided documentation as a plain string.
+- `completionItem.documentation` carries analyzer-provided Markdown
+  documentation as LSP `MarkupContent` with `kind: "markdown"`.
 
 The implementation should not derive `detail` from schema paths or field documentation in this slice. Generic category text belongs in `kind`, and explanatory prose belongs in `documentation`.
 
@@ -53,7 +55,8 @@ Add focused LSP tests that prove existing completion candidates now include pres
 
 - Every returned completion item has `kind` set to JSON number `10`.
 - Every returned completion item omits generic `detail`.
-- Existing `documentation` is still present for a documented field.
+- Existing `documentation` is still present as Markdown `MarkupContent` for a
+  documented field.
 - Existing completion labels remain unchanged for the tested request.
 - Existing `textEdit` and `insertTextMode` assertions continue to pass.
 
@@ -64,6 +67,7 @@ No tests should assert new Crossplane fields or new field descriptions in this s
 - Current completion candidates are unchanged.
 - LSP completion items expose `kind: 10` for every emitted item.
 - LSP completion items omit generic `detail`.
-- Existing documentation remains available as documentation, not overloaded into detail.
+- Existing documentation remains available as Markdown documentation, not
+  overloaded into detail.
 - The slice has no manual Crossplane field catalog additions.
 - `go test ./...` passes.

@@ -54,10 +54,7 @@ Completion items with empty documentation must continue to omit the
 `documentation` field.
 
 Hover already sends Markdown `MarkupContent`; this change aligns completion
-documentation with hover semantics. It supersedes the older completion
-presentation design statement that completion documentation should remain a
-plain string. The completion presentation decision must be updated so future
-work does not reintroduce plain-string Markdown.
+documentation with hover semantics.
 
 ## Array-Item Key Completion
 
@@ -175,18 +172,6 @@ Manual Zed validation should confirm:
   indentation.
 - Completing `name` under an existing `functionRef:` still works.
 - v1.20 and v2 release-specific completion sets remain unchanged.
-
-## Documentation Updates
-
-Update these docs as part of the implementation slice:
-
-- `PROJECT_ROADMAP.md`: keep this cleanup listed under `Current` until manual
-  Zed validation passes.
-- `docs/research/decisions/completion-presentation.md`: clarify that
-  documentation content is Markdown and should be sent as Markdown
-  `MarkupContent` by the LSP adapter.
-- `docs/superpowers/specs/2026-05-20-completion-presentation-design.md`:
-  supersede the plain-string completion documentation requirement.
 
 ## Acceptance Criteria
 
