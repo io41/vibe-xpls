@@ -156,8 +156,18 @@ func TestAnalyzerCompletionUsesArrayItemSchemaPath(t *testing.T) {
 	a.OpenDocument(uri, text)
 
 	completion := a.CompletionAtOffset(uri, len(text))
-	if !containsCompletion(completion.Items, "name") {
+	item, ok := completionItemByLabel(completion.Items, "name")
+	if !ok {
 		t.Fatalf("array item completion missing name: %#v", completion.Items)
+	}
+	if item.TextEdit == nil {
+		t.Fatalf("name completion missing text edit: %#v", item)
+	}
+	if item.TextEdit.NewText != "        name:" {
+		t.Fatalf("new text = %q, want eight-space indented name:", item.TextEdit.NewText)
+	}
+	if got, want := item.TextEdit.Replace, (Span{Start: strings.LastIndex(text, "        n"), End: len(text)}); got != want {
+		t.Fatalf("replace span = %#v, want %#v", got, want)
 	}
 }
 

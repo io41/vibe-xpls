@@ -86,6 +86,7 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	if !context.allowParentPaths && len(parentPaths) > 1 {
 		parentPaths = parentPaths[:1]
 	}
+	selectedParentPath := ""
 	for i, parentPath := range parentPaths {
 		stabilityPath := parentPath
 		if i == 0 {
@@ -108,13 +109,14 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 		completion = filterCompletion(candidate, context.prefix)
 		if len(completion.Items) != 0 {
+			selectedParentPath = parentPath
 			break
 		}
 	}
 	for i := range completion.Items {
 		completion.Items[i].TextEdit = &CompletionTextEdit{
 			Replace: context.replace,
-			NewText: completionTextEditNewText(context, completion.Items[i]),
+			NewText: completionTextEditNewText(context, selectedParentPath, completion.Items[i]),
 		}
 	}
 	return completion
@@ -287,9 +289,12 @@ func arrayItemSchemaParentPath(parentPath string) string {
 	return parentPath + "[0]"
 }
 
-func completionTextEditNewText(context completionContext, item CompletionItem) string {
+func completionTextEditNewText(context completionContext, parentPath string, item CompletionItem) string {
 	if context.useNewTextPrefix {
 		return context.newTextPrefix + item.Label + ":"
+	}
+	if parentPath != "" && parentPath == context.schemaParentPath {
+		return context.indent + item.Label + ":"
 	}
 	return completionItemIndent(item) + item.Label + ":"
 }
