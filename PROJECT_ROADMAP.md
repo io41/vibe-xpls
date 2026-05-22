@@ -57,7 +57,9 @@ schema tests, runs the full Go test suite, and builds both CLIs into
 
 - Manual Zed validation of the generated completion foundation.
 - Tightening completion UX issues found through real editor use, including
-  parent-key documentation gaps for generated compatibility schemas.
+  Markdown rendering for completion documentation, first-key completion in YAML
+  array items, and parent-key documentation gaps for generated compatibility
+  schemas.
 - Keeping schema generation and update flow simple, offline, deterministic, and
   reviewable.
 
