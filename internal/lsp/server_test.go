@@ -319,6 +319,67 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 	}
 }
 
+func TestCompletionItemsOmitEmptyDocumentation(t *testing.T) {
+	root := testRoot(t)
+	uri := fileURI(filepath.Join(root, "api", "completion-empty-doc.yaml"))
+	text := "apiVersion: example.org/v1\nkind: EmptyDoc\n\n"
+
+	var in bytes.Buffer
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	s := NewServer(&in, &out, &errOut)
+	s.newAnalyzer = func(options analyzer.Options) (*analyzer.Analyzer, error) {
+		options.SchemaBundleFS = fstest.MapFS{
+			"schemadata/manifest.json": {Data: []byte(`{
+				"bundleFormatVersion": 1,
+				"generatorVersion": "fixture",
+				"releases": [{
+					"tag": "v1.20.7",
+					"commit": "fixture",
+					"schemas": ["schemas/v1.20.7/empty-doc.json"]
+				}]
+			}`)},
+			"schemadata/schemas/v1.20.7/empty-doc.json": {Data: []byte(`{
+				"apiVersion": "example.org/v1",
+				"fields": [
+					{"path": "undocumented"}
+				],
+				"kind": "EmptyDoc",
+				"provenance": {"owner": "core", "source": "generated-built-in"},
+				"release": "v1.20.7"
+			}`)},
+		}
+		return analyzer.New(options)
+	}
+	for _, frame := range []string{
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": map[string]any{}}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+		notificationFrame(t, "exit", nil),
+	} {
+		if _, err := in.WriteString(frame); err != nil {
+			t.Fatalf("write frame: %v", err)
+		}
+	}
+	if code := s.Run(); code != 0 {
+		t.Fatalf("server exit code = %d stderr=%s stdout=%s", code, errOut.String(), out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("server wrote stderr: %s", errOut.String())
+	}
+
+	completion := resultMap(t, responseForID(t, readMessages(t, out.Bytes()), 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "undocumented")
+	if _, ok := item["documentation"]; ok {
+		t.Fatalf("undocumented documentation = %#v, want omitted for empty docs", item["documentation"])
+	}
+}
+
 func TestHoverAndCompletionUseNegotiatedUTF8Positions(t *testing.T) {
 	root := testRoot(t)
 	uri := fileURI(filepath.Join(root, "api", "utf8.yaml"))
