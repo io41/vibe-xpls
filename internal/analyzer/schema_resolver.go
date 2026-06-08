@@ -106,7 +106,7 @@ func packageCrossplaneVersionRangeFromText(text string) (crossplaneVersionRange,
 }
 
 func parseCrossplaneVersionRange(value string) (crossplaneVersionRange, bool) {
-	parts := strings.Fields(value)
+	parts := normalizeCrossplaneVersionRangeParts(strings.Fields(value))
 	if len(parts) == 0 || len(parts) > 2 {
 		return crossplaneVersionRange{}, false
 	}
@@ -137,13 +137,24 @@ func parseCrossplaneVersionRange(value string) (crossplaneVersionRange, bool) {
 			return crossplaneVersionRange{}, false
 		}
 	}
-	if !versionRange.min.ok || !versionRange.minInclusive {
-		return crossplaneVersionRange{}, false
-	}
-	if len(parts) == 2 && (!versionRange.max.ok || !versionRange.maxExclusive) {
+	if !versionRange.min.ok && !versionRange.max.ok {
 		return crossplaneVersionRange{}, false
 	}
 	return versionRange, true
+}
+
+func normalizeCrossplaneVersionRangeParts(fields []string) []string {
+	parts := make([]string, 0, len(fields))
+	for i := 0; i < len(fields); i++ {
+		field := fields[i]
+		if (field == ">=" || field == "<") && i+1 < len(fields) {
+			parts = append(parts, field+fields[i+1])
+			i++
+			continue
+		}
+		parts = append(parts, field)
+	}
+	return parts
 }
 
 func (r crossplaneVersionRange) includes(release CrossplaneRelease) bool {

@@ -72,6 +72,7 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 	legacyWorkspaceSchema := a.schemas.HasWorkspaceSchema(gvk)
 	schema, scopedWorkspaceSchema := a.workspaceSchemaForURI(uri, gvk)
 	var resolution schemaResolution
+	var fields []FieldDoc
 	if !legacyWorkspaceSchema && !scopedWorkspaceSchema {
 		if !a.schemas.bundleStatus.OK {
 			return Completion{Reason: SuppressionBundleDisabled}
@@ -81,9 +82,20 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 			return Completion{Reason: resolution.Reason}
 		}
 	}
+	switch {
+	case legacyWorkspaceSchema:
+		fields = a.schemas.Fields(apiVersion, kind)
+	case scopedWorkspaceSchema:
+		fields = fieldsFromSchema(schema)
+	default:
+		fields = a.schemas.FieldsForRelease(resolution.Release, apiVersion, kind)
+	}
+	if completionContextIsScalarDescendant(context) {
+		return Completion{}
+	}
 	completion := Completion{}
 	parentPaths := completionParentPaths(context.schemaParentPath)
-	if !context.allowParentPaths && len(parentPaths) > 1 {
+	if (!context.allowParentPaths || completionContextBlocksParentFallback(context, fields)) && len(parentPaths) > 1 {
 		parentPaths = parentPaths[:1]
 	}
 	selectedParentPath := ""
@@ -95,15 +107,8 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		if stabilityPath != "" && !parsed.IsStablePath(stabilityPath) {
 			continue
 		}
-		var candidate Completion
 		schemaParentPath := schemaPathFromParsedPath(parentPath)
-		if legacyWorkspaceSchema {
-			candidate = completionFromWorkspaceSchema(a.schemas, apiVersion, kind, schemaParentPath)
-		} else if scopedWorkspaceSchema {
-			candidate = completionFromFields(fieldsFromSchema(schema), schemaParentPath)
-		} else {
-			candidate = completionFromSchema(a.schemas, resolution.Release, apiVersion, kind, schemaParentPath)
-		}
+		candidate := completionFromFields(fields, schemaParentPath)
 		if i > 0 {
 			candidate = filterExistingCompletionPaths(candidate, parsed, context.rootOccurrence.DocumentIndex)
 		}
@@ -120,6 +125,40 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		}
 	}
 	return completion
+}
+
+func completionContextIsScalarDescendant(context completionContext) bool {
+	if context.parentPath == "" ||
+		context.rootOccurrence.Path != context.parentPath ||
+		!context.rootOccurrence.ValueOK ||
+		!context.rootOccurrence.ValueSpanOK {
+		return false
+	}
+	return context.rootOccurrence.ValueSpan.Start < context.lineStart
+}
+
+func completionContextBlocksParentFallback(context completionContext, fields []FieldDoc) bool {
+	if context.schemaParentPath == "" {
+		return false
+	}
+	if strings.Contains(context.schemaParentPath, "[") {
+		return true
+	}
+	return schemaPathIsArrayField(fields, context.schemaParentPath)
+}
+
+func schemaPathIsArrayField(fields []FieldDoc, path string) bool {
+	path = schemaPathFromParsedPath(path)
+	if path == "" {
+		return false
+	}
+	arrayPath := path + "[]"
+	for _, field := range fields {
+		if field.Path == arrayPath {
+			return true
+		}
+	}
+	return false
 }
 
 func malformedYAMLContextAtOffset(parsed YAMLDocument, offset int) bool {
@@ -163,6 +202,7 @@ type completionContext struct {
 	rootOccurrence   PathOccurrence
 	replace          Span
 	indent           string
+	lineStart        int
 	newTextPrefix    string
 	useNewTextPrefix bool
 	allowParentPaths bool
@@ -236,6 +276,7 @@ func completionContextAtOffset(parsed YAMLDocument, offset int) (completionConte
 		rootOccurrence:   rootOccurrence,
 		replace:          replace,
 		indent:           text[lineStart:indentEnd],
+		lineStart:        lineStart,
 		newTextPrefix:    newTextPrefix,
 		useNewTextPrefix: useNewTextPrefix,
 		allowParentPaths: !sequenceOK,

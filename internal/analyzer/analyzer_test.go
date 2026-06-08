@@ -273,6 +273,98 @@ func TestAnalyzerCompletionAtOffsetDoesNotFallbackFromArrayItemToParentObject(t 
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetDoesNotFallbackFromPipelineArrayToSpecObject(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \">=v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	prefix := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nmetadata:\n  name: root-composition\n"
+	tests := []struct {
+		name      string
+		spec      string
+		wantWrite bool
+	}{
+		{
+			name: "spec child",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"  w",
+			wantWrite: true,
+		},
+		{
+			name: "array value position",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"    w",
+		},
+		{
+			name: "array item sibling",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"      w",
+		},
+		{
+			name: "nested object child",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"        w",
+		},
+		{
+			name: "scalar descendant",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"          w",
+		},
+		{
+			name: "array item key prefix without match",
+			spec: "spec:\n" +
+				"  compositeTypeRef: foo\n" +
+				"  mode: Pipline\n" +
+				"  pipeline:\n" +
+				"    - functionRef:\n" +
+				"        name: bar\n" +
+				"    - w",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text := prefix + tt.spec
+			a.OpenDocument(uri, text)
+			completion := a.CompletionAtOffset(uri, len(text))
+			gotWrite := containsCompletion(completion.Items, "writeConnectionSecretsToNamespace")
+			if gotWrite != tt.wantWrite {
+				t.Fatalf("writeConnectionSecretsToNamespace offered = %v, want %v: %#v", gotWrite, tt.wantWrite, completion.Items)
+			}
+		})
+	}
+}
+
 func TestAnalyzerCompletionSuppressesRootStatusOnly(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -821,6 +913,25 @@ func TestAnalyzerCompletionUsesPackageCrossplaneVersionConstraint(t *testing.T) 
 	}
 }
 
+func TestAnalyzerCompletionUsesUpperBoundPackageCrossplaneVersionConstraint(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "crossplane.yaml"), []byte("apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nspec:\n  crossplane:\n    version: \"< v2.0.0\"\n"), 0o600); err != nil {
+		t.Fatalf("write package metadata: %v", err)
+	}
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "composition.yaml")
+	text := "apiVersion: apiextensions.crossplane.io/v1\nkind: Composition\nspec:\n  pa"
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "patchSets") {
+		t.Fatalf("upper-bound v1 package should offer patchSets when present in v1 schema: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerCompletionUsesOpenPackageMarkerVersion(t *testing.T) {
 	root := t.TempDir()
 	markerPath := filepath.Join(root, "crossplane.yaml")
@@ -862,6 +973,21 @@ func TestResolveSchemaReleaseSupportsBoundedRange(t *testing.T) {
 	v1 := CrossplaneRelease{Tag: "v1.20.7"}
 	v2 := CrossplaneRelease{Tag: "v2.2.1"}
 	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, ">=v1.20.0 <v2.0.0", []Schema{
+		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
+		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
+	})
+
+	got := a.resolveSchemaRelease("file://"+filepath.Join(a.workspace.Root, "resource.yaml"), gvk)
+	if !got.OK || got.Release != v1 {
+		t.Fatalf("release = %#v, want %#v", got, v1)
+	}
+}
+
+func TestResolveSchemaReleaseSupportsUpperBoundRange(t *testing.T) {
+	gvk := SourceGVK{APIVersion: "example.io/v1", Kind: "Example"}
+	v1 := CrossplaneRelease{Tag: "v1.20.7"}
+	v2 := CrossplaneRelease{Tag: "v2.2.1"}
+	a := analyzerWithPackageMarkerAndGeneratedSchemas(t, "< v2.0.0", []Schema{
 		{Release: v1, GVK: gvk, Fields: map[string]FieldDoc{"spec.v1": {Path: "spec.v1"}}},
 		{Release: v2, GVK: gvk, Fields: map[string]FieldDoc{"spec.v2": {Path: "spec.v2"}}},
 	})
