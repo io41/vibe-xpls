@@ -230,6 +230,37 @@ spec:
 	}
 }
 
+func TestAnalyzerCompletionSkipsFunctionInputParentPathWhenBundleDisabled(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "function-input-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "TemplateInput", "inline", "Inline template source."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits(), SchemaBundleFS: unsupportedSchemaBundleFS()})
+	if err != nil {
+		t.Fatalf("new analyzer with disabled bundle: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-parent-disabled-bundle.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: TemplateInput
+        spec:
+`
+	a.OpenDocument(uri, text)
+
+	completion := a.Completion(uri, "spec.pipeline[0].input.spec")
+	if containsCompletion(completion.Items, "inline") {
+		t.Fatalf("bundle-disabled completion returned input field: %#v", completion.Items)
+	}
+	if completion.Reason != SuppressionBundleDisabled {
+		t.Fatalf("reason = %q, want %q", completion.Reason, SuppressionBundleDisabled)
+	}
+}
+
 func TestAnalyzerCompletionSkipsAmbiguousFunctionInputSchemaForParentPath(t *testing.T) {
 	root := t.TempDir()
 	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")

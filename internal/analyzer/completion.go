@@ -38,22 +38,33 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if !ok {
 		return Completion{}
 	}
-	if root.apiVersion == "apiextensions.crossplane.io/v1" && root.kind == "Composition" {
-		if completion, ok := a.functionInputCompletionForParentPath(uri, parsed, parentPath); ok {
-			return completion
-		}
-	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
 	schemaParentPath := schemaPathFromParsedPath(parentPath)
+	isComposition := root.apiVersion == "apiextensions.crossplane.io/v1" && root.kind == "Composition"
 	if a.schemas.HasWorkspaceSchema(gvk) {
+		if isComposition {
+			if completion, ok := a.functionInputCompletionForParentPath(uri, parsed, parentPath); ok {
+				return completion
+			}
+		}
 		return completionFromWorkspaceSchema(a.schemas, root.apiVersion, root.kind, schemaParentPath)
 	}
 	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
+		if isComposition {
+			if completion, ok := a.functionInputCompletionForParentPath(uri, parsed, parentPath); ok {
+				return completion
+			}
+		}
 		return completionFromFields(fieldsFromSchema(schema), schemaParentPath)
 	}
 	resolution := a.resolveSchemaRelease(uri, gvk)
 	if !resolution.OK {
 		return Completion{Reason: resolution.Reason}
+	}
+	if isComposition {
+		if completion, ok := a.functionInputCompletionForParentPath(uri, parsed, parentPath); ok {
+			return completion
+		}
 	}
 	return completionFromSchema(a.schemas, resolution.Release, root.apiVersion, root.kind, schemaParentPath)
 }
