@@ -426,8 +426,10 @@ In `internal/analyzer/completion.go`, find this block in `CompletionAtOffset`:
 Replace it with:
 
 ```go
-	if target, ok := a.functionInputCompletionTarget(uri, parsed, context); ok {
-		return completionFromFunctionInputFields(context, target.fields, target.inputChildPath)
+	if apiVersion == "apiextensions.crossplane.io/v1" && kind == "Composition" {
+		if target, ok := a.functionInputCompletionTarget(uri, parsed, context); ok {
+			return completionFromFunctionInputFields(context, target.fields, target.inputChildPath)
+		}
 	}
 	if completionContextIsScalarDescendant(context) {
 		return Completion{}
