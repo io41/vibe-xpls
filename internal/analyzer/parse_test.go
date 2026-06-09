@@ -168,6 +168,80 @@ spec:
 	}
 }
 
+func TestValueForDocumentPathUsesConcretePipelineInputPath(t *testing.T) {
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-a
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputA
+    - functionRef:
+        name: function-b
+      input:
+        apiVersion: fn.example.org/v1beta1
+        kind: InputB
+`
+
+	doc := ParseYAMLDocument(text)
+
+	got, ok := doc.ValueForDocumentPath(0, "spec.pipeline[0].input.apiVersion")
+	if !ok || got != "fn.example.org/v1alpha1" {
+		t.Fatalf("step 0 input apiVersion = %q ok=%v, want fn.example.org/v1alpha1", got, ok)
+	}
+	got, ok = doc.ValueForDocumentPath(0, "spec.pipeline[0].input.kind")
+	if !ok || got != "InputA" {
+		t.Fatalf("step 0 input kind = %q ok=%v, want InputA", got, ok)
+	}
+	got, ok = doc.ValueForDocumentPath(0, "spec.pipeline[1].input.apiVersion")
+	if !ok || got != "fn.example.org/v1beta1" {
+		t.Fatalf("step 1 input apiVersion = %q ok=%v, want fn.example.org/v1beta1", got, ok)
+	}
+	got, ok = doc.ValueForDocumentPath(0, "spec.pipeline[1].input.kind")
+	if !ok || got != "InputB" {
+		t.Fatalf("step 1 input kind = %q ok=%v, want InputB", got, ok)
+	}
+}
+
+func TestValueForDocumentPathUsesLatestDuplicateOccurrence(t *testing.T) {
+	t.Run("latest stable duplicate wins", func(t *testing.T) {
+		text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        apiVersion: fn.example.org/v1beta1
+`
+
+		doc := ParseYAMLDocument(text)
+
+		got, ok := doc.ValueForDocumentPath(0, "spec.pipeline[0].input.apiVersion")
+		if !ok || got != "fn.example.org/v1beta1" {
+			t.Fatalf("input apiVersion = %q ok=%v, want fn.example.org/v1beta1", got, ok)
+		}
+	})
+
+	t.Run("latest unstable duplicate prevents fallback", func(t *testing.T) {
+		text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        apiVersion: {{ .APIVersion }}
+`
+
+		doc := ParseYAMLDocument(text)
+
+		if got, ok := doc.ValueForDocumentPath(0, "spec.pipeline[0].input.apiVersion"); ok {
+			t.Fatalf("input apiVersion = %q ok=true, want no value from latest unstable duplicate", got)
+		}
+	})
+}
+
 func TestMultiDocumentPathAtOffsetUsesOccurrences(t *testing.T) {
 	text := "apiVersion: first.example/v1\nkind: First\n---\napiVersion: second.example/v1\nkind: Second\n"
 

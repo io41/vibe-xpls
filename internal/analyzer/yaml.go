@@ -236,6 +236,24 @@ func (d YAMLDocument) RootValueForOccurrence(occurrence PathOccurrence, path str
 	return best.Value, true
 }
 
+func (d YAMLDocument) ValueForDocumentPath(documentIndex int, path string) (string, bool) {
+	var best PathOccurrence
+	bestOK := false
+	for _, candidate := range d.occurrences {
+		if candidate.DocumentIndex != documentIndex || candidate.Path != path {
+			continue
+		}
+		if !bestOK || candidate.PathSpan.Start > best.PathSpan.Start {
+			best = candidate
+			bestOK = true
+		}
+	}
+	if !bestOK || !best.Stable || !best.ValueOK {
+		return "", false
+	}
+	return best.Value, true
+}
+
 func (d *YAMLDocument) walkNode(node ast.Node, path string, stable bool, documentIndex int, sequenceRegion Span, sequenceRegionOK bool) {
 	switch n := node.(type) {
 	case *ast.MappingNode:
