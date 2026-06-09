@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 type coverageBaseline struct {
@@ -72,9 +74,22 @@ func validateCoverageBaselineUse(baseline coverageBaseline, gaps []observedGap) 
 		if _, ok := matched[entry.key()]; ok {
 			continue
 		}
-		problems = append(problems, coverageProblem{Message: fmt.Sprintf("obsolete baseline entry %s", entry.key())})
+		problems = append(problems, coverageProblem{Message: formatObsoleteBaselineEntry(entry)})
 	}
 	return problems
+}
+
+func formatObsoleteBaselineEntry(entry coverageBaselineEntry) string {
+	return fmt.Sprintf(
+		"obsolete baseline entry release=%s apiVersion=%s kind=%s path=%s category=%s reason=%s note=%s",
+		strconv.Quote(entry.Release),
+		strconv.Quote(entry.APIVersion),
+		strconv.Quote(entry.Kind),
+		strconv.Quote(entry.Path),
+		strconv.Quote(string(entry.Category)),
+		strconv.Quote(entry.Reason),
+		strconv.Quote(entry.Note),
+	)
 }
 
 func (baseline coverageBaseline) matchingEntries(gap observedGap) []coverageBaselineEntry {
@@ -111,10 +126,28 @@ func formatCoverageProblems(problems []coverageProblem) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("schema coverage ratchet failed:")
-	for _, problem := range problems {
-		b.WriteString("\n- ")
-		b.WriteString(problem.Message)
+	b.WriteString("schema coverage ratchet failed: ")
+	for i, problem := range problems {
+		if i > 0 {
+			b.WriteString("; ")
+		}
+		b.WriteString(escapeControlCharacters(problem.Message))
+	}
+	return b.String()
+}
+
+func escapeControlCharacters(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			if r <= 0xff {
+				fmt.Fprintf(&b, "\\x%02x", r)
+				continue
+			}
+			fmt.Fprintf(&b, "\\u%04x", r)
+			continue
+		}
+		b.WriteRune(r)
 	}
 	return b.String()
 }

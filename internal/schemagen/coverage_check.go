@@ -125,6 +125,12 @@ func copyFile(src, dst string) error {
 }
 
 func compareGeneratedPath(wantPath, gotPath, label string) error {
+	if _, err := os.Stat(wantPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s is missing", label)
+		}
+		return fmt.Errorf("stat path %s: %w", wantPath, err)
+	}
 	wantFiles, err := filesByRelativePathForCheck(wantPath)
 	if err != nil {
 		return err

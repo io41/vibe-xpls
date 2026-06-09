@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 func TestLoadCoverageBaselineRejectsDuplicateEntries(t *testing.T) {
@@ -209,6 +210,44 @@ func TestValidateCoverageRatchetFailsForObsoleteBaselineEntry(t *testing.T) {
 	}
 	if !strings.Contains(problems[0].Message, "obsolete baseline entry") {
 		t.Fatalf("problem = %#v, want obsolete baseline entry", problems[0])
+	}
+}
+
+func TestFormatCoverageProblemsNamesObsoleteBaselineFieldsWithoutControls(t *testing.T) {
+	baseline := coverageBaseline{
+		FormatVersion: coverageFormatVersion,
+		Entries: []coverageBaselineEntry{{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.removed",
+			Category:   gapMissingField,
+			Reason:     "field used to be absent\x00with nul",
+			Note:       "stale\nfixture",
+		}},
+	}
+
+	problems := validateCoverageRatchet(coverageState{}, baseline)
+	formatted := formatCoverageProblems(problems)
+
+	for _, want := range []string{
+		"obsolete baseline entry",
+		`release="v1.20.7"`,
+		`apiVersion="example.org/v1"`,
+		`kind="Widget"`,
+		`path="spec.removed"`,
+		`category="missing-field"`,
+		`reason="field used to be absent\x00with nul"`,
+		`note="stale\nfixture"`,
+	} {
+		if !strings.Contains(formatted, want) {
+			t.Fatalf("formatted coverage problems missing %q:\n%s", want, formatted)
+		}
+	}
+	for _, r := range formatted {
+		if unicode.IsControl(r) {
+			t.Fatalf("formatted coverage problems contains control rune %U:\n%q", r, formatted)
+		}
 	}
 }
 

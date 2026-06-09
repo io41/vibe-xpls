@@ -65,6 +65,51 @@ func TestCheckCoverageFailsForStaleCoverageArtifact(t *testing.T) {
 	}
 }
 
+func TestCompareGeneratedPathReportsMissingSingleFileWithLabel(t *testing.T) {
+	root := t.TempDir()
+	got := filepath.Join(root, "tmp", "coverage", "coverage.json")
+	writeTestFile(t, got, []byte("{}\n"))
+
+	err := compareGeneratedPath(filepath.Join(root, "committed", "coverage", "coverage.json"), got, "coverage/coverage.json")
+	if err == nil {
+		t.Fatal("compareGeneratedPath succeeded with missing committed single file")
+	}
+	if got, want := err.Error(), "coverage/coverage.json is missing"; got != want {
+		t.Fatalf("compareGeneratedPath error = %q, want %q", got, want)
+	}
+}
+
+func TestCompareGeneratedPathReportsMissingDirectoryWithLabel(t *testing.T) {
+	root := t.TempDir()
+	got := filepath.Join(root, "tmp", "schemas")
+	writeTestFile(t, filepath.Join(got, "schema.json"), []byte("{}\n"))
+
+	err := compareGeneratedPath(filepath.Join(root, "committed", "schemas"), got, "schemas")
+	if err == nil {
+		t.Fatal("compareGeneratedPath succeeded with missing committed directory")
+	}
+	if got, want := err.Error(), "schemas is missing"; got != want {
+		t.Fatalf("compareGeneratedPath error = %q, want %q", got, want)
+	}
+}
+
+func TestCompareGeneratedPathReportsExtraGeneratedFileWithLabel(t *testing.T) {
+	root := t.TempDir()
+	want := filepath.Join(root, "committed", "schemas")
+	got := filepath.Join(root, "tmp", "schemas")
+	writeTestFile(t, filepath.Join(want, "schema.json"), []byte("{}\n"))
+	writeTestFile(t, filepath.Join(got, "schema.json"), []byte("{}\n"))
+	writeTestFile(t, filepath.Join(got, "extra.json"), []byte("{}\n"))
+
+	err := compareGeneratedPath(want, got, "schemas")
+	if err == nil {
+		t.Fatal("compareGeneratedPath succeeded with extra generated file")
+	}
+	if got, want := err.Error(), "schemas has extra generated file extra.json"; got != want {
+		t.Fatalf("compareGeneratedPath error = %q, want %q", got, want)
+	}
+}
+
 func writeEmptyCoverageBaseline(t *testing.T, outDir string) string {
 	t.Helper()
 	path := filepath.Join(outDir, "coverage", "baseline.json")
@@ -75,4 +120,14 @@ func writeEmptyCoverageBaseline(t *testing.T, outDir string) string {
 		t.Fatalf("write empty coverage baseline: %v", err)
 	}
 	return path
+}
+
+func writeTestFile(t *testing.T, path string, raw []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create test file dir: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
 }
