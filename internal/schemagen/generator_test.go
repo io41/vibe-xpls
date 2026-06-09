@@ -291,6 +291,40 @@ spec:
 	}
 }
 
+func TestGenerateSkipsRootSchemasWithOnlyCoverageOnlyConstructs(t *testing.T) {
+	out := t.TempDir()
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: OnlyAllOf
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          allOf:
+            - type: object
+              properties:
+                spec:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	if err := Generate(cfg, out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "schemas", "v1.20.7", "example.io_v1_OnlyAllOf.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("root allOf schema stat err = %v, want not exist", err)
+	}
+}
+
 func assertGeneratedPath(t *testing.T, fields []struct {
 	Path     string `json:"path"`
 	Required bool   `json:"required,omitempty"`

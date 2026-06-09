@@ -91,8 +91,9 @@ func walkCoverageSchema(targets map[string]coverageTarget, base coverageTarget, 
 	}
 	if schema.Type == "array" && schema.Items != nil {
 		arrayPath := prefix + "[]"
-		putCoverageTarget(targets, base, schema, arrayPath, required, coverageUnsupportedReason(schema))
-		if coverageShouldStopAtContainingTarget(schema) || coverageUnsupportedReason(schema) != "" {
+		unsupportedReason := coverageUnsupportedReason(root, schema)
+		putCoverageTarget(targets, base, schema, arrayPath, required, unsupportedReason)
+		if coverageShouldStopAtContainingTarget(schema) || unsupportedReason != "" {
 			return
 		}
 		item, err := resolveSchema(root, *schema.Items, nil)
@@ -100,10 +101,10 @@ func walkCoverageSchema(targets map[string]coverageTarget, base coverageTarget, 
 			putCoverageUnsupportedTarget(targets, base, *schema.Items, arrayPath, false, err.Error())
 			return
 		}
-		walkCoverageSchemaContents(targets, base, root, item, arrayPath)
+		walkCoverageSchema(targets, base, root, item, arrayPath, false)
 		return
 	}
-	unsupportedReason := coverageUnsupportedReason(schema)
+	unsupportedReason := coverageUnsupportedReason(root, schema)
 	if prefix != "" {
 		putCoverageTarget(targets, base, schema, prefix, required, unsupportedReason)
 	}
@@ -133,7 +134,7 @@ func walkCoverageAllOfChild(targets map[string]coverageTarget, base coverageTarg
 		putCoverageUnsupportedTarget(targets, base, schema, prefix, false, err.Error())
 		return
 	}
-	unsupportedReason := coverageUnsupportedReason(schema)
+	unsupportedReason := coverageUnsupportedReason(root, schema)
 	if unsupportedReason != "" {
 		putCoverageUnsupportedTarget(targets, base, schema, prefix, false, unsupportedReason)
 		return
@@ -161,6 +162,9 @@ func putCoverageTarget(targets map[string]coverageTarget, base coverageTarget, s
 	target.Enum = enumStrings(schema.Enum)
 	target.Deprecated = schema.Deprecated != nil && *schema.Deprecated
 	target.UnsupportedReason = unsupportedReason
+	if existing, ok := targets[path]; ok {
+		target = mergeCoverageTarget(existing, target)
+	}
 	targets[path] = target
 }
 
@@ -168,12 +172,47 @@ func putCoverageUnsupportedTarget(targets map[string]coverageTarget, base covera
 	if path == "" {
 		return
 	}
-	if target, ok := targets[path]; ok {
-		target.UnsupportedReason = reason
-		targets[path] = target
-		return
-	}
 	putCoverageTarget(targets, base, schema, path, required, reason)
+}
+
+func mergeCoverageTarget(existing, incoming coverageTarget) coverageTarget {
+	out := existing
+	if out.Release == "" {
+		out.Release = incoming.Release
+	}
+	if out.APIVersion == "" {
+		out.APIVersion = incoming.APIVersion
+	}
+	if out.Kind == "" {
+		out.Kind = incoming.Kind
+	}
+	if out.SourcePath == "" {
+		out.SourcePath = incoming.SourcePath
+	}
+	if out.SourceSHA256 == "" {
+		out.SourceSHA256 = incoming.SourceSHA256
+	}
+	if out.Path == "" {
+		out.Path = incoming.Path
+	}
+	if out.Description == "" {
+		out.Description = incoming.Description
+	}
+	if out.Type == "" {
+		out.Type = incoming.Type
+	}
+	out.Required = out.Required || incoming.Required
+	if out.Default == nil {
+		out.Default = incoming.Default
+	}
+	if len(out.Enum) == 0 {
+		out.Enum = incoming.Enum
+	}
+	out.Deprecated = out.Deprecated || incoming.Deprecated
+	if out.UnsupportedReason == "" {
+		out.UnsupportedReason = incoming.UnsupportedReason
+	}
+	return out
 }
 
 func coverageTargetType(schema openAPISchema) string {
@@ -183,14 +222,30 @@ func coverageTargetType(schema openAPISchema) string {
 	return schema.Type
 }
 
-func coverageUnsupportedReason(schema openAPISchema) string {
+func coverageUnsupportedReason(root, schema openAPISchema) string {
 	if len(schema.OneOf) > 0 {
 		return "oneOf is unsupported"
 	}
 	if len(schema.AnyOf) > 0 && !schema.XKubernetesIntOrString {
 		return "anyOf is unsupported"
 	}
+	if coverageScalarAllOfUnsupported(root, schema) {
+		return "scalar allOf is unsupported"
+	}
 	return ""
+}
+
+func coverageScalarAllOfUnsupported(root, schema openAPISchema) bool {
+	for _, child := range schema.AllOf {
+		child, err := resolveSchema(root, child, nil)
+		if err != nil {
+			continue
+		}
+		if child.Type != "" && child.Type != "object" {
+			return true
+		}
+	}
+	return false
 }
 
 func coverageShouldStopAtContainingTarget(schema openAPISchema) bool {

@@ -722,12 +722,5 @@ func (schema openAPISchema) isZero() bool {
 		schema.AdditionalProperties == nil &&
 		len(schema.Definitions) == 0 &&
 		len(schema.Defs) == 0 &&
-		len(schema.PatternProperties) == 0 &&
-		len(schema.OneOf) == 0 &&
-		len(schema.AnyOf) == 0 &&
-		len(schema.AllOf) == 0 &&
-		schema.Deprecated == nil &&
-		!schema.XKubernetesPreserveUnknown &&
-		!schema.XKubernetesEmbeddedResource &&
-		!schema.XKubernetesIntOrString
+		!schema.XKubernetesPreserveUnknown
 }

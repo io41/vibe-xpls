@@ -1,6 +1,7 @@
 package schemagen
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -140,6 +141,156 @@ spec:
 	assertCoverageTarget(t, targets, "example.org/v1", "Broken", "spec.cycle", "", false, "cyclic local ref")
 }
 
+func TestCoverageTargetsMergeDuplicatePathsWithoutLosingStrongerMetadata(t *testing.T) {
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.org
+  names:
+    kind: Merge
+  scope: Cluster
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                merged:
+                  type: object
+                  allOf:
+                    - type: object
+                      required:
+                        - value
+                      properties:
+                        value:
+                          type: string
+                          description: from allOf
+                          default: from-allof
+                          enum:
+                            - from-allof
+                  properties:
+                    value:
+                      description: ""
+                choice:
+                  type: object
+                  allOf:
+                    - type: object
+                      properties:
+                        value:
+                          oneOf:
+                            - type: string
+                            - type: integer
+                  properties:
+                    value:
+                      type: string
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	targets, err := collectCoverageTargets(cfg)
+	if err != nil {
+		t.Fatalf("collectCoverageTargets: %v", err)
+	}
+
+	target := findCoverageTarget(t, targets, "example.org/v1", "Merge", "spec.merged.value")
+	if target.Type != "string" || target.Description != "from allOf" || !target.Required {
+		t.Fatalf("spec.merged.value = type %q description %q required %v, want allOf metadata", target.Type, target.Description, target.Required)
+	}
+	if target.Default == nil {
+		t.Fatal("spec.merged.value missing default")
+	}
+	var defaultValue string
+	if err := json.Unmarshal(*target.Default, &defaultValue); err != nil {
+		t.Fatalf("parse default: %v", err)
+	}
+	if defaultValue != "from-allof" {
+		t.Fatalf("default = %q, want from-allof", defaultValue)
+	}
+	if len(target.Enum) != 1 || target.Enum[0] != "from-allof" {
+		t.Fatalf("enum = %#v, want [from-allof]", target.Enum)
+	}
+
+	target = findCoverageTarget(t, targets, "example.org/v1", "Merge", "spec.choice.value")
+	if !strings.Contains(target.UnsupportedReason, "oneOf") {
+		t.Fatalf("unsupported reason = %q, want containing oneOf", target.UnsupportedReason)
+	}
+}
+
+func TestCoverageTargetsMarkUnsupportedArrayItemRootConstructs(t *testing.T) {
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.org
+  names:
+    kind: Arrays
+  scope: Cluster
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                choices:
+                  type: array
+                  items:
+                    oneOf:
+                      - type: string
+                      - type: integer
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	targets, err := collectCoverageTargets(cfg)
+	if err != nil {
+		t.Fatalf("collectCoverageTargets: %v", err)
+	}
+
+	assertCoverageTarget(t, targets, "example.org/v1", "Arrays", "spec.choices[]", "array", false, "oneOf")
+}
+
+func TestCoverageTargetsMarkScalarAllOfAsUnsupported(t *testing.T) {
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.org
+  names:
+    kind: ScalarAllOf
+  scope: Cluster
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                scalar:
+                  allOf:
+                    - type: string
+                      enum:
+                        - small
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	targets, err := collectCoverageTargets(cfg)
+	if err != nil {
+		t.Fatalf("collectCoverageTargets: %v", err)
+	}
+
+	assertCoverageTarget(t, targets, "example.org/v1", "ScalarAllOf", "spec.scalar", "", false, "allOf")
+}
+
 func TestCoverageTargetsIncludeSourcePathAndSHA(t *testing.T) {
 	cfg := fixtureConfig()
 	targets, err := collectCoverageTargets(cfg)
@@ -155,22 +306,27 @@ func TestCoverageTargetsIncludeSourcePathAndSHA(t *testing.T) {
 
 func assertCoverageTarget(t *testing.T, targets []coverageTarget, apiVersion, kind, path, typ string, required bool, unsupportedContains string) {
 	t.Helper()
+	target := findCoverageTarget(t, targets, apiVersion, kind, path)
+	if target.Type != typ || target.Required != required {
+		t.Fatalf("%s %s %s = type %q required %v, want type %q required %v", apiVersion, kind, path, target.Type, target.Required, typ, required)
+	}
+	if unsupportedContains != "" && !strings.Contains(target.UnsupportedReason, unsupportedContains) {
+		t.Fatalf("%s unsupported reason = %q, want containing %q", path, target.UnsupportedReason, unsupportedContains)
+	}
+	if unsupportedContains == "" && target.UnsupportedReason != "" {
+		t.Fatalf("%s unsupported reason = %q, want empty", path, target.UnsupportedReason)
+	}
+}
+
+func findCoverageTarget(t *testing.T, targets []coverageTarget, apiVersion, kind, path string) coverageTarget {
+	t.Helper()
 	for _, target := range targets {
-		if target.APIVersion != apiVersion || target.Kind != kind || target.Path != path {
-			continue
+		if target.APIVersion == apiVersion && target.Kind == kind && target.Path == path {
+			return target
 		}
-		if target.Type != typ || target.Required != required {
-			t.Fatalf("%s %s %s = type %q required %v, want type %q required %v", apiVersion, kind, path, target.Type, target.Required, typ, required)
-		}
-		if unsupportedContains != "" && !strings.Contains(target.UnsupportedReason, unsupportedContains) {
-			t.Fatalf("%s unsupported reason = %q, want containing %q", path, target.UnsupportedReason, unsupportedContains)
-		}
-		if unsupportedContains == "" && target.UnsupportedReason != "" {
-			t.Fatalf("%s unsupported reason = %q, want empty", path, target.UnsupportedReason)
-		}
-		return
 	}
 	t.Fatalf("missing target %s %s %s", apiVersion, kind, path)
+	return coverageTarget{}
 }
 
 func TestCoverageTargetsFixtureConfigUsesConfigRelativePaths(t *testing.T) {
