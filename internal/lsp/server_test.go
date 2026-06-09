@@ -320,7 +320,8 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 }
 
 func TestCompletionItemsOmitEmptyDocumentation(t *testing.T) {
-	root := testRoot(t)
+	root := t.TempDir()
+	writeLSPTestFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\n")
 	uri := fileURI(filepath.Join(root, "api", "completion-empty-doc.yaml"))
 	text := "apiVersion: example.org/v1\nkind: EmptyDoc\n\n"
 

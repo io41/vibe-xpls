@@ -43,6 +43,30 @@ func TestGenerateFixtureCRD(t *testing.T) {
 	assertGeneratedPath(t, doc.Fields, "spec.compositeTypeRef.kind", true)
 }
 
+func TestGenerateCompatibilitySchemaIncludesParentDocumentation(t *testing.T) {
+	out := t.TempDir()
+	if err := Generate(fixtureConfig(), out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(out, "schemas", "v1.20.7", "meta.pkg.crossplane.io_v1_Configuration.json"))
+	if err != nil {
+		t.Fatalf("read generated compatibility schema: %v", err)
+	}
+	var doc struct {
+		Fields []struct {
+			Path        string `json:"path"`
+			Description string `json:"description,omitempty"`
+			Type        string `json:"type,omitempty"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse generated compatibility schema: %v", err)
+	}
+	assertGeneratedFieldDoc(t, doc.Fields, "metadata", "Configuration package metadata.", "object")
+	assertGeneratedFieldDoc(t, doc.Fields, "spec", "Configuration package specification.", "object")
+	assertGeneratedFieldDoc(t, doc.Fields, "spec.dependsOn", "Package dependencies required by this Configuration.", "object")
+}
+
 func TestGenerateRejectsReleaseTagPathEscape(t *testing.T) {
 	base := t.TempDir()
 	out := filepath.Join(base, "out")
@@ -279,6 +303,24 @@ func assertGeneratedPath(t *testing.T, fields []struct {
 			}
 			return
 		}
+	}
+	t.Fatalf("missing generated path %s", path)
+}
+
+func assertGeneratedFieldDoc(t *testing.T, fields []struct {
+	Path        string `json:"path"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type,omitempty"`
+}, path, description, typ string) {
+	t.Helper()
+	for _, field := range fields {
+		if field.Path != path {
+			continue
+		}
+		if field.Description != description || field.Type != typ {
+			t.Fatalf("%s = description %q type %q, want description %q type %q", path, field.Description, field.Type, description, typ)
+		}
+		return
 	}
 	t.Fatalf("missing generated path %s", path)
 }

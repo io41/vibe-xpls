@@ -52,14 +52,14 @@ schema tests, runs the full Go test suite, and builds both CLIs into
 - Workspace CRD/XRD schema sources. Local provider CRDs and XRD OpenAPI schemas
   are loaded into the source-neutral schema model for package-scoped key
   completions and docs without registry, cluster, or network access.
+- Manual Zed validation passed for the generated completion foundation,
+  including Markdown completion documentation, YAML array-item first-key
+  completion, and v1/v2 release-specific completion sets.
+- Generated compatibility schemas include parent-key documentation for package
+  metadata completions.
 
 ## Current
 
-- Manual Zed validation of the generated completion foundation.
-- Tightening completion UX issues found through real editor use, including
-  Markdown rendering for completion documentation, first-key completion in YAML
-  array items, and parent-key documentation gaps for generated compatibility
-  schemas.
 - Keeping schema generation and update flow simple, offline, deterministic, and
   reviewable.
 

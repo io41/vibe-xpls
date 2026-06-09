@@ -231,7 +231,10 @@ func generatedCompatibilitySchemas(release ReleaseConfig) ([]schemaDocumentJSON,
 	fields := []analyzer.FieldDoc{
 		{Path: "apiVersion", Description: "API version of the Configuration metadata resource.", Type: "string"},
 		{Path: "kind", Description: "Resource kind, normally Configuration.", Type: "string"},
+		{Path: "metadata", Description: "Configuration package metadata.", Type: "object"},
 		{Path: "metadata.name", Description: "Name of the Configuration package.", Type: "string"},
+		{Path: "spec", Description: "Configuration package specification.", Type: "object"},
+		{Path: "spec.dependsOn", Description: "Package dependencies required by this Configuration.", Type: "object"},
 		{Path: "spec.dependsOn.provider", Description: "Provider package dependency required by this Configuration."},
 	}
 	return []schemaDocumentJSON{{

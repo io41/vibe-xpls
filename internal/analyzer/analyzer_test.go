@@ -666,6 +666,15 @@ func TestAnalyzerCompletionAtOffsetStillCompletesSpecChildren(t *testing.T) {
 	if !containsCompletion(completion.Items, "dependsOn") {
 		t.Fatalf("expected dependsOn completion under spec, got %#v", completion.Items)
 	}
+	item, ok := completionItemByLabel(completion.Items, "dependsOn")
+	if !ok || !strings.Contains(item.Documentation, "Package dependencies required by this Configuration.") {
+		t.Fatalf("dependsOn documentation = %q ok=%v, want compatibility parent docs", item.Documentation, ok)
+	}
+	rootCompletion := a.Completion(uri, "")
+	item, ok = completionItemByLabel(rootCompletion.Items, "spec")
+	if !ok || !strings.Contains(item.Documentation, "Configuration package specification.") {
+		t.Fatalf("spec documentation = %q ok=%v, want compatibility parent docs", item.Documentation, ok)
+	}
 }
 
 func TestAnalyzerCompletionAtOffsetFallbackScopedToCurrentDocument(t *testing.T) {

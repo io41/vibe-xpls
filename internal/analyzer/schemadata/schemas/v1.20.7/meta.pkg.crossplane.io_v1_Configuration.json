@@ -14,9 +14,24 @@
       "type": "string"
     },
     {
+      "path": "metadata",
+      "description": "Configuration package metadata.",
+      "type": "object"
+    },
+    {
       "path": "metadata.name",
       "description": "Name of the Configuration package.",
       "type": "string"
+    },
+    {
+      "path": "spec",
+      "description": "Configuration package specification.",
+      "type": "object"
+    },
+    {
+      "path": "spec.dependsOn",
+      "description": "Package dependencies required by this Configuration.",
+      "type": "object"
     },
     {
       "path": "spec.dependsOn.provider",
