@@ -9,6 +9,8 @@ import (
 
 var schemaArrayIndexPattern = regexp.MustCompile(`\[\d+\]`)
 
+var compositionFunctionInputPathPattern = regexp.MustCompile(`^spec\.pipeline\[(\d+)\]\.input(?:\.(.*))?$`)
+
 type Completion struct {
 	Items  []CompletionItem
 	Reason SuppressionReason
@@ -89,6 +91,11 @@ func (a *Analyzer) CompletionAtOffset(uri string, offset int) Completion {
 		fields = fieldsFromSchema(schema)
 	default:
 		fields = a.schemas.FieldsForRelease(resolution.Release, apiVersion, kind)
+	}
+	if apiVersion == "apiextensions.crossplane.io/v1" && kind == "Composition" {
+		if target, ok := a.functionInputCompletionTarget(uri, parsed, context); ok {
+			return completionFromFunctionInputFields(context, target.fields, target.inputChildPath)
+		}
 	}
 	if completionContextIsScalarDescendant(context) {
 		return Completion{}
@@ -413,6 +420,72 @@ func completionFromFields(fields []FieldDoc, parentPath string) Completion {
 
 func schemaPathFromParsedPath(path string) string {
 	return schemaArrayIndexPattern.ReplaceAllString(path, "[]")
+}
+
+type functionInputCompletionTarget struct {
+	fields         []FieldDoc
+	inputChildPath string
+}
+
+func compositionFunctionInputPath(path string) (inputPath, inputChildPath string, ok bool) {
+	matches := compositionFunctionInputPathPattern.FindStringSubmatch(path)
+	if matches == nil {
+		return "", "", false
+	}
+	inputPath = "spec.pipeline[" + matches[1] + "].input"
+	return inputPath, matches[2], true
+}
+
+func (a *Analyzer) functionInputCompletionTarget(uri string, parsed YAMLDocument, context completionContext) (functionInputCompletionTarget, bool) {
+	inputPath, inputChildPath, ok := compositionFunctionInputPath(context.schemaParentPath)
+	if !ok {
+		inputPath, inputChildPath, ok = compositionFunctionInputPath(context.parentPath)
+	}
+	if !ok {
+		return functionInputCompletionTarget{}, false
+	}
+	apiVersion, apiOK := parsed.ValueForDocumentPath(context.rootOccurrence.DocumentIndex, inputPath+".apiVersion")
+	kind, kindOK := parsed.ValueForDocumentPath(context.rootOccurrence.DocumentIndex, inputPath+".kind")
+	if !apiOK || !kindOK || apiVersion == "" || kind == "" {
+		return functionInputCompletionTarget{}, false
+	}
+	fields, ok := a.fieldsForInputGVK(uri, SourceGVK{APIVersion: apiVersion, Kind: kind})
+	if !ok {
+		return functionInputCompletionTarget{}, false
+	}
+	return functionInputCompletionTarget{fields: fields, inputChildPath: inputChildPath}, true
+}
+
+func (a *Analyzer) fieldsForInputGVK(uri string, gvk SourceGVK) ([]FieldDoc, bool) {
+	if a.schemas.HasWorkspaceSchema(gvk) {
+		fields := a.schemas.Fields(gvk.APIVersion, gvk.Kind)
+		return fields, len(fields) != 0
+	}
+	if schema, ok := a.workspaceSchemaForURI(uri, gvk); ok {
+		fields := fieldsFromSchema(schema)
+		return fields, len(fields) != 0
+	}
+	return nil, false
+}
+
+func completionFromFunctionInputFields(context completionContext, fields []FieldDoc, inputChildPath string) Completion {
+	if completionContextIsScalarDescendant(context) {
+		return Completion{}
+	}
+	// Input dispatch does not use parent fallback; the edit belongs at the
+	// cursor's current indentation.
+	completion := filterCompletion(completionFromFields(fields, inputChildPath), context.prefix)
+	for i := range completion.Items {
+		newText := context.indent + completion.Items[i].Label + ":"
+		if context.useNewTextPrefix {
+			newText = context.newTextPrefix + completion.Items[i].Label + ":"
+		}
+		completion.Items[i].TextEdit = &CompletionTextEdit{
+			Replace: context.replace,
+			NewText: newText,
+		}
+	}
+	return completion
 }
 
 func immediateCompletionLabel(rest string) string {

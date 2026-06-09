@@ -171,6 +171,132 @@ func TestAnalyzerCompletionUsesArrayItemSchemaPath(t *testing.T) {
 	}
 }
 
+func TestAnalyzerCompletionAtOffsetDispatchesFunctionInputSchema(t *testing.T) {
+	root, a := writeFunctionInputCompletionPackage(t)
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: TemplateInput
+        spec:
+          i`
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "inline")
+	if !ok {
+		t.Fatalf("completion missing inline input field: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "Inline template source.") {
+		t.Fatalf("inline documentation = %q, want input schema docs", item.Documentation)
+	}
+	if item.TextEdit == nil || item.TextEdit.NewText != "          inline:" {
+		t.Fatalf("inline text edit = %#v, want indented inline key", item.TextEdit)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetDispatchesFunctionInputArrayItemSchema(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "function-input-array-crd.yaml"), workspaceFunctionInputArrayCRD("fn.example.org", "v1alpha1", "ArrayInput", "items", "name", "Input item name."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-array.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: ArrayInput
+        spec:
+          items:
+            - n`
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	item, ok := completionItemByLabel(completion.Items, "name")
+	if !ok {
+		t.Fatalf("completion missing input item name field: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "Input item name.") {
+		t.Fatalf("name documentation = %q, want input item schema docs", item.Documentation)
+	}
+	if item.TextEdit == nil || item.TextEdit.NewText != "name:" {
+		t.Fatalf("name text edit = %#v, want sequence item key edit", item.TextEdit)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetUsesCurrentPipelineInputGVK(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-a-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputA", "alphaField", "Alpha input field."))
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-b-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputB", "betaField", "Beta input field."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-two-inputs.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-a
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputA
+        spec:
+          alphaField: one
+    - functionRef:
+        name: function-b
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputB
+        spec:
+          b`
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if !containsCompletion(completion.Items, "betaField") {
+		t.Fatalf("completion missing betaField for second input: %#v", completion.Items)
+	}
+	if containsCompletion(completion.Items, "alphaField") {
+		t.Fatalf("completion leaked first input field into second input: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionAtOffsetSkipsUnknownFunctionInputSchema(t *testing.T) {
+	root, a := writeFunctionInputCompletionPackage(t)
+	uri := "file://" + filepath.Join(root, "api", "composition-unknown-function-input.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: MissingInput
+        spec:
+          i`
+	a.OpenDocument(uri, text)
+
+	completion := a.CompletionAtOffset(uri, len(text))
+	if containsCompletion(completion.Items, "inline") {
+		t.Fatalf("unknown input schema completion = %#v, want no TemplateInput fields", completion.Items)
+	}
+}
+
 func TestAnalyzerCompletionAtOffsetCompletesFirstArrayItemKey(t *testing.T) {
 	root := testkit.FixturePath(t, "internal", "analyzer", "testdata", "workspaces", "root")
 	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
@@ -1931,6 +2057,87 @@ spec:
               required:
                 - forProvider
 `
+}
+
+func workspaceFunctionInputCRD(group, version, kind, fieldName, description string) string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: test.` + group + `
+spec:
+  group: ` + group + `
+  names:
+    kind: ` + kind + `
+    plural: tests
+  scope: Namespaced
+  versions:
+    - name: ` + version + `
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            spec:
+              type: object
+              properties:
+                ` + fieldName + `:
+                  type: string
+                  description: ` + description + `
+`
+}
+
+func workspaceFunctionInputArrayCRD(group, version, kind, arrayFieldName, itemFieldName, itemDescription string) string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: test.` + group + `
+spec:
+  group: ` + group + `
+  names:
+    kind: ` + kind + `
+    plural: tests
+  scope: Namespaced
+  versions:
+    - name: ` + version + `
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            spec:
+              type: object
+              properties:
+                ` + arrayFieldName + `:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ` + itemFieldName + `:
+                        type: string
+                        description: ` + itemDescription + `
+`
+}
+
+func writeFunctionInputCompletionPackage(t *testing.T) (string, *Analyzer) {
+	t.Helper()
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "function-input-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "TemplateInput", "inline", "Inline template source."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	return root, a
 }
 
 func workspaceProviderCRDWithArray(description string) string {
