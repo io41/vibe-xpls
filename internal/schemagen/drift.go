@@ -35,7 +35,15 @@ type driftChecker struct {
 
 type githubRefResponse struct {
 	Object struct {
-		SHA string `json:"sha"`
+		SHA  string `json:"sha"`
+		Type string `json:"type"`
+	} `json:"object"`
+}
+
+type githubTagObjectResponse struct {
+	Object struct {
+		SHA  string `json:"sha"`
+		Type string `json:"type"`
 	} `json:"object"`
 }
 
@@ -90,9 +98,6 @@ func CheckDrift(cfg Config, opts DriftOptions) error {
 			problems = append(problems, problem)
 		}
 	}
-	if len(problems) > 0 {
-		return driftProblemsError(problems)
-	}
 
 	for _, release := range cfg.Releases {
 		releaseProblems, err := checker.checkReleaseCRDContent(release)
@@ -132,7 +137,30 @@ func (c driftChecker) fetchTagSHA(tag string) (string, error) {
 	if ref.Object.SHA == "" {
 		return "", errors.New("tag ref response missing object.sha")
 	}
-	return ref.Object.SHA, nil
+	return c.resolveGitObjectToCommitSHA(ref.Object.Type, ref.Object.SHA)
+}
+
+func (c driftChecker) resolveGitObjectToCommitSHA(objectType, sha string) (string, error) {
+	for depth := 0; depth < 5; depth++ {
+		switch objectType {
+		case "", "commit":
+			return sha, nil
+		case "tag":
+			var tagObject githubTagObjectResponse
+			path := "/repos/crossplane/crossplane/git/tags/" + url.PathEscape(sha)
+			if err := c.getJSON(path, &tagObject); err != nil {
+				return "", err
+			}
+			if tagObject.Object.SHA == "" {
+				return "", errors.New("tag object response missing object.sha")
+			}
+			sha = tagObject.Object.SHA
+			objectType = tagObject.Object.Type
+		default:
+			return "", fmt.Errorf("tag resolves to unsupported object type %q", objectType)
+		}
+	}
+	return "", errors.New("tag object resolution exceeded maximum depth")
 }
 
 func (c driftChecker) fetchTags() ([]string, error) {
