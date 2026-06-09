@@ -81,3 +81,37 @@ type actualCoverageField struct {
 	CompatOverride bool
 	CompatAdded    bool
 }
+
+type coverageFieldState struct {
+	Release    string
+	APIVersion string
+	Kind       string
+	Path       string
+	Bucket     coverageBucket
+	Metadata   coverageMetadataState
+	Gap        *observedGap
+}
+
+type coverageMetadataState struct {
+	Description metadataCoverageStatus `json:"description,omitempty"`
+	Type        metadataCoverageStatus `json:"type,omitempty"`
+	Required    metadataCoverageStatus `json:"required,omitempty"`
+	Enum        metadataCoverageStatus `json:"enum,omitempty"`
+	Default     metadataCoverageStatus `json:"default,omitempty"`
+	Deprecated  metadataCoverageStatus `json:"deprecated,omitempty"`
+}
+
+type coverageGVKState struct {
+	Release      string
+	APIVersion   string
+	Kind         string
+	SourcePath   string
+	SourceSHA256 string
+	Fields       []coverageFieldState
+	Buckets      map[coverageBucket]int
+}
+
+type coverageState struct {
+	GVKs []coverageGVKState
+	Gaps []observedGap
+}
