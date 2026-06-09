@@ -9,6 +9,19 @@ build_dir="${BUILD_DIR:-dist/local}"
 
 echo "==> Regenerating built-in Crossplane schema bundle"
 go run ./cmd/vibe-xpls-schema-gen \
+  generate \
+  --config internal/analyzer/schemadata/config.json \
+  --out internal/analyzer/schemadata
+
+echo "==> Regenerating schema coverage artifacts"
+go run ./cmd/vibe-xpls-schema-gen \
+  coverage generate \
+  --config internal/analyzer/schemadata/config.json \
+  --out internal/analyzer/schemadata
+
+echo "==> Checking schema coverage ratchet"
+go run ./cmd/vibe-xpls-schema-gen \
+  coverage check \
   --config internal/analyzer/schemadata/config.json \
   --out internal/analyzer/schemadata
 

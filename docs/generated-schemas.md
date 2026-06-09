@@ -8,13 +8,30 @@ Current pins:
 - Crossplane `v2.2.1`, commit `713541df7fc5cf0946b6573837831086465a2dbe`
 
 Regenerate and verify after changing `internal/analyzer/schemadata/config.json`,
-generator code, committed upstream artifacts, or generated-schema documentation:
+generator code, committed upstream artifacts, generated-schema documentation,
+coverage artifacts, or coverage baseline entries:
 
 ```bash
 ./scripts/update-generated.sh
 ```
 
-The command regenerates schema artifacts, runs stale-generation checks, runs the
-full Go test suite, and builds local CLIs into `dist/local/`.
+The command regenerates schema artifacts and coverage artifacts, enforces the
+coverage ratchet, runs stale-generation checks, runs the full Go test suite,
+and builds local CLIs into `dist/local/`.
+
+The generation block is:
+
+```bash
+go run ./cmd/vibe-xpls-schema-gen generate --config internal/analyzer/schemadata/config.json --out internal/analyzer/schemadata
+go run ./cmd/vibe-xpls-schema-gen coverage generate --config internal/analyzer/schemadata/config.json --out internal/analyzer/schemadata
+go run ./cmd/vibe-xpls-schema-gen coverage check --config internal/analyzer/schemadata/config.json --out internal/analyzer/schemadata
+```
+
+`internal/analyzer/schemadata/coverage/baseline.json` is human-maintained.
+Coverage generation reads it but never rewrites it. New coverage gaps should be
+fixed in the generator when practical, or classified with a baseline entry when
+the gap is intentional or not yet supported. Remove obsolete baseline entries
+when generator support improves; the coverage check reports entries that no
+longer match an observed gap.
 
 The generator must produce byte-identical output from committed inputs. Runtime never downloads schemas.

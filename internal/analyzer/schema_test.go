@@ -55,8 +55,16 @@ func TestGeneratedSchemaBundleIsCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("regenerate bundle: %v\n%s", err, output)
 	}
+	copyFile(t, "schemadata/coverage/baseline.json", filepath.Join(tmp, "coverage", "baseline.json"))
+	cmd = exec.Command("go", "run", "../../cmd/vibe-xpls-schema-gen", "coverage", "generate", "--config", "schemadata/config.json", "--out", tmp)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("regenerate coverage: %v\n%s", err, output)
+	}
 	assertDirectoriesEqual(t, "schemadata/manifest.json", filepath.Join(tmp, "manifest.json"))
 	assertDirectoriesEqual(t, "schemadata/schemas", filepath.Join(tmp, "schemas"))
+	assertDirectoriesEqual(t, "schemadata/coverage/coverage.json", filepath.Join(tmp, "coverage", "coverage.json"))
+	assertDirectoriesEqual(t, "schemadata/coverage/coverage.md", filepath.Join(tmp, "coverage", "coverage.md"))
 }
 
 func TestInvalidBundleFormatDisablesGeneratedBuiltIns(t *testing.T) {
@@ -367,6 +375,20 @@ func assertDirectoriesEqual(t *testing.T, wantPath, gotPath string) {
 		if _, ok := wantFiles[path]; !ok {
 			t.Fatalf("%s has extra generated file %s", gotPath, path)
 		}
+	}
+}
+
+func copyFile(t *testing.T, srcPath, dstPath string) {
+	t.Helper()
+	raw, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatalf("read file %s: %v", srcPath, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+		t.Fatalf("create parent directory for %s: %v", dstPath, err)
+	}
+	if err := os.WriteFile(dstPath, raw, 0o644); err != nil {
+		t.Fatalf("write file %s: %v", dstPath, err)
 	}
 }
 

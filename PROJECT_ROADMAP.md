@@ -21,15 +21,16 @@ criteria change.
 ## Single Update Command
 
 Run this after changing schema generator code, schema bundle config, committed
-schema inputs, schema docs, or generated-schema documentation:
+schema inputs, schema docs, generated-schema documentation, coverage artifacts,
+or coverage baseline entries:
 
 ```sh
 ./scripts/update-generated.sh
 ```
 
-The command regenerates committed schema artifacts, runs stale-generation and
-schema tests, runs the full Go test suite, and builds both CLIs into
-`dist/local/`.
+The command regenerates committed schema artifacts and coverage artifacts,
+enforces the coverage check/ratchet, runs stale-generation and schema tests,
+runs the full Go test suite, and builds both CLIs into `dist/local/`.
 
 ## Done
 
@@ -61,6 +62,8 @@ schema tests, runs the full Go test suite, and builds both CLIs into
   `spec.pipeline[].input` object has a stable `apiVersion` and `kind` whose
   schema is known locally, completions under that input use the input object's
   schema.
+- Generated schema coverage artifacts and a human-maintained baseline ratchet
+  for current pinned Crossplane releases.
 
 ## Current
 
@@ -91,3 +94,7 @@ schema tests, runs the full Go test suite, and builds both CLIs into
   `docs/superpowers/plans/2026-05-21-generated-completion-foundation.md`
 - Completion presentation decision:
   `docs/research/decisions/completion-presentation.md`
+- Schema coverage ratchet design:
+  `docs/superpowers/specs/2026-06-09-schema-coverage-ratchet-design.md`
+- Schema coverage ratchet implementation plan:
+  `docs/superpowers/plans/2026-06-09-schema-coverage-ratchet.md`

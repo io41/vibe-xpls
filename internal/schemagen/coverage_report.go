@@ -201,7 +201,7 @@ func renderCoverageMarkdown(state coverageState) string {
 		}
 		b.WriteString("\n")
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
 func coverageReportReleases(state coverageState) []coverageReleaseReport {

@@ -227,6 +227,12 @@ func TestRenderCoverageMarkdownSummarizesWorstGVKs(t *testing.T) {
 			t.Fatalf("coverage markdown missing %q:\n%s", want, got)
 		}
 	}
+	if strings.HasSuffix(got, "\n\n") {
+		t.Fatalf("coverage markdown has trailing blank line:\n%s", got)
+	}
+	if !strings.HasSuffix(got, "\n") {
+		t.Fatalf("coverage markdown missing final newline:\n%s", got)
+	}
 }
 
 func TestRenderCoverageJSONAndMarkdownCountMetadataOnlyGaps(t *testing.T) {
