@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/io41/vibe-xpls/internal/analyzer"
@@ -145,6 +146,89 @@ func TestCoverageStateJSONUsesReportFieldNames(t *testing.T) {
 	assertMissingJSONKeys(t, gap, "Release", "APIVersion", "Kind", "Path", "Category", "Reason")
 }
 
+func TestRenderCoverageJSONIsDeterministic(t *testing.T) {
+	state := coverageRenderTestState()
+
+	first, err := renderCoverageJSON(state)
+	if err != nil {
+		t.Fatalf("render coverage JSON: %v", err)
+	}
+	second, err := renderCoverageJSON(state)
+	if err != nil {
+		t.Fatalf("render coverage JSON again: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Fatalf("coverage JSON differs between renders:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+
+	want := `{
+  "formatVersion": 1,
+  "releases": [
+    {
+      "tag": "v1.20.7",
+      "totals": {
+        "upstreamGVKs": 1,
+        "generatedGVKs": 1,
+        "targetFields": 2,
+        "coveredUpstreamFields": 1,
+        "knownGaps": 1
+      },
+      "gvks": [
+        {
+          "apiVersion": "example.org/v1",
+          "kind": "Widget",
+          "sourcePath": "crds/widgets.yaml",
+          "sourceSHA256": "abc123",
+          "buckets": {
+            "covered-upstream": 1,
+            "missing": 1
+          },
+          "fields": [
+            {
+              "path": "spec.missing",
+              "bucket": "missing",
+              "metadata": {}
+            },
+            {
+              "path": "spec.present",
+              "bucket": "covered-upstream",
+              "metadata": {
+                "description": "covered",
+                "type": "covered",
+                "required": "not-required",
+                "enum": "not-present-upstream",
+                "default": "not-present-upstream",
+                "deprecated": "not-present-upstream"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+`
+	if string(first) != want {
+		t.Fatalf("coverage JSON mismatch:\ngot:\n%s\nwant:\n%s", first, want)
+	}
+}
+
+func TestRenderCoverageMarkdownSummarizesWorstGVKs(t *testing.T) {
+	got := renderCoverageMarkdown(coverageRenderTestState())
+	for _, want := range []string{
+		"# Schema Coverage",
+		"## Release v1.20.7",
+		"Upstream field coverage: 1/2 (50.00%)",
+		"Known gaps: 1",
+		"### Worst-Covered GVKs",
+		"| example.org/v1 | Widget | 50.00% | 1 |",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("coverage markdown missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestCompatibilityOverrideDetectedFromDescriptionTypeOrRequired(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -191,6 +275,46 @@ func TestCompatibilityOverrideDetectedFromDescriptionTypeOrRequired(t *testing.T
 				t.Fatalf("fieldHasCompatibilityOverride() = %t, want %t", got, tt.want)
 			}
 		})
+	}
+}
+
+func coverageRenderTestState() coverageState {
+	return coverageState{
+		GVKs: []coverageGVKState{{
+			Release:      "v1.20.7",
+			APIVersion:   "example.org/v1",
+			Kind:         "Widget",
+			SourcePath:   "crds/widgets.yaml",
+			SourceSHA256: "abc123",
+			Fields: []coverageFieldState{
+				{
+					Release:    "v1.20.7",
+					APIVersion: "example.org/v1",
+					Kind:       "Widget",
+					Path:       "spec.present",
+					Bucket:     bucketCoveredUpstream,
+					Metadata: coverageMetadataState{
+						Description: metadataCovered,
+						Type:        metadataCovered,
+						Required:    metadataNotRequired,
+						Enum:        metadataNotPresentUpstream,
+						Default:     metadataNotPresentUpstream,
+						Deprecated:  metadataNotPresentUpstream,
+					},
+				},
+				{
+					Release:    "v1.20.7",
+					APIVersion: "example.org/v1",
+					Kind:       "Widget",
+					Path:       "spec.missing",
+					Bucket:     bucketMissing,
+				},
+			},
+			Buckets: map[coverageBucket]int{
+				bucketMissing:         1,
+				bucketCoveredUpstream: 1,
+			},
+		}},
 	}
 }
 

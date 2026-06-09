@@ -14,6 +14,49 @@ type coverageGVKKey struct {
 	Kind       string
 }
 
+type coverageReportDocument struct {
+	FormatVersion int                     `json:"formatVersion"`
+	Releases      []coverageReleaseReport `json:"releases"`
+}
+
+type coverageReleaseReport struct {
+	Tag    string               `json:"tag"`
+	Totals coverageTotalsReport `json:"totals"`
+	GVKs   []coverageGVKReport  `json:"gvks"`
+}
+
+type coverageTotalsReport struct {
+	UpstreamGVKs          int `json:"upstreamGVKs"`
+	GeneratedGVKs         int `json:"generatedGVKs"`
+	TargetFields          int `json:"targetFields"`
+	CoveredUpstreamFields int `json:"coveredUpstreamFields"`
+	KnownGaps             int `json:"knownGaps"`
+}
+
+type coverageGVKReport struct {
+	APIVersion   string                `json:"apiVersion"`
+	Kind         string                `json:"kind"`
+	SourcePath   string                `json:"sourcePath"`
+	SourceSHA256 string                `json:"sourceSHA256"`
+	Buckets      map[string]int        `json:"buckets"`
+	Fields       []coverageFieldReport `json:"fields"`
+}
+
+type coverageFieldReport struct {
+	Path     string                 `json:"path"`
+	Bucket   string                 `json:"bucket"`
+	Metadata coverageMetadataReport `json:"metadata"`
+}
+
+type coverageMetadataReport struct {
+	Description metadataCoverageStatus `json:"description,omitempty"`
+	Type        metadataCoverageStatus `json:"type,omitempty"`
+	Required    metadataCoverageStatus `json:"required,omitempty"`
+	Enum        metadataCoverageStatus `json:"enum,omitempty"`
+	Default     metadataCoverageStatus `json:"default,omitempty"`
+	Deprecated  metadataCoverageStatus `json:"deprecated,omitempty"`
+}
+
 func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey]actualCoverageField, baseline coverageBaseline) coverageState {
 	state := coverageState{}
 	gvks := map[coverageGVKKey]*coverageGVKState{}
@@ -121,6 +164,243 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 	state.GVKs = sortedCoverageGVKs(gvks)
 	sortCoverageGaps(state.Gaps)
 	return state
+}
+
+func renderCoverageJSON(state coverageState) ([]byte, error) {
+	doc := coverageReportDocument{
+		FormatVersion: coverageFormatVersion,
+		Releases:      coverageReportReleases(state),
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal coverage report: %w", err)
+	}
+	return append(raw, '\n'), nil
+}
+
+func renderCoverageMarkdown(state coverageState) string {
+	var b strings.Builder
+	b.WriteString("# Schema Coverage\n\n")
+	for _, release := range sortedCoverageReleaseTags(state) {
+		gvks := coverageGVKsForRelease(state.GVKs, release)
+		totals := coverageCounts(gvks)
+		b.WriteString(fmt.Sprintf("## Release %s\n\n", release))
+		b.WriteString(fmt.Sprintf(
+			"Upstream field coverage: %d/%d (%.2f%%)\n",
+			totals.CoveredUpstreamFields,
+			totals.TargetFields,
+			percent(totals.CoveredUpstreamFields, totals.TargetFields),
+		))
+		b.WriteString(fmt.Sprintf("Known gaps: %d\n\n", totals.KnownGaps))
+		b.WriteString("### Worst-Covered GVKs\n\n")
+		b.WriteString("| API Version | Kind | Coverage | Known Gaps |\n")
+		b.WriteString("| --- | --- | ---: | ---: |\n")
+		for _, row := range worstCoveredGVKs(gvks, 10) {
+			b.WriteString(fmt.Sprintf("| %s | %s | %.2f%% | %d |\n", row.APIVersion, row.Kind, row.Percent, row.KnownGaps))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func coverageReportReleases(state coverageState) []coverageReleaseReport {
+	tags := sortedCoverageReleaseTags(state)
+	releases := make([]coverageReleaseReport, 0, len(tags))
+	for _, tag := range tags {
+		gvks := coverageGVKsForRelease(state.GVKs, tag)
+		releases = append(releases, coverageReleaseReport{
+			Tag:    tag,
+			Totals: coverageCounts(gvks),
+			GVKs:   coverageGVKReports(gvks),
+		})
+	}
+	return releases
+}
+
+func sortedCoverageReleaseTags(state coverageState) []string {
+	seen := map[string]struct{}{}
+	for _, gvk := range state.GVKs {
+		seen[gvk.Release] = struct{}{}
+	}
+	tags := make([]string, 0, len(seen))
+	for tag := range seen {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	return tags
+}
+
+func coverageGVKsForRelease(gvks []coverageGVKState, release string) []coverageGVKState {
+	out := make([]coverageGVKState, 0, len(gvks))
+	for _, gvk := range gvks {
+		if gvk.Release == release {
+			out = append(out, gvk)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].APIVersion != out[j].APIVersion {
+			return out[i].APIVersion < out[j].APIVersion
+		}
+		return out[i].Kind < out[j].Kind
+	})
+	return out
+}
+
+func coverageGVKReports(gvks []coverageGVKState) []coverageGVKReport {
+	reports := make([]coverageGVKReport, 0, len(gvks))
+	for _, gvk := range gvks {
+		reports = append(reports, coverageGVKReport{
+			APIVersion:   gvk.APIVersion,
+			Kind:         gvk.Kind,
+			SourcePath:   gvk.SourcePath,
+			SourceSHA256: gvk.SourceSHA256,
+			Buckets:      sortedBucketMap(gvk.Buckets),
+			Fields:       coverageFieldReports(gvk.Fields),
+		})
+	}
+	return reports
+}
+
+func coverageFieldReports(fields []coverageFieldState) []coverageFieldReport {
+	sorted := append([]coverageFieldState(nil), fields...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Path != sorted[j].Path {
+			return sorted[i].Path < sorted[j].Path
+		}
+		return sorted[i].Bucket < sorted[j].Bucket
+	})
+
+	reports := make([]coverageFieldReport, 0, len(sorted))
+	for _, field := range sorted {
+		reports = append(reports, coverageFieldReport{
+			Path:   field.Path,
+			Bucket: string(field.Bucket),
+			Metadata: coverageMetadataReport{
+				Description: field.Metadata.Description,
+				Type:        field.Metadata.Type,
+				Required:    field.Metadata.Required,
+				Enum:        field.Metadata.Enum,
+				Default:     field.Metadata.Default,
+				Deprecated:  field.Metadata.Deprecated,
+			},
+		})
+	}
+	return reports
+}
+
+func sortedBucketMap(buckets map[coverageBucket]int) map[string]int {
+	keys := make([]string, 0, len(buckets))
+	for bucket := range buckets {
+		keys = append(keys, string(bucket))
+	}
+	sort.Strings(keys)
+
+	out := make(map[string]int, len(keys))
+	for _, key := range keys {
+		out[key] = buckets[coverageBucket(key)]
+	}
+	return out
+}
+
+func coverageCounts(gvks []coverageGVKState) coverageTotalsReport {
+	var totals coverageTotalsReport
+	for _, gvk := range gvks {
+		var hasUpstreamField bool
+		var hasGeneratedField bool
+		for _, field := range gvk.Fields {
+			if coverageBucketIsTarget(field.Bucket) {
+				hasUpstreamField = true
+				totals.TargetFields++
+			}
+			if coverageBucketIsCovered(field.Bucket) {
+				totals.CoveredUpstreamFields++
+			}
+			if coverageBucketIsKnownGap(field.Bucket) {
+				totals.KnownGaps++
+			}
+			if coverageBucketIsGenerated(field.Bucket) {
+				hasGeneratedField = true
+			}
+		}
+		if hasUpstreamField {
+			totals.UpstreamGVKs++
+		}
+		if hasGeneratedField {
+			totals.GeneratedGVKs++
+		}
+	}
+	return totals
+}
+
+func coverageBucketIsTarget(bucket coverageBucket) bool {
+	switch bucket {
+	case bucketCompatAddedField, bucketCompatOnlySchema:
+		return false
+	default:
+		return true
+	}
+}
+
+func coverageBucketIsCovered(bucket coverageBucket) bool {
+	return bucket == bucketCoveredUpstream || bucket == bucketCoveredWithCompatOverride
+}
+
+func coverageBucketIsKnownGap(bucket coverageBucket) bool {
+	switch bucket {
+	case bucketMissing, bucketExcluded, bucketUnsupportedShape:
+		return true
+	default:
+		return false
+	}
+}
+
+func coverageBucketIsGenerated(bucket coverageBucket) bool {
+	switch bucket {
+	case bucketCoveredUpstream, bucketCoveredWithCompatOverride, bucketCompatAddedField, bucketCompatOnlySchema:
+		return true
+	default:
+		return false
+	}
+}
+
+func percent(numerator, denominator int) float64 {
+	if denominator == 0 {
+		return 100
+	}
+	return float64(numerator) / float64(denominator) * 100
+}
+
+type worstCoveredGVK struct {
+	APIVersion string
+	Kind       string
+	Percent    float64
+	KnownGaps  int
+}
+
+func worstCoveredGVKs(gvks []coverageGVKState, limit int) []worstCoveredGVK {
+	rows := make([]worstCoveredGVK, 0, len(gvks))
+	for _, gvk := range gvks {
+		counts := coverageCounts([]coverageGVKState{gvk})
+		rows = append(rows, worstCoveredGVK{
+			APIVersion: gvk.APIVersion,
+			Kind:       gvk.Kind,
+			Percent:    percent(counts.CoveredUpstreamFields, counts.TargetFields),
+			KnownGaps:  counts.KnownGaps,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Percent != rows[j].Percent {
+			return rows[i].Percent < rows[j].Percent
+		}
+		if rows[i].APIVersion != rows[j].APIVersion {
+			return rows[i].APIVersion < rows[j].APIVersion
+		}
+		return rows[i].Kind < rows[j].Kind
+	})
+	if len(rows) > limit {
+		return rows[:limit]
+	}
+	return rows
 }
 
 func markBaselineClassifiedFieldExcluded(field *coverageFieldState, baseline coverageBaseline) {
