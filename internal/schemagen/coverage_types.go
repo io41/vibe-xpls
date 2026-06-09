@@ -46,12 +46,12 @@ type coverageProblem struct {
 }
 
 type observedGap struct {
-	Release    string
-	APIVersion string
-	Kind       string
-	Path       string
-	Category   gapCategory
-	Reason     string
+	Release    string      `json:"release"`
+	APIVersion string      `json:"apiVersion"`
+	Kind       string      `json:"kind"`
+	Path       string      `json:"path"`
+	Category   gapCategory `json:"category"`
+	Reason     string      `json:"reason"`
 }
 
 type coverageTarget struct {
@@ -83,13 +83,13 @@ type actualCoverageField struct {
 }
 
 type coverageFieldState struct {
-	Release    string
-	APIVersion string
-	Kind       string
-	Path       string
-	Bucket     coverageBucket
-	Metadata   coverageMetadataState
-	Gap        *observedGap
+	Release    string                `json:"release"`
+	APIVersion string                `json:"apiVersion"`
+	Kind       string                `json:"kind"`
+	Path       string                `json:"path"`
+	Bucket     coverageBucket        `json:"bucket"`
+	Metadata   coverageMetadataState `json:"metadata"`
+	Gap        *observedGap          `json:"gap,omitempty"`
 }
 
 type coverageMetadataState struct {
@@ -102,16 +102,16 @@ type coverageMetadataState struct {
 }
 
 type coverageGVKState struct {
-	Release      string
-	APIVersion   string
-	Kind         string
-	SourcePath   string
-	SourceSHA256 string
-	Fields       []coverageFieldState
-	Buckets      map[coverageBucket]int
+	Release      string                 `json:"release"`
+	APIVersion   string                 `json:"apiVersion"`
+	Kind         string                 `json:"kind"`
+	SourcePath   string                 `json:"sourcePath,omitempty"`
+	SourceSHA256 string                 `json:"sourceSHA256,omitempty"`
+	Fields       []coverageFieldState   `json:"fields"`
+	Buckets      map[coverageBucket]int `json:"buckets"`
 }
 
 type coverageState struct {
-	GVKs []coverageGVKState
-	Gaps []observedGap
+	GVKs []coverageGVKState `json:"gvks"`
+	Gaps []observedGap      `json:"gaps"`
 }

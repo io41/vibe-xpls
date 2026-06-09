@@ -1,6 +1,7 @@
 package schemagen
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -50,6 +51,149 @@ func TestCoverageBucketsSeparateUpstreamCompatAndMissingFields(t *testing.T) {
 	assertCoverageFieldBucket(t, state, "spec.missing", bucketMissing)
 }
 
+func TestCoverageStateJSONUsesReportFieldNames(t *testing.T) {
+	state := coverageState{
+		GVKs: []coverageGVKState{{
+			Release:      "v1.20.7",
+			APIVersion:   "example.org/v1",
+			Kind:         "Widget",
+			SourcePath:   "crds/widgets.yaml",
+			SourceSHA256: "abc123",
+			Fields: []coverageFieldState{{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.name",
+				Bucket:     bucketCoveredUpstream,
+				Metadata: coverageMetadataState{
+					Description: metadataCovered,
+				},
+				Gap: &observedGap{
+					Release:    "v1.20.7",
+					APIVersion: "example.org/v1",
+					Kind:       "Widget",
+					Path:       "spec.name",
+					Category:   gapMissingDescription,
+					Reason:     "description differs",
+				},
+			}},
+			Buckets: map[coverageBucket]int{bucketCoveredUpstream: 1},
+		}},
+		Gaps: []observedGap{{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.name",
+			Category:   gapMissingDescription,
+			Reason:     "description differs",
+		}},
+	}
+
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal coverage state: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal coverage state: %v", err)
+	}
+
+	assertHasJSONKey(t, doc, "gvks")
+	assertHasJSONKey(t, doc, "gaps")
+	assertMissingJSONKeys(t, doc, "GVKs", "Gaps")
+
+	gvk := objectFromJSONValue(t, arrayFromJSONValue(t, doc["gvks"])[0])
+	assertHasJSONKey(t, gvk, "release")
+	assertHasJSONKey(t, gvk, "apiVersion")
+	assertHasJSONKey(t, gvk, "kind")
+	assertHasJSONKey(t, gvk, "sourcePath")
+	assertHasJSONKey(t, gvk, "sourceSHA256")
+	assertHasJSONKey(t, gvk, "fields")
+	assertHasJSONKey(t, gvk, "buckets")
+	assertMissingJSONKeys(t, gvk, "Release", "APIVersion", "Kind", "SourcePath", "SourceSHA256", "Fields", "Buckets")
+
+	field := objectFromJSONValue(t, arrayFromJSONValue(t, gvk["fields"])[0])
+	assertHasJSONKey(t, field, "release")
+	assertHasJSONKey(t, field, "apiVersion")
+	assertHasJSONKey(t, field, "kind")
+	assertHasJSONKey(t, field, "path")
+	assertHasJSONKey(t, field, "bucket")
+	assertHasJSONKey(t, field, "metadata")
+	assertHasJSONKey(t, field, "gap")
+	assertMissingJSONKeys(t, field, "Release", "APIVersion", "Kind", "Path", "Bucket", "Metadata", "Gap")
+
+	metadata := objectFromJSONValue(t, field["metadata"])
+	assertHasJSONKey(t, metadata, "description")
+	assertMissingJSONKeys(t, metadata, "Description")
+
+	fieldGap := objectFromJSONValue(t, field["gap"])
+	assertHasJSONKey(t, fieldGap, "release")
+	assertHasJSONKey(t, fieldGap, "apiVersion")
+	assertHasJSONKey(t, fieldGap, "kind")
+	assertHasJSONKey(t, fieldGap, "path")
+	assertHasJSONKey(t, fieldGap, "category")
+	assertHasJSONKey(t, fieldGap, "reason")
+	assertMissingJSONKeys(t, fieldGap, "Release", "APIVersion", "Kind", "Path", "Category", "Reason")
+
+	gap := objectFromJSONValue(t, arrayFromJSONValue(t, doc["gaps"])[0])
+	assertHasJSONKey(t, gap, "release")
+	assertHasJSONKey(t, gap, "apiVersion")
+	assertHasJSONKey(t, gap, "kind")
+	assertHasJSONKey(t, gap, "path")
+	assertHasJSONKey(t, gap, "category")
+	assertHasJSONKey(t, gap, "reason")
+	assertMissingJSONKeys(t, gap, "Release", "APIVersion", "Kind", "Path", "Category", "Reason")
+}
+
+func TestCompatibilityOverrideDetectedFromDescriptionTypeOrRequired(t *testing.T) {
+	tests := []struct {
+		name     string
+		field    fieldDocJSON
+		override analyzer.FieldDoc
+		want     bool
+	}{
+		{
+			name:     "description",
+			field:    fieldDocJSON{Description: "compat description"},
+			override: analyzer.FieldDoc{Description: "compat description"},
+			want:     true,
+		},
+		{
+			name:     "type",
+			field:    fieldDocJSON{Type: "object"},
+			override: analyzer.FieldDoc{Type: "object"},
+			want:     true,
+		},
+		{
+			name:     "required",
+			field:    fieldDocJSON{Required: true},
+			override: analyzer.FieldDoc{Required: true},
+			want:     true,
+		},
+		{
+			name:     "not reflected",
+			field:    fieldDocJSON{Description: "upstream", Type: "string"},
+			override: analyzer.FieldDoc{Description: "compat", Type: "object", Required: true},
+			want:     false,
+		},
+		{
+			name:     "empty override metadata",
+			field:    fieldDocJSON{Description: "upstream", Type: "string", Required: true},
+			override: analyzer.FieldDoc{},
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fieldHasCompatibilityOverride(tt.field, tt.override)
+			if got != tt.want {
+				t.Fatalf("fieldHasCompatibilityOverride() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 func assertCoverageFieldBucket(t *testing.T, state coverageState, path string, bucket coverageBucket) {
 	t.Helper()
 	for _, gvk := range state.GVKs {
@@ -63,4 +207,41 @@ func assertCoverageFieldBucket(t *testing.T, state coverageState, path string, b
 		}
 	}
 	t.Fatalf("missing coverage field %s", path)
+}
+
+func assertHasJSONKey(t *testing.T, object map[string]any, key string) {
+	t.Helper()
+	if _, ok := object[key]; !ok {
+		t.Fatalf("missing JSON key %q in %#v", key, object)
+	}
+}
+
+func assertMissingJSONKeys(t *testing.T, object map[string]any, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if _, ok := object[key]; ok {
+			t.Fatalf("unexpected JSON key %q in %#v", key, object)
+		}
+	}
+}
+
+func arrayFromJSONValue(t *testing.T, value any) []any {
+	t.Helper()
+	array, ok := value.([]any)
+	if !ok {
+		t.Fatalf("JSON value %#v is %T, want array", value, value)
+	}
+	if len(array) == 0 {
+		t.Fatalf("JSON array is empty")
+	}
+	return array
+}
+
+func objectFromJSONValue(t *testing.T, value any) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("JSON value %#v is %T, want object", value, value)
+	}
+	return object
 }

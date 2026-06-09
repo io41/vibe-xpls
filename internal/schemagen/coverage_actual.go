@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/io41/vibe-xpls/internal/analyzer"
 )
 
 type actualCoverageKey struct {
@@ -45,7 +47,7 @@ func collectActualCoverageFields(outDir string) (map[actualCoverageKey]actualCov
 				Default:        field.Default,
 				Enum:           append([]string(nil), field.Enum...),
 				Deprecated:     field.Deprecated,
-				CompatOverride: hasOverride && override.Description != "" && override.Description == field.Description,
+				CompatOverride: hasOverride && fieldHasCompatibilityOverride(field, override),
 			}
 		}
 		if strings.Contains(doc.Provenance.UpstreamSourcePath, "generated/compatibility/") {
@@ -62,6 +64,12 @@ func collectActualCoverageFields(outDir string) (map[actualCoverageKey]actualCov
 		return nil, err
 	}
 	return actual, nil
+}
+
+func fieldHasCompatibilityOverride(field fieldDocJSON, override analyzer.FieldDoc) bool {
+	return override.Description != "" && override.Description == field.Description ||
+		override.Type != "" && override.Type == field.Type ||
+		override.Required && field.Required
 }
 
 func sortedActualKeys(actual map[actualCoverageKey]actualCoverageField) []actualCoverageKey {
