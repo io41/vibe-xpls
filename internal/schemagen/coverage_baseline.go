@@ -80,3 +80,18 @@ func validateCoverageBaselineUse(baseline coverageBaseline, gaps []observedGap) 
 	}
 	return problems
 }
+
+func validateCoverageRatchet(state coverageState, baseline coverageBaseline) []coverageProblem {
+	var problems []coverageProblem
+	for _, gap := range state.Gaps {
+		if _, ok := baseline.match(gap); ok {
+			continue
+		}
+		problems = append(problems, coverageProblem{Message: fmt.Sprintf(
+			"unclassified coverage gap release=%s apiVersion=%s kind=%s path=%s category=%s reason=%s",
+			gap.Release, gap.APIVersion, gap.Kind, gap.Path, gap.Category, gap.Reason,
+		)})
+	}
+	problems = append(problems, validateCoverageBaselineUse(baseline, state.Gaps)...)
+	return problems
+}

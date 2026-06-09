@@ -15,8 +15,6 @@ type coverageGVKKey struct {
 }
 
 func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey]actualCoverageField, baseline coverageBaseline) coverageState {
-	_ = baseline
-
 	state := coverageState{}
 	gvks := map[coverageGVKKey]*coverageGVKState{}
 	targetKeys := map[actualCoverageKey]struct{}{}
@@ -52,6 +50,7 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 			}
 			fieldState.Gap = &gap
 			fieldGaps = append(fieldGaps, gap)
+			markBaselineClassifiedFieldExcluded(&fieldState, baseline)
 		case hasActual:
 			if actualField.CompatOverride {
 				fieldState.Bucket = bucketCoveredWithCompatOverride
@@ -76,6 +75,7 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 			}
 			fieldState.Gap = &gap
 			fieldGaps = append(fieldGaps, gap)
+			markBaselineClassifiedFieldExcluded(&fieldState, baseline)
 		}
 
 		addCoverageField(gvks, fieldState, target.SourcePath, target.SourceSHA256)
@@ -111,6 +111,7 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 			Bucket:     bucket,
 			Gap:        &gap,
 		}
+		markBaselineClassifiedFieldExcluded(&fieldState, baseline)
 		addCoverageField(gvks, fieldState, "", "")
 		state.Gaps = append(state.Gaps, gap)
 	}
@@ -118,6 +119,15 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 	state.GVKs = sortedCoverageGVKs(gvks)
 	sortCoverageGaps(state.Gaps)
 	return state
+}
+
+func markBaselineClassifiedFieldExcluded(field *coverageFieldState, baseline coverageBaseline) {
+	if field.Gap == nil {
+		return
+	}
+	if _, ok := baseline.match(*field.Gap); ok {
+		field.Bucket = bucketExcluded
+	}
 }
 
 func addCoverageField(gvks map[coverageGVKKey]*coverageGVKState, field coverageFieldState, sourcePath, sourceSHA256 string) {

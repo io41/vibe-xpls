@@ -104,3 +104,178 @@ func TestCoverageBaselineWildcardMustMatchAtLeastOneObservedGap(t *testing.T) {
 		t.Fatalf("problem = %#v, want obsolete baseline entry", problems[0])
 	}
 }
+
+func TestValidateCoverageRatchetFailsForUnclassifiedGap(t *testing.T) {
+	state := coverageState{Gaps: []observedGap{{
+		Release:    "v1.20.7",
+		APIVersion: "example.org/v1",
+		Kind:       "Widget",
+		Path:       "spec.mode",
+		Category:   gapMissingField,
+		Reason:     "field absent",
+	}}}
+
+	problems := validateCoverageRatchet(state, coverageBaseline{FormatVersion: coverageFormatVersion})
+	if len(problems) != 1 {
+		t.Fatalf("problem count = %d, want 1", len(problems))
+	}
+	if !strings.Contains(problems[0].Message, "unclassified coverage gap") {
+		t.Fatalf("problem = %#v, want unclassified coverage gap", problems[0])
+	}
+}
+
+func TestValidateCoverageRatchetPassesForClassifiedGap(t *testing.T) {
+	state := coverageState{Gaps: []observedGap{{
+		Release:    "v1.20.7",
+		APIVersion: "example.org/v1",
+		Kind:       "Widget",
+		Path:       "spec.mode",
+		Category:   gapMissingField,
+		Reason:     "field absent",
+	}}}
+	baseline := coverageBaseline{
+		FormatVersion: coverageFormatVersion,
+		Entries: []coverageBaselineEntry{{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.mode",
+			Category:   gapMissingField,
+			Reason:     "current generator omits this fixture field",
+			Note:       "test fixture",
+		}},
+	}
+
+	if problems := validateCoverageRatchet(state, baseline); len(problems) != 0 {
+		t.Fatalf("problems = %#v, want none", problems)
+	}
+}
+
+func TestValidateCoverageRatchetFailsForObsoleteBaselineEntry(t *testing.T) {
+	baseline := coverageBaseline{
+		FormatVersion: coverageFormatVersion,
+		Entries: []coverageBaselineEntry{{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.removed",
+			Category:   gapMissingField,
+			Reason:     "field used to be absent",
+			Note:       "stale fixture",
+		}},
+	}
+
+	problems := validateCoverageRatchet(coverageState{}, baseline)
+	if len(problems) != 1 {
+		t.Fatalf("problem count = %d, want 1", len(problems))
+	}
+	if !strings.Contains(problems[0].Message, "obsolete baseline entry") {
+		t.Fatalf("problem = %#v, want obsolete baseline entry", problems[0])
+	}
+}
+
+func TestCoverageBucketsBaselineClassifiedFieldGapsBecomeExcluded(t *testing.T) {
+	targets := []coverageTarget{
+		{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.missing",
+		},
+		{
+			Release:           "v1.20.7",
+			APIVersion:        "example.org/v1",
+			Kind:              "Widget",
+			Path:              "spec.unsupported",
+			UnsupportedReason: "unsupported fixture shape",
+		},
+		{
+			Release:     "v1.20.7",
+			APIVersion:  "example.org/v1",
+			Kind:        "Widget",
+			Path:        "spec.metadata",
+			Description: "upstream description",
+			Type:        "string",
+		},
+	}
+	actual := map[actualCoverageKey]actualCoverageField{
+		{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.compatOnly",
+		}: {
+			Path:        "spec.compatOnly",
+			CompatAdded: true,
+		},
+		{
+			Release:    "v1.20.7",
+			APIVersion: "example.org/v1",
+			Kind:       "Widget",
+			Path:       "spec.metadata",
+		}: {
+			Path:        "spec.metadata",
+			Description: "generated description",
+			Type:        "string",
+		},
+	}
+	baseline := coverageBaseline{
+		FormatVersion: coverageFormatVersion,
+		Entries: []coverageBaselineEntry{
+			{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.missing",
+				Category:   gapMissingField,
+				Reason:     "current generator omits this fixture field",
+				Note:       "test fixture",
+			},
+			{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.unsupported",
+				Category:   gapUnsupportedOpenAPIShape,
+				Reason:     "current generator cannot model this shape",
+				Note:       "test fixture",
+			},
+			{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.compatOnly",
+				Category:   gapCompatOnlySchema,
+				Reason:     "compatibility-only field remains generated",
+				Note:       "test fixture",
+			},
+			{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.metadata",
+				Category:   gapMissingDescription,
+				Reason:     "current generator uses compatibility metadata",
+				Note:       "test fixture",
+			},
+		},
+	}
+
+	state := computeCoverageState(targets, actual, baseline)
+
+	assertCoverageFieldBucket(t, state, "spec.missing", bucketExcluded)
+	assertCoverageFieldBucket(t, state, "spec.unsupported", bucketExcluded)
+	assertCoverageFieldBucket(t, state, "spec.compatOnly", bucketExcluded)
+	assertCoverageFieldBucket(t, state, "spec.metadata", bucketCoveredUpstream)
+	assertCoverageGap(t, state, "spec.metadata", gapMissingDescription)
+}
+
+func assertCoverageGap(t *testing.T, state coverageState, path string, category gapCategory) {
+	t.Helper()
+	for _, gap := range state.Gaps {
+		if gap.Path == path && gap.Category == category {
+			return
+		}
+	}
+	t.Fatalf("missing coverage gap path=%s category=%s", path, category)
+}
