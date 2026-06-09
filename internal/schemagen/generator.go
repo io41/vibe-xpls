@@ -38,18 +38,25 @@ type crdDocument struct {
 }
 
 type openAPISchema struct {
-	Ref                        string                   `yaml:"$ref"`
-	Type                       string                   `yaml:"type"`
-	Description                string                   `yaml:"description"`
-	Properties                 map[string]openAPISchema `yaml:"properties"`
-	Required                   []string                 `yaml:"required"`
-	Items                      *openAPISchema           `yaml:"items"`
-	Default                    any                      `yaml:"default"`
-	Enum                       []any                    `yaml:"enum"`
-	AdditionalProperties       any                      `yaml:"additionalProperties"`
-	Definitions                map[string]openAPISchema `yaml:"definitions"`
-	Defs                       map[string]openAPISchema `yaml:"$defs"`
-	XKubernetesPreserveUnknown bool                     `yaml:"x-kubernetes-preserve-unknown-fields"`
+	Ref                         string                   `yaml:"$ref"`
+	Type                        string                   `yaml:"type"`
+	Description                 string                   `yaml:"description"`
+	Properties                  map[string]openAPISchema `yaml:"properties"`
+	Required                    []string                 `yaml:"required"`
+	Items                       *openAPISchema           `yaml:"items"`
+	Default                     any                      `yaml:"default"`
+	Enum                        []any                    `yaml:"enum"`
+	AdditionalProperties        any                      `yaml:"additionalProperties"`
+	Definitions                 map[string]openAPISchema `yaml:"definitions"`
+	Defs                        map[string]openAPISchema `yaml:"$defs"`
+	PatternProperties           map[string]openAPISchema `yaml:"patternProperties"`
+	OneOf                       []openAPISchema          `yaml:"oneOf"`
+	AnyOf                       []openAPISchema          `yaml:"anyOf"`
+	AllOf                       []openAPISchema          `yaml:"allOf"`
+	Deprecated                  *bool                    `yaml:"deprecated"`
+	XKubernetesPreserveUnknown  bool                     `yaml:"x-kubernetes-preserve-unknown-fields"`
+	XKubernetesEmbeddedResource bool                     `yaml:"x-kubernetes-embedded-resource"`
+	XKubernetesIntOrString      bool                     `yaml:"x-kubernetes-int-or-string"`
 }
 
 type schemaBundleManifest struct {
@@ -513,8 +520,29 @@ func mergeSchemaOverride(base, override openAPISchema) openAPISchema {
 	if override.Defs != nil {
 		base.Defs = override.Defs
 	}
+	if override.PatternProperties != nil {
+		base.PatternProperties = override.PatternProperties
+	}
+	if override.OneOf != nil {
+		base.OneOf = override.OneOf
+	}
+	if override.AnyOf != nil {
+		base.AnyOf = override.AnyOf
+	}
+	if override.AllOf != nil {
+		base.AllOf = override.AllOf
+	}
+	if override.Deprecated != nil {
+		base.Deprecated = override.Deprecated
+	}
 	if override.XKubernetesPreserveUnknown {
 		base.XKubernetesPreserveUnknown = override.XKubernetesPreserveUnknown
+	}
+	if override.XKubernetesEmbeddedResource {
+		base.XKubernetesEmbeddedResource = override.XKubernetesEmbeddedResource
+	}
+	if override.XKubernetesIntOrString {
+		base.XKubernetesIntOrString = override.XKubernetesIntOrString
 	}
 	return base
 }
@@ -694,5 +722,12 @@ func (schema openAPISchema) isZero() bool {
 		schema.AdditionalProperties == nil &&
 		len(schema.Definitions) == 0 &&
 		len(schema.Defs) == 0 &&
-		!schema.XKubernetesPreserveUnknown
+		len(schema.PatternProperties) == 0 &&
+		len(schema.OneOf) == 0 &&
+		len(schema.AnyOf) == 0 &&
+		len(schema.AllOf) == 0 &&
+		schema.Deprecated == nil &&
+		!schema.XKubernetesPreserveUnknown &&
+		!schema.XKubernetesEmbeddedResource &&
+		!schema.XKubernetesIntOrString
 }
