@@ -38,6 +38,11 @@ func (a *Analyzer) Completion(uri, parentPath string) Completion {
 	if !ok {
 		return Completion{}
 	}
+	if root.apiVersion == "apiextensions.crossplane.io/v1" && root.kind == "Composition" {
+		if completion, ok := a.functionInputCompletionForParentPath(uri, parsed, parentPath); ok {
+			return completion
+		}
+	}
 	gvk := SourceGVK{APIVersion: root.apiVersion, Kind: root.kind}
 	schemaParentPath := schemaPathFromParsedPath(parentPath)
 	if a.schemas.HasWorkspaceSchema(gvk) {
@@ -434,6 +439,39 @@ func compositionFunctionInputPath(path string) (inputPath, inputChildPath string
 	}
 	inputPath = "spec.pipeline[" + matches[1] + "].input"
 	return inputPath, matches[2], true
+}
+
+func (a *Analyzer) functionInputCompletionForParentPath(uri string, parsed YAMLDocument, parentPath string) (Completion, bool) {
+	inputPath, inputChildPath, ok := compositionFunctionInputPath(parentPath)
+	if !ok {
+		return Completion{}, false
+	}
+	gvks := map[SourceGVK]struct{}{}
+	inputs := 0
+	for _, candidate := range parsed.occurrences {
+		if candidate.Path != inputPath || !candidate.Stable {
+			continue
+		}
+		inputs++
+		apiVersion, apiOK := parsed.ValueForDocumentPath(candidate.DocumentIndex, inputPath+".apiVersion")
+		kind, kindOK := parsed.ValueForDocumentPath(candidate.DocumentIndex, inputPath+".kind")
+		if !apiOK || !kindOK || apiVersion == "" || kind == "" {
+			return Completion{}, false
+		}
+		gvks[SourceGVK{APIVersion: apiVersion, Kind: kind}] = struct{}{}
+	}
+	if inputs == 0 || len(gvks) != 1 {
+		return Completion{}, false
+	}
+	var gvk SourceGVK
+	for candidate := range gvks {
+		gvk = candidate
+	}
+	fields, ok := a.fieldsForInputGVK(uri, gvk)
+	if !ok {
+		return Completion{}, false
+	}
+	return completionFromFields(fields, inputChildPath), true
 }
 
 func (a *Analyzer) functionInputCompletionTarget(uri string, parsed YAMLDocument, context completionContext) (functionInputCompletionTarget, bool) {

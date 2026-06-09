@@ -200,6 +200,183 @@ spec:
 	}
 }
 
+func TestAnalyzerCompletionDispatchesFunctionInputSchemaForParentPath(t *testing.T) {
+	root, a := writeFunctionInputCompletionPackage(t)
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-parent.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: TemplateInput
+        spec:
+`
+	a.OpenDocument(uri, text)
+	_, parsed, ok := a.currentYAMLDocument(uri)
+	if !ok || !parsed.IsStablePath("spec.pipeline[0].input.spec") {
+		t.Fatalf("test setup: input spec path not stable")
+	}
+
+	completion := a.Completion(uri, "spec.pipeline[0].input.spec")
+	item, ok := completionItemByLabel(completion.Items, "inline")
+	if !ok {
+		t.Fatalf("completion missing inline input field: %#v", completion.Items)
+	}
+	if !strings.Contains(item.Documentation, "Inline template source.") {
+		t.Fatalf("inline documentation = %q, want input schema docs", item.Documentation)
+	}
+}
+
+func TestAnalyzerCompletionSkipsAmbiguousFunctionInputSchemaForParentPath(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-a-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputA", "alphaField", "Alpha input field."))
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-b-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputB", "betaField", "Beta input field."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-parent-multi.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputA
+        spec:
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputB
+        spec:
+`
+	a.OpenDocument(uri, text)
+	_, parsed, ok := a.currentYAMLDocument(uri)
+	if !ok {
+		t.Fatalf("test setup: document not open")
+	}
+	stableInputSpecs := 0
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.Path == "spec.pipeline[0].input.spec" && occurrence.Stable {
+			stableInputSpecs++
+		}
+	}
+	if stableInputSpecs != 2 {
+		t.Fatalf("test setup: stable input spec occurrences = %d, want 2", stableInputSpecs)
+	}
+
+	completion := a.Completion(uri, "spec.pipeline[0].input.spec")
+	if containsCompletion(completion.Items, "alphaField") || containsCompletion(completion.Items, "betaField") {
+		t.Fatalf("ambiguous parent path returned input fields: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionSkipsIncompleteAmbiguousFunctionInputSchemaForParentPath(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-a-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputA", "alphaField", "Alpha input field."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-parent-incomplete-multi.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputA
+        spec:
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        spec:
+`
+	a.OpenDocument(uri, text)
+	_, parsed, ok := a.currentYAMLDocument(uri)
+	if !ok {
+		t.Fatalf("test setup: document not open")
+	}
+	stableInputs := 0
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.Path == "spec.pipeline[0].input" && occurrence.Stable {
+			stableInputs++
+		}
+	}
+	if stableInputs != 2 {
+		t.Fatalf("test setup: stable input occurrences = %d, want 2", stableInputs)
+	}
+
+	completion := a.Completion(uri, "spec.pipeline[0].input.spec")
+	if containsCompletion(completion.Items, "alphaField") {
+		t.Fatalf("incomplete ambiguous parent path returned alphaField: %#v", completion.Items)
+	}
+}
+
+func TestAnalyzerCompletionSkipsUnstableAmbiguousFunctionInputSchemaForParentPath(t *testing.T) {
+	root := t.TempDir()
+	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	analyzerWriteFile(t, filepath.Join(root, "api", "input-a-crd.yaml"), workspaceFunctionInputCRD("fn.example.org", "v1alpha1", "InputA", "alphaField", "Alpha input field."))
+	a, err := New(Options{WorkspaceRoot: root, Limits: DefaultLimits()})
+	if err != nil {
+		t.Fatalf("new analyzer: %v", err)
+	}
+	uri := "file://" + filepath.Join(root, "api", "composition-function-input-parent-unstable-multi.yaml")
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: InputA
+        spec:
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - input:
+        apiVersion: fn.example.org/v1alpha1
+        kind: {{ .InputKind }}
+        spec:
+`
+	a.OpenDocument(uri, text)
+	_, parsed, ok := a.currentYAMLDocument(uri)
+	if !ok {
+		t.Fatalf("test setup: document not open")
+	}
+	inputSpecs := 0
+	for _, occurrence := range parsed.occurrences {
+		if occurrence.Path == "spec.pipeline[0].input.spec" {
+			inputSpecs++
+		}
+	}
+	if inputSpecs != 2 {
+		t.Fatalf("test setup: input spec occurrences = %d, want 2", inputSpecs)
+	}
+	if kind, ok := parsed.ValueForDocumentPath(1, "spec.pipeline[0].input.kind"); ok {
+		t.Fatalf("test setup: second input kind = %q ok=true, want unstable kind", kind)
+	}
+
+	completion := a.Completion(uri, "spec.pipeline[0].input.spec")
+	if containsCompletion(completion.Items, "alphaField") {
+		t.Fatalf("unstable ambiguous parent path returned alphaField: %#v", completion.Items)
+	}
+}
+
 func TestAnalyzerCompletionAtOffsetDispatchesFunctionInputArrayItemSchema(t *testing.T) {
 	root := t.TempDir()
 	analyzerWriteFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
