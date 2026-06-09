@@ -46,6 +46,18 @@ func TestSchemaGenCLIRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestSchemaGenCLIDriftRequiresTokenWhenRequested(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "drift", "check", "--config", fixtureConfigPath(), "--require-token")
+	cmd.Env = append(os.Environ(), "GITHUB_TOKEN=")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("go run . drift check --require-token succeeded without GITHUB_TOKEN")
+	}
+	if !strings.Contains(string(output), "GITHUB_TOKEN is required") {
+		t.Fatalf("drift check output missing token requirement:\n%s", output)
+	}
+}
+
 func fixtureConfigPath() string {
 	return filepath.Join("..", "..", "internal", "schemagen", "testdata", "config.json")
 }

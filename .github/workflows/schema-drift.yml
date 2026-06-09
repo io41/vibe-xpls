@@ -1,0 +1,30 @@
+name: Schema Drift
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check schema drift
+        run: go run ./cmd/vibe-xpls-schema-gen drift check --config internal/analyzer/schemadata/config.json --require-token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

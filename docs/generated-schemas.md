@@ -35,3 +35,19 @@ when generator support improves; the coverage check reports entries that no
 longer match an observed gap.
 
 The generator must produce byte-identical output from committed inputs. Runtime never downloads schemas.
+
+## Upstream Drift
+
+Normal PR checks do not access the network. They only regenerate and compare
+committed schema inputs and generated artifacts.
+
+Scheduled CI checks upstream drift with:
+
+```bash
+go run ./cmd/vibe-xpls-schema-gen drift check --config internal/analyzer/schemadata/config.json
+```
+
+The scheduled workflow runs the command with `--require-token` and
+`GITHUB_TOKEN` so GitHub rate limits are explicit. The drift check reports
+pinned tag commit drift, newer stable Crossplane tags, and CRD content drift. It
+does not mutate committed schema inputs.
