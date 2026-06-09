@@ -319,6 +319,55 @@ func TestCompletionItemsIncludePresentationMetadata(t *testing.T) {
 	}
 }
 
+func TestCompletionItemsDispatchFunctionInputSchema(t *testing.T) {
+	root := t.TempDir()
+	writeLSPTestFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\nmetadata:\n  name: package\n")
+	writeLSPTestFile(t, filepath.Join(root, "api", "function-input-crd.yaml"), lspFunctionInputCRD())
+	uri := fileURI(filepath.Join(root, "api", "composition-function-input.yaml"))
+	text := `apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+spec:
+  pipeline:
+    - functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: example.org/v1
+        kind: FunctionInput
+        spec:
+          i`
+
+	messages := runServerFrames(t,
+		requestFrame(t, 1, "initialize", map[string]any{"rootUri": fileURI(root), "capabilities": zedCompletionCapabilities()}),
+		notificationFrame(t, "textDocument/didOpen", map[string]any{
+			"textDocument": map[string]any{"uri": uri, "text": text},
+		}),
+		requestFrame(t, 2, "textDocument/completion", map[string]any{
+			"textDocument": map[string]any{"uri": uri},
+			"position":     positionAtOffset(t, text, len(text), source.EncodingUTF16),
+		}),
+	)
+
+	completion := resultMap(t, responseForID(t, messages, 2))
+	item := completionItemByLabelForTest(t, asSlice(t, completion["items"]), "inline")
+	if item["kind"] != float64(10) {
+		t.Fatalf("kind = %#v, want LSP Property 10", item["kind"])
+	}
+	documentation := asMap(t, item["documentation"])
+	if documentation["kind"] != "markdown" || documentation["value"] != "Inline template source.\n\n_Type: string_" {
+		t.Fatalf("documentation = %#v, want markdown input schema docs", item["documentation"])
+	}
+	edit := asMap(t, item["textEdit"])
+	if edit["newText"] != "          inline:" {
+		t.Fatalf("newText = %#v, want indented input field", edit["newText"])
+	}
+	rng := asMap(t, edit["range"])
+	start := asMap(t, rng["start"])
+	end := asMap(t, rng["end"])
+	if start["line"] != float64(10) || start["character"] != float64(0) || end["line"] != float64(10) || end["character"] != float64(11) {
+		t.Fatalf("textEdit range = %#v, want line 10 char 0..11", rng)
+	}
+}
+
 func TestCompletionItemsOmitEmptyDocumentation(t *testing.T) {
 	root := t.TempDir()
 	writeLSPTestFile(t, filepath.Join(root, "crossplane.yaml"), "apiVersion: meta.pkg.crossplane.io/v1\nkind: Configuration\n")
@@ -1022,6 +1071,38 @@ spec:
                     ` + fieldName + `:
                       type: string
                       description: ` + description + `
+`
+}
+
+func lspFunctionInputCRD() string {
+	return `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: functioninputs.example.org
+spec:
+  group: example.org
+  names:
+    kind: FunctionInput
+    plural: functioninputs
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            spec:
+              type: object
+              properties:
+                inline:
+                  type: string
+                  description: Inline template source.
 `
 }
 
