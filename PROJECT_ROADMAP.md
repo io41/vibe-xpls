@@ -57,6 +57,10 @@ schema tests, runs the full Go test suite, and builds both CLIs into
   completion, and v1/v2 release-specific completion sets.
 - Generated compatibility schemas include parent-key documentation for package
   metadata completions.
+- Function input schema dispatch for Composition pipeline inputs. When a
+  `spec.pipeline[].input` object has a stable `apiVersion` and `kind` whose
+  schema is known locally, completions under that input use the input object's
+  schema.
 
 ## Current
 
@@ -65,20 +69,16 @@ schema tests, runs the full Go test suite, and builds both CLIs into
 
 ## Next
 
-1. Function input schema dispatch.
-   Use the selected pipeline function and known input GVK to provide completions
-   under `spec.pipeline[].input` when the input object's schema is known.
-
-2. Relationship-aware completions.
+1. Relationship-aware completions.
    Use the local package, XRD, Composition, function, and provider graph to
    suggest safe relationships such as composition type refs and package
    dependency references.
 
-3. Safe value completions.
+2. Safe value completions.
    Add value completions from schema enums, defaults, and in-workspace facts
    without inventing values or querying remote systems.
 
-4. Developer/debug schema insight command.
+3. Developer/debug schema insight command.
    Add a command that explains bundle health, selected release, active package
    root, schema provenance, and completion suppression reasons for a file.
 
