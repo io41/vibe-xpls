@@ -151,6 +151,44 @@ func TestValidateCoverageRatchetPassesForClassifiedGap(t *testing.T) {
 	}
 }
 
+func TestValidateCoverageRatchetPassesWhenWildcardAndExactBaselineEntriesMatchSameGap(t *testing.T) {
+	state := coverageState{Gaps: []observedGap{{
+		Release:    "v1.20.7",
+		APIVersion: "example.org/v1",
+		Kind:       "Widget",
+		Path:       "spec.mode",
+		Category:   gapMissingField,
+		Reason:     "field absent",
+	}}}
+	baseline := coverageBaseline{
+		FormatVersion: coverageFormatVersion,
+		Entries: []coverageBaselineEntry{
+			{
+				Release:    "*",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.mode",
+				Category:   gapMissingField,
+				Reason:     "current generator omits this fixture field across pins",
+				Note:       "wildcard fixture",
+			},
+			{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.mode",
+				Category:   gapMissingField,
+				Reason:     "current generator omits this fixture field for this pin",
+				Note:       "exact fixture",
+			},
+		},
+	}
+
+	if problems := validateCoverageRatchet(state, baseline); len(problems) != 0 {
+		t.Fatalf("problems = %#v, want none", problems)
+	}
+}
+
 func TestValidateCoverageRatchetFailsForObsoleteBaselineEntry(t *testing.T) {
 	baseline := coverageBaseline{
 		FormatVersion: coverageFormatVersion,
@@ -203,9 +241,17 @@ func TestCoverageBucketsBaselineClassifiedFieldGapsBecomeExcluded(t *testing.T) 
 			Release:    "v1.20.7",
 			APIVersion: "example.org/v1",
 			Kind:       "Widget",
-			Path:       "spec.compatOnly",
+			Path:       "spec.compatAdded",
 		}: {
-			Path:        "spec.compatOnly",
+			Path: "spec.compatAdded",
+		},
+		{
+			Release:    "v1.20.7",
+			APIVersion: "compat.example.org/v1",
+			Kind:       "Synthetic",
+			Path:       "spec.compatOnlySchema",
+		}: {
+			Path:        "spec.compatOnlySchema",
 			CompatAdded: true,
 		},
 		{
@@ -244,7 +290,16 @@ func TestCoverageBucketsBaselineClassifiedFieldGapsBecomeExcluded(t *testing.T) 
 				Release:    "v1.20.7",
 				APIVersion: "example.org/v1",
 				Kind:       "Widget",
-				Path:       "spec.compatOnly",
+				Path:       "spec.compatAdded",
+				Category:   gapCompatAddedField,
+				Reason:     "compatibility field remains generated",
+				Note:       "test fixture",
+			},
+			{
+				Release:    "v1.20.7",
+				APIVersion: "compat.example.org/v1",
+				Kind:       "Synthetic",
+				Path:       "spec.compatOnlySchema",
 				Category:   gapCompatOnlySchema,
 				Reason:     "compatibility-only field remains generated",
 				Note:       "test fixture",
@@ -265,7 +320,8 @@ func TestCoverageBucketsBaselineClassifiedFieldGapsBecomeExcluded(t *testing.T) 
 
 	assertCoverageFieldBucket(t, state, "spec.missing", bucketExcluded)
 	assertCoverageFieldBucket(t, state, "spec.unsupported", bucketExcluded)
-	assertCoverageFieldBucket(t, state, "spec.compatOnly", bucketExcluded)
+	assertCoverageFieldBucket(t, state, "spec.compatAdded", bucketCompatAddedField)
+	assertCoverageFieldBucket(t, state, "spec.compatOnlySchema", bucketExcluded)
 	assertCoverageFieldBucket(t, state, "spec.metadata", bucketCoveredUpstream)
 	assertCoverageGap(t, state, "spec.metadata", gapMissingDescription)
 }

@@ -111,7 +111,9 @@ func computeCoverageState(targets []coverageTarget, actual map[actualCoverageKey
 			Bucket:     bucket,
 			Gap:        &gap,
 		}
-		markBaselineClassifiedFieldExcluded(&fieldState, baseline)
+		if category == gapCompatOnlySchema {
+			markBaselineClassifiedFieldExcluded(&fieldState, baseline)
+		}
 		addCoverageField(gvks, fieldState, "", "")
 		state.Gaps = append(state.Gaps, gap)
 	}

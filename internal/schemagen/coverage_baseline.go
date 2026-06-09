@@ -52,22 +52,17 @@ func (entry coverageBaselineEntry) key() string {
 }
 
 func (baseline coverageBaseline) match(gap observedGap) (coverageBaselineEntry, bool) {
-	for _, entry := range baseline.Entries {
-		if entry.Release != "*" && entry.Release != gap.Release {
-			continue
-		}
-		if entry.APIVersion != gap.APIVersion || entry.Kind != gap.Kind || entry.Path != gap.Path || entry.Category != gap.Category {
-			continue
-		}
-		return entry, true
+	entries := baseline.matchingEntries(gap)
+	if len(entries) == 0 {
+		return coverageBaselineEntry{}, false
 	}
-	return coverageBaselineEntry{}, false
+	return entries[0], true
 }
 
 func validateCoverageBaselineUse(baseline coverageBaseline, gaps []observedGap) []coverageProblem {
 	matched := map[string]struct{}{}
 	for _, gap := range gaps {
-		if entry, ok := baseline.match(gap); ok {
+		for _, entry := range baseline.matchingEntries(gap) {
 			matched[entry.key()] = struct{}{}
 		}
 	}
@@ -79,6 +74,20 @@ func validateCoverageBaselineUse(baseline coverageBaseline, gaps []observedGap) 
 		problems = append(problems, coverageProblem{Message: fmt.Sprintf("obsolete baseline entry %s", entry.key())})
 	}
 	return problems
+}
+
+func (baseline coverageBaseline) matchingEntries(gap observedGap) []coverageBaselineEntry {
+	var entries []coverageBaselineEntry
+	for _, entry := range baseline.Entries {
+		if entry.Release != "*" && entry.Release != gap.Release {
+			continue
+		}
+		if entry.APIVersion != gap.APIVersion || entry.Kind != gap.Kind || entry.Path != gap.Path || entry.Category != gap.Category {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
 
 func validateCoverageRatchet(state coverageState, baseline coverageBaseline) []coverageProblem {
