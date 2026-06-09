@@ -183,7 +183,8 @@ func renderCoverageMarkdown(state coverageState) string {
 	b.WriteString("# Schema Coverage\n\n")
 	for _, release := range sortedCoverageReleaseTags(state) {
 		gvks := coverageGVKsForRelease(state.GVKs, release)
-		totals := coverageCounts(gvks)
+		gaps := coverageGapsForRelease(state.Gaps, release)
+		totals := coverageCounts(gvks, gaps)
 		b.WriteString(fmt.Sprintf("## Release %s\n\n", release))
 		b.WriteString(fmt.Sprintf(
 			"Upstream field coverage: %d/%d (%.2f%%)\n",
@@ -195,7 +196,7 @@ func renderCoverageMarkdown(state coverageState) string {
 		b.WriteString("### Worst-Covered GVKs\n\n")
 		b.WriteString("| API Version | Kind | Coverage | Known Gaps |\n")
 		b.WriteString("| --- | --- | ---: | ---: |\n")
-		for _, row := range worstCoveredGVKs(gvks, 10) {
+		for _, row := range worstCoveredGVKs(gvks, gaps, 10) {
 			b.WriteString(fmt.Sprintf("| %s | %s | %.2f%% | %d |\n", row.APIVersion, row.Kind, row.Percent, row.KnownGaps))
 		}
 		b.WriteString("\n")
@@ -208,9 +209,10 @@ func coverageReportReleases(state coverageState) []coverageReleaseReport {
 	releases := make([]coverageReleaseReport, 0, len(tags))
 	for _, tag := range tags {
 		gvks := coverageGVKsForRelease(state.GVKs, tag)
+		gaps := coverageGapsForRelease(state.Gaps, tag)
 		releases = append(releases, coverageReleaseReport{
 			Tag:    tag,
-			Totals: coverageCounts(gvks),
+			Totals: coverageCounts(gvks, gaps),
 			GVKs:   coverageGVKReports(gvks),
 		})
 	}
@@ -243,6 +245,28 @@ func coverageGVKsForRelease(gvks []coverageGVKState, release string) []coverageG
 		}
 		return out[i].Kind < out[j].Kind
 	})
+	return out
+}
+
+func coverageGapsForRelease(gaps []observedGap, release string) []observedGap {
+	out := make([]observedGap, 0, len(gaps))
+	for _, gap := range gaps {
+		if gap.Release == release {
+			out = append(out, gap)
+		}
+	}
+	sortCoverageGaps(out)
+	return out
+}
+
+func coverageGapsForGVK(gaps []observedGap, release, apiVersion, kind string) []observedGap {
+	out := make([]observedGap, 0, len(gaps))
+	for _, gap := range gaps {
+		if gap.Release == release && gap.APIVersion == apiVersion && gap.Kind == kind {
+			out = append(out, gap)
+		}
+	}
+	sortCoverageGaps(out)
 	return out
 }
 
@@ -302,23 +326,20 @@ func sortedBucketMap(buckets map[coverageBucket]int) map[string]int {
 	return out
 }
 
-func coverageCounts(gvks []coverageGVKState) coverageTotalsReport {
-	var totals coverageTotalsReport
+func coverageCounts(gvks []coverageGVKState, gaps []observedGap) coverageTotalsReport {
+	totals := coverageTotalsReport{KnownGaps: len(gaps)}
 	for _, gvk := range gvks {
 		var hasUpstreamField bool
 		var hasGeneratedField bool
 		for _, field := range gvk.Fields {
-			if coverageBucketIsTarget(field.Bucket) {
+			if coverageFieldIsTarget(field) {
 				hasUpstreamField = true
 				totals.TargetFields++
 			}
 			if coverageBucketIsCovered(field.Bucket) {
 				totals.CoveredUpstreamFields++
 			}
-			if coverageBucketIsKnownGap(field.Bucket) {
-				totals.KnownGaps++
-			}
-			if coverageBucketIsGenerated(field.Bucket) {
+			if coverageFieldIsGenerated(field) {
 				hasGeneratedField = true
 			}
 		}
@@ -332,12 +353,12 @@ func coverageCounts(gvks []coverageGVKState) coverageTotalsReport {
 	return totals
 }
 
-func coverageBucketIsTarget(bucket coverageBucket) bool {
-	switch bucket {
+func coverageFieldIsTarget(field coverageFieldState) bool {
+	switch field.Bucket {
 	case bucketCompatAddedField, bucketCompatOnlySchema:
 		return false
 	default:
-		return true
+		return !coverageFieldIsExcludedCompatOnlySchema(field)
 	}
 }
 
@@ -345,22 +366,20 @@ func coverageBucketIsCovered(bucket coverageBucket) bool {
 	return bucket == bucketCoveredUpstream || bucket == bucketCoveredWithCompatOverride
 }
 
-func coverageBucketIsKnownGap(bucket coverageBucket) bool {
-	switch bucket {
-	case bucketMissing, bucketExcluded, bucketUnsupportedShape:
+func coverageFieldIsGenerated(field coverageFieldState) bool {
+	if coverageFieldIsExcludedCompatOnlySchema(field) {
+		return true
+	}
+	switch field.Bucket {
+	case bucketCoveredUpstream, bucketCoveredWithCompatOverride, bucketCompatAddedField, bucketCompatOnlySchema:
 		return true
 	default:
 		return false
 	}
 }
 
-func coverageBucketIsGenerated(bucket coverageBucket) bool {
-	switch bucket {
-	case bucketCoveredUpstream, bucketCoveredWithCompatOverride, bucketCompatAddedField, bucketCompatOnlySchema:
-		return true
-	default:
-		return false
-	}
+func coverageFieldIsExcludedCompatOnlySchema(field coverageFieldState) bool {
+	return field.Bucket == bucketExcluded && field.Gap != nil && field.Gap.Category == gapCompatOnlySchema
 }
 
 func percent(numerator, denominator int) float64 {
@@ -377,10 +396,16 @@ type worstCoveredGVK struct {
 	KnownGaps  int
 }
 
-func worstCoveredGVKs(gvks []coverageGVKState, limit int) []worstCoveredGVK {
+func worstCoveredGVKs(gvks []coverageGVKState, gaps []observedGap, limit int) []worstCoveredGVK {
 	rows := make([]worstCoveredGVK, 0, len(gvks))
 	for _, gvk := range gvks {
-		counts := coverageCounts([]coverageGVKState{gvk})
+		counts := coverageCounts(
+			[]coverageGVKState{gvk},
+			coverageGapsForGVK(gaps, gvk.Release, gvk.APIVersion, gvk.Kind),
+		)
+		if counts.TargetFields == 0 {
+			continue
+		}
 		rows = append(rows, worstCoveredGVK{
 			APIVersion: gvk.APIVersion,
 			Kind:       gvk.Kind,

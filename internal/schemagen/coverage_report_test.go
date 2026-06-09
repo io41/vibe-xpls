@@ -229,6 +229,77 @@ func TestRenderCoverageMarkdownSummarizesWorstGVKs(t *testing.T) {
 	}
 }
 
+func TestRenderCoverageJSONAndMarkdownCountMetadataOnlyGaps(t *testing.T) {
+	state := coverageMetadataGapTestState()
+
+	raw, err := renderCoverageJSON(state)
+	if err != nil {
+		t.Fatalf("render coverage JSON: %v", err)
+	}
+	var doc coverageReportDocument
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal coverage report: %v", err)
+	}
+	if got, want := doc.Releases[0].Totals.TargetFields, 1; got != want {
+		t.Fatalf("targetFields = %d, want %d", got, want)
+	}
+	if got, want := doc.Releases[0].Totals.CoveredUpstreamFields, 1; got != want {
+		t.Fatalf("coveredUpstreamFields = %d, want %d", got, want)
+	}
+	if got, want := doc.Releases[0].Totals.KnownGaps, 1; got != want {
+		t.Fatalf("knownGaps = %d, want %d", got, want)
+	}
+
+	markdown := renderCoverageMarkdown(state)
+	for _, want := range []string{
+		"Upstream field coverage: 1/1 (100.00%)",
+		"Known gaps: 1",
+		"| example.org/v1 | Widget | 100.00% | 1 |",
+	} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("coverage markdown missing %q:\n%s", want, markdown)
+		}
+	}
+}
+
+func TestCoverageCountsTreatExcludedCompatOnlyAsGeneratedNonTarget(t *testing.T) {
+	state := coverageExcludedCompatOnlySchemaState()
+	totals := coverageCounts(state.GVKs, state.Gaps)
+
+	if got, want := totals.UpstreamGVKs, 0; got != want {
+		t.Fatalf("upstreamGVKs = %d, want %d", got, want)
+	}
+	if got, want := totals.GeneratedGVKs, 1; got != want {
+		t.Fatalf("generatedGVKs = %d, want %d", got, want)
+	}
+	if got, want := totals.TargetFields, 0; got != want {
+		t.Fatalf("targetFields = %d, want %d", got, want)
+	}
+	if got, want := totals.CoveredUpstreamFields, 0; got != want {
+		t.Fatalf("coveredUpstreamFields = %d, want %d", got, want)
+	}
+	if got, want := totals.KnownGaps, 1; got != want {
+		t.Fatalf("knownGaps = %d, want %d", got, want)
+	}
+
+	raw, err := renderCoverageJSON(state)
+	if err != nil {
+		t.Fatalf("render coverage JSON: %v", err)
+	}
+	var doc coverageReportDocument
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal coverage report: %v", err)
+	}
+	if got, want := doc.Releases[0].Totals, totals; got != want {
+		t.Fatalf("rendered totals = %#v, want %#v", got, want)
+	}
+
+	markdown := renderCoverageMarkdown(state)
+	if strings.Contains(markdown, "| compat.example.org/v1 | Synthetic |") {
+		t.Fatalf("compat-only synthetic GVK appears in worst-covered table:\n%s", markdown)
+	}
+}
+
 func TestCompatibilityOverrideDetectedFromDescriptionTypeOrRequired(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -279,6 +350,14 @@ func TestCompatibilityOverrideDetectedFromDescriptionTypeOrRequired(t *testing.T
 }
 
 func coverageRenderTestState() coverageState {
+	missingGap := observedGap{
+		Release:    "v1.20.7",
+		APIVersion: "example.org/v1",
+		Kind:       "Widget",
+		Path:       "spec.missing",
+		Category:   gapMissingField,
+		Reason:     "generated schema is missing upstream field",
+	}
 	return coverageState{
 		GVKs: []coverageGVKState{{
 			Release:      "v1.20.7",
@@ -308,6 +387,7 @@ func coverageRenderTestState() coverageState {
 					Kind:       "Widget",
 					Path:       "spec.missing",
 					Bucket:     bucketMissing,
+					Gap:        &missingGap,
 				},
 			},
 			Buckets: map[coverageBucket]int{
@@ -315,6 +395,69 @@ func coverageRenderTestState() coverageState {
 				bucketCoveredUpstream: 1,
 			},
 		}},
+		Gaps: []observedGap{missingGap},
+	}
+}
+
+func coverageMetadataGapTestState() coverageState {
+	metadataGap := observedGap{
+		Release:    "v1.20.7",
+		APIVersion: "example.org/v1",
+		Kind:       "Widget",
+		Path:       "spec.present",
+		Category:   gapMissingDescription,
+		Reason:     "generated schema is missing description metadata",
+	}
+	return coverageState{
+		GVKs: []coverageGVKState{{
+			Release:      "v1.20.7",
+			APIVersion:   "example.org/v1",
+			Kind:         "Widget",
+			SourcePath:   "crds/widgets.yaml",
+			SourceSHA256: "abc123",
+			Fields: []coverageFieldState{{
+				Release:    "v1.20.7",
+				APIVersion: "example.org/v1",
+				Kind:       "Widget",
+				Path:       "spec.present",
+				Bucket:     bucketCoveredUpstream,
+				Metadata: coverageMetadataState{
+					Description: metadataMissing,
+					Type:        metadataCovered,
+				},
+				Gap: &metadataGap,
+			}},
+			Buckets: map[coverageBucket]int{bucketCoveredUpstream: 1},
+		}},
+		Gaps: []observedGap{metadataGap},
+	}
+}
+
+func coverageExcludedCompatOnlySchemaState() coverageState {
+	gap := observedGap{
+		Release:    "v1.20.7",
+		APIVersion: "compat.example.org/v1",
+		Kind:       "Synthetic",
+		Path:       "spec.compat",
+		Category:   gapCompatOnlySchema,
+		Reason:     "generated compatibility-only schema field has no upstream target",
+	}
+	return coverageState{
+		GVKs: []coverageGVKState{{
+			Release:    "v1.20.7",
+			APIVersion: "compat.example.org/v1",
+			Kind:       "Synthetic",
+			Fields: []coverageFieldState{{
+				Release:    "v1.20.7",
+				APIVersion: "compat.example.org/v1",
+				Kind:       "Synthetic",
+				Path:       "spec.compat",
+				Bucket:     bucketExcluded,
+				Gap:        &gap,
+			}},
+			Buckets: map[coverageBucket]int{bucketExcluded: 1},
+		}},
+		Gaps: []observedGap{gap},
 	}
 }
 
