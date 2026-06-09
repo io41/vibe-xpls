@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type coverageBaseline struct {
@@ -103,4 +104,17 @@ func validateCoverageRatchet(state coverageState, baseline coverageBaseline) []c
 	}
 	problems = append(problems, validateCoverageBaselineUse(baseline, state.Gaps)...)
 	return problems
+}
+
+func formatCoverageProblems(problems []coverageProblem) string {
+	if len(problems) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("schema coverage ratchet failed:")
+	for _, problem := range problems {
+		b.WriteString("\n- ")
+		b.WriteString(problem.Message)
+	}
+	return b.String()
 }

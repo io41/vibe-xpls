@@ -50,7 +50,7 @@ func TestEmbeddedSchemaBundleLoadsFixture(t *testing.T) {
 
 func TestGeneratedSchemaBundleIsCurrent(t *testing.T) {
 	tmp := t.TempDir()
-	cmd := exec.Command("go", "run", "../../cmd/vibe-xpls-schema-gen", "--config", "schemadata/config.json", "--out", tmp)
+	cmd := exec.Command("go", "run", "../../cmd/vibe-xpls-schema-gen", "generate", "--config", "schemadata/config.json", "--out", tmp)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("regenerate bundle: %v\n%s", err, output)
