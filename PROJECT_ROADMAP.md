@@ -89,11 +89,16 @@ runs the full Go test suite, and builds both CLIs into `dist/local/`.
    suggest safe relationships such as composition type refs and package
    dependency references.
 
-2. Safe value completions.
+2. Crossplane v2 pin refresh.
+   Update the latest pinned v2 release from Crossplane `v2.2.1` to `v2.3.2`,
+   refresh committed upstream CRD inputs, regenerate schemas and coverage
+   artifacts, and resolve any new coverage gaps exposed by the pin update.
+
+3. Safe value completions.
    Add value completions from schema enums, defaults, and in-workspace facts
    without inventing values or querying remote systems.
 
-3. Developer/debug schema insight command.
+4. Developer/debug schema insight command.
    Add a command that explains bundle health, selected release, active package
    root, schema provenance, and completion suppression reasons for a file.
 
