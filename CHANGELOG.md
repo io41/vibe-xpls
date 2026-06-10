@@ -1,5 +1,96 @@
 # Changelog
 
+## [0.0.4](https://github.com/io41/vibe-xpls/compare/v0.0.3...v0.0.4) (2026-06-10)
+
+
+### Features
+
+* add generated schema coverage artifacts ([4841152](https://github.com/io41/vibe-xpls/commit/48411523f00b27dba7b62d69ccafd81033cc1f35))
+* add release-aware schema model ([2dc643f](https://github.com/io41/vibe-xpls/commit/2dc643f1b10f82964e11937492d26d47d1805a73))
+* add scheduled schema drift check ([6b83ccb](https://github.com/io41/vibe-xpls/commit/6b83ccb585099153ab320b7a18e4ec7de77ca4a1))
+* add schema coverage baseline contract ([27a4f4a](https://github.com/io41/vibe-xpls/commit/27a4f4aebdd5ccf3eb9b7f70dda7e1e4dfe0e6c4))
+* add schema coverage generator commands ([1ac64f0](https://github.com/io41/vibe-xpls/commit/1ac64f00a24303ec14d9b33fa05edb8b3de863e5))
+* add schema generator ([651d07a](https://github.com/io41/vibe-xpls/commit/651d07a3804e424b2775a1f175101299d00c0bfb))
+* add YAML document path value lookup ([c1f886a](https://github.com/io41/vibe-xpls/commit/c1f886a454da3838d4c228e8c3baba2800db228c))
+* classify generated schema coverage ([c51d8ea](https://github.com/io41/vibe-xpls/commit/c51d8ea2035a8306a5336daab9867e64adcf16f8))
+* complete from generated schema paths ([b911d86](https://github.com/io41/vibe-xpls/commit/b911d86af70193c7483c2a6b73edfc197177231e))
+* cover function input completions over lsp ([f1f24da](https://github.com/io41/vibe-xpls/commit/f1f24dae62087854de2ddd61435df3156ae3aebd))
+* dispatch function input completions ([61aeee0](https://github.com/io41/vibe-xpls/commit/61aeee0db5f4053747f3e0c465af1b714c00fdb2))
+* enforce schema coverage baseline ([6c751d1](https://github.com/io41/vibe-xpls/commit/6c751d16edf04ee75abaea9fb4f5753d0c970c0b))
+* extract schema coverage targets ([c2f8412](https://github.com/io41/vibe-xpls/commit/c2f8412b6e2fab584a0e54491cc036a2b14ca3ac))
+* generate Crossplane core schemas ([a099e82](https://github.com/io41/vibe-xpls/commit/a099e82f889ae455f0d29a4f314ff637c599a5b5))
+* improve schema coverage reporting ([9892819](https://github.com/io41/vibe-xpls/commit/9892819cb5037430c19910f59a3b04a67c25676d))
+* load generated schema bundle ([2d8c24c](https://github.com/io41/vibe-xpls/commit/2d8c24c5a94e2ac7392b501d67b6a47923cbf594))
+* load workspace provider crd schemas ([ccf3213](https://github.com/io41/vibe-xpls/commit/ccf3213fee2cce3715265fec792a79feb1e618e2))
+* load workspace xrd schemas ([2de313b](https://github.com/io41/vibe-xpls/commit/2de313b10318a01e681952b0192360a58851beb7))
+* render schema coverage artifacts ([cf82618](https://github.com/io41/vibe-xpls/commit/cf826183ba640d84f4ef2df799865bb0b4f6cfaa))
+* report schema completion degradation ([e79c61b](https://github.com/io41/vibe-xpls/commit/e79c61ba4ca67fb37e9496b56d19c2176182da84))
+* resolve schema release per package ([1bbb731](https://github.com/io41/vibe-xpls/commit/1bbb731df9ef45b4d79f486c029e901d0bf0b2b7))
+* support direct function input completions ([c263ecc](https://github.com/io41/vibe-xpls/commit/c263ecc551952736993725f05d5a01ac25f68fd5))
+
+
+### Bug Fixes
+
+* align YAML spans with source positions ([a21efea](https://github.com/io41/vibe-xpls/commit/a21efea202afa9848dc3233957816e57d748184f))
+* canonicalize workspace schema diagnostic uris ([ceff09d](https://github.com/io41/vibe-xpls/commit/ceff09d0e492c873ce4d8ccfdb445598215fe182))
+* complete first keys in yaml array items ([9465279](https://github.com/io41/vibe-xpls/commit/9465279650d67cc473d6ca5fcabc43f21c5c5934))
+* constrain completion fallback and version ranges ([896fbd1](https://github.com/io41/vibe-xpls/commit/896fbd135a72c0f44c93cce0fadff37fd7a9e55c))
+* copy schema field metadata ([a836179](https://github.com/io41/vibe-xpls/commit/a836179918a9bdb3d3e3618c5b4e7315bf50888b))
+* correct schema coverage report totals ([8db4cb4](https://github.com/io41/vibe-xpls/commit/8db4cb45e37badaf0b75d6ff035a2190823b500a))
+* document compatibility schema parent completions ([d317511](https://github.com/io41/vibe-xpls/commit/d31751128b856548b4b4210f6952b6b06ca28516))
+* gate direct function input completions on outer schema ([97db211](https://github.com/io41/vibe-xpls/commit/97db2114c4c61d1b1abe3a7a4be6a2431f0d9163))
+* generate compatibility schema data ([bfe5611](https://github.com/io41/vibe-xpls/commit/bfe5611facce6f952051ae5853bd3ddda16f58c9))
+* harden coverage target extraction ([cce1303](https://github.com/io41/vibe-xpls/commit/cce1303f9a4d4f5a671f0de37f1b4b1212082d03))
+* harden schema generator paths and refs ([89c4dff](https://github.com/io41/vibe-xpls/commit/89c4dff1b448d3ccf8834f11a97b0570bec0f27d))
+* harden workspace schema loading ([dbab7ca](https://github.com/io41/vibe-xpls/commit/dbab7ca262050e00d652e89e10870c11571802e4))
+* honor package marker edits and workspace schemas ([a937006](https://github.com/io41/vibe-xpls/commit/a937006519b1df27caa07504a303a5abc82e4f71))
+* ignore workspace schema sources in ignored dirs ([8353b51](https://github.com/io41/vibe-xpls/commit/8353b51798d29b06ecd30de78383cb3bec3260f7))
+* improve schema coverage check diagnostics ([b27576e](https://github.com/io41/vibe-xpls/commit/b27576e4668b878c84cee5f924e26355a5a89ffb))
+* preserve generated schema bundle behavior ([dbcc166](https://github.com/io41/vibe-xpls/commit/dbcc16621a142503d2f14ae552a77f8cd393c121))
+* preserve generated schema compatibility ([dd17c47](https://github.com/io41/vibe-xpls/commit/dd17c477e99c60ecc28f35d7ae71865a2a908b9d))
+* preserve hover at scalar boundaries ([9897f2c](https://github.com/io41/vibe-xpls/commit/9897f2c4c88116a58de5a631d01ff3f9087d026d))
+* preserve int-or-string schema metadata ([9a080ae](https://github.com/io41/vibe-xpls/commit/9a080ae7f95fa8b711c15586c3c411671f23d076))
+* publish workspace schema diagnostics for related sources ([ada1335](https://github.com/io41/vibe-xpls/commit/ada13351d070cc9e85558f7ebe23831294766842))
+* refine schema coverage state reporting ([e85cb60](https://github.com/io41/vibe-xpls/commit/e85cb603bce92514425f5051b569dca330c80a26))
+* render completion docs as markdown ([78151ec](https://github.com/io41/vibe-xpls/commit/78151ec0959de3872fa91b492c56e203e5c6a1b8))
+* resolve annotated schema drift tags ([eb81b38](https://github.com/io41/vibe-xpls/commit/eb81b38749e68fd033614f38d3a8719322d31d19))
+* scope workspace schemas by package ([c9dcfe9](https://github.com/io41/vibe-xpls/commit/c9dcfe9ca5d4c060ecc92e534f9fc1a86518f935))
+* stabilize hover path selection ([36fb7bd](https://github.com/io41/vibe-xpls/commit/36fb7bdc0e500eb6d3f9e7dead0d7d0d04e00ccc))
+* surface workspace schema refresh diagnostics ([a7c0999](https://github.com/io41/vibe-xpls/commit/a7c09991e81d4780068d1f1a6873692e74b07d92))
+* throttle stable completion suppressions ([88854e9](https://github.com/io41/vibe-xpls/commit/88854e930d788565e032d7436d5bd4cf3eecb451))
+* tighten completion degradation reporting ([af3357b](https://github.com/io41/vibe-xpls/commit/af3357b2a5392de6758e7b56100f7f1073b3eea5))
+* tighten schema coverage baseline ratchet ([36071dc](https://github.com/io41/vibe-xpls/commit/36071dc6d499989629eb2ef49c3e7a3c016af26e))
+
+
+### Documentation
+
+* add project roadmap ([8127333](https://github.com/io41/vibe-xpls/commit/8127333380a479c68c6d274f161102d6cb020fe6))
+* add schema coverage ratchet implementation plan ([1d42bf9](https://github.com/io41/vibe-xpls/commit/1d42bf9ad68b82e51900dcb8b9ea3d69a66ddbb6))
+* align completion documentation specs ([075a9a9](https://github.com/io41/vibe-xpls/commit/075a9a93c597836c030bd54ee0812d22cf2b6f4c))
+* clarify experimental project status ([42c6058](https://github.com/io41/vibe-xpls/commit/42c6058091d35a95443e5d5e3e03c100ed28838f))
+* clarify function input dispatch gating ([6da0b4a](https://github.com/io41/vibe-xpls/commit/6da0b4afccb18fdd0cf7e477b9cdf7224f0ecd49))
+* close function input schema dispatch ([2282cc0](https://github.com/io41/vibe-xpls/commit/2282cc017d2759d304d8457699ee8d7aa3aad8cb))
+* design completion ux cleanup ([0589bd5](https://github.com/io41/vibe-xpls/commit/0589bd5ffa1ad850a3a4e4a529996e2e5dd6a0ff))
+* design generated completion foundation ([1a8a440](https://github.com/io41/vibe-xpls/commit/1a8a44099fa59296dc0c9d486f884ffaef530644))
+* design schema coverage ratchet ([2c6b6ab](https://github.com/io41/vibe-xpls/commit/2c6b6ab99060ed54fa36b3767362c1f3549fbe78))
+* document generated schema bundle ([8c2c73e](https://github.com/io41/vibe-xpls/commit/8c2c73e24a0183987ecc27499ad5de03ee3128a9))
+* plan completion ux cleanup ([15f736c](https://github.com/io41/vibe-xpls/commit/15f736ceb808afffc553ec046761c1ff714b4523))
+* plan function input schema dispatch ([6f18996](https://github.com/io41/vibe-xpls/commit/6f18996d6fd476346e686373e52deeb7a286f351))
+* plan generated completion foundation ([216568f](https://github.com/io41/vibe-xpls/commit/216568fcb2fb5d3e7f68c9e9c61b868b9c6583b9))
+* refine schema coverage ratchet design ([806e184](https://github.com/io41/vibe-xpls/commit/806e184ab3b4541da8492afb676c2e42d078d9c2))
+* track crossplane pin refresh ([1b3e7cd](https://github.com/io41/vibe-xpls/commit/1b3e7cdca9172f8546a54f8e7d1a520f8d1677a8))
+* update workspace schema roadmap status ([43846d8](https://github.com/io41/vibe-xpls/commit/43846d814e4adccd5743f019ce1af2031c6ce92c))
+
+
+### Tests
+
+* cover array item completion edits ([ddafa95](https://github.com/io41/vibe-xpls/commit/ddafa9560d3e5bc0aac8ffe90e198ed2b7da1403))
+* cover empty completion documentation ([3c1231c](https://github.com/io41/vibe-xpls/commit/3c1231caf9a0909440ad185d3bf7dfaba3351c5e))
+* cover nested workspace schema boundaries ([a25b77c](https://github.com/io41/vibe-xpls/commit/a25b77cd98176963db888014913bcbec1f5ead03))
+* cover schema generator path guards ([821633f](https://github.com/io41/vibe-xpls/commit/821633f7bc89e7245744633565f96d66c3b7a5de))
+* cover workspace schema conflicts ([c4e53d7](https://github.com/io41/vibe-xpls/commit/c4e53d7f644d12f5bcc2df4f699a8bca0566dcad))
+* harden completion metadata assertions ([4504e9a](https://github.com/io41/vibe-xpls/commit/4504e9a163573bd96dda07bea978b77a6e8225dc))
+
 ## [0.0.3](https://github.com/io41/vibe-xpls/compare/v0.0.2...v0.0.3) (2026-05-20)
 
 
