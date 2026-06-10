@@ -137,11 +137,13 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.strategy.rollingUpdate.maxSurge",
-      "description": "The maximum number of pods that can be scheduled above the desired number of\npods.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nThis can not be 0 if MaxUnavailable is 0.\nAbsolute number is calculated from percentage by rounding up.\nDefaults to 25%.\nExample: when this is set to 30%, the new ReplicaSet can be scaled up immediately when\nthe rolling update starts, such that the total number of old and new pods do not exceed\n130% of desired pods. Once old pods have been killed,\nnew ReplicaSet can be scaled up further, ensuring that total number of pods running\nat any time during the update is at most 130% of desired pods."
+      "description": "The maximum number of pods that can be scheduled above the desired number of\npods.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nThis can not be 0 if MaxUnavailable is 0.\nAbsolute number is calculated from percentage by rounding up.\nDefaults to 25%.\nExample: when this is set to 30%, the new ReplicaSet can be scaled up immediately when\nthe rolling update starts, such that the total number of old and new pods do not exceed\n130% of desired pods. Once old pods have been killed,\nnew ReplicaSet can be scaled up further, ensuring that total number of pods running\nat any time during the update is at most 130% of desired pods.",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.strategy.rollingUpdate.maxUnavailable",
-      "description": "The maximum number of pods that can be unavailable during the update.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nAbsolute number is calculated from percentage by rounding down.\nThis can not be 0 if MaxSurge is 0.\nDefaults to 25%.\nExample: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods\nimmediately when the rolling update starts. Once new pods are ready, old ReplicaSet\ncan be scaled down further, followed by scaling up the new ReplicaSet, ensuring\nthat the total number of pods available at all times during the update is at\nleast 70% of desired pods."
+      "description": "The maximum number of pods that can be unavailable during the update.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nAbsolute number is calculated from percentage by rounding down.\nThis can not be 0 if MaxSurge is 0.\nDefaults to 25%.\nExample: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods\nimmediately when the rolling update starts. Once new pods are ready, old ReplicaSet\ncan be scaled down further, followed by scaling up the new ReplicaSet, ensuring\nthat the total number of pods available at all times during the update is at\nleast 70% of desired pods.",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.strategy.type",
@@ -843,7 +845,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.resource",
@@ -938,6 +941,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].lifecycle.postStart.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -969,6 +973,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].lifecycle.postStart.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1021,6 +1026,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].lifecycle.preStop.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1052,6 +1058,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].lifecycle.preStop.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1126,6 +1133,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].livenessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1161,6 +1169,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].livenessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1283,6 +1292,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].readinessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1318,6 +1328,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].readinessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1592,6 +1603,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].startupProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1627,6 +1639,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.containers[].startupProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -1895,7 +1908,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].env[].valueFrom.resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].env[].valueFrom.resourceFieldRef.resource",
@@ -1990,6 +2004,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].lifecycle.postStart.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2021,6 +2036,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].lifecycle.postStart.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2073,6 +2089,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].lifecycle.preStop.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2104,6 +2121,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].lifecycle.preStop.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2178,6 +2196,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].livenessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2213,6 +2232,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].livenessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2335,6 +2355,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].readinessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2370,6 +2391,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].readinessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2644,6 +2666,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].startupProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2679,6 +2702,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.ephemeralContainers[].startupProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -2966,7 +2990,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].env[].valueFrom.resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].env[].valueFrom.resourceFieldRef.resource",
@@ -3061,6 +3086,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].lifecycle.postStart.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3092,6 +3118,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].lifecycle.postStart.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3144,6 +3171,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].lifecycle.preStop.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3175,6 +3203,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].lifecycle.preStop.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3249,6 +3278,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].livenessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3284,6 +3314,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].livenessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3406,6 +3437,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].readinessProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3441,6 +3473,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].readinessProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3715,6 +3748,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].startupProbe.httpGet.port",
       "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -3750,6 +3784,7 @@
     {
       "path": "spec.deploymentTemplate.spec.template.spec.initContainers[].startupProbe.tcpSocket.port",
       "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+      "type": "int-or-string",
       "required": true
     },
     {
@@ -4524,7 +4559,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].downwardAPI.items[].resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].downwardAPI.items[].resourceFieldRef.resource",
@@ -4544,7 +4580,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].emptyDir.sizeLimit",
-      "description": "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir"
+      "description": "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].ephemeral",
@@ -5201,7 +5238,8 @@
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].projected.sources[].downwardAPI.items[].resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].projected.sources[].downwardAPI.items[].resourceFieldRef.resource",

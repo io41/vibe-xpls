@@ -407,11 +407,18 @@ func putField(fields map[string]analyzer.FieldDoc, path string, schema openAPISc
 	fields[path] = analyzer.FieldDoc{
 		Path:        path,
 		Description: schema.Description,
-		Type:        schema.Type,
+		Type:        generatedFieldType(schema),
 		Required:    required,
 		Default:     rawDefault(schema.Default),
 		Enum:        enumStrings(schema.Enum),
 	}
+}
+
+func generatedFieldType(schema openAPISchema) string {
+	if schema.XKubernetesIntOrString {
+		return "int-or-string"
+	}
+	return schema.Type
 }
 
 func mergeArrayItemDescription(fields map[string]analyzer.FieldDoc, path string, item openAPISchema) {

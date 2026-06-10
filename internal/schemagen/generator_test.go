@@ -116,6 +116,55 @@ spec:
 	assertGeneratedFieldDoc(t, doc.Fields, "packages[]", "Package entry in the lock.", "array")
 }
 
+func TestGeneratePreservesKubernetesIntOrStringType(t *testing.T) {
+	out := t.TempDir()
+	crdDir := writeCRDDir(t, `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+spec:
+  group: example.io
+  names:
+    kind: Widget
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                surge:
+                  anyOf:
+                    - type: integer
+                    - type: string
+                  description: Max surge.
+                  x-kubernetes-int-or-string: true
+`)
+	cfg := fixtureConfig()
+	cfg.Releases[0].RawCRDDir = crdDir
+
+	if err := Generate(cfg, out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(out, "schemas", "v1.20.7", "example.io_v1_Widget.json"))
+	if err != nil {
+		t.Fatalf("read generated schema: %v", err)
+	}
+	var doc struct {
+		Fields []struct {
+			Path        string `json:"path"`
+			Description string `json:"description,omitempty"`
+			Type        string `json:"type,omitempty"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse generated schema: %v", err)
+	}
+	assertGeneratedFieldDoc(t, doc.Fields, "spec.surge", "Max surge.", "int-or-string")
+}
+
 func TestGenerateRejectsReleaseTagPathEscape(t *testing.T) {
 	base := t.TempDir()
 	out := filepath.Join(base, "out")

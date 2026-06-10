@@ -71,6 +71,9 @@ runs the full Go test suite, and builds both CLIs into `dist/local/`.
   the array field itself is undocumented, and intentionally generated
   compatibility descriptions are reported as compatibility overrides instead of
   missing upstream descriptions.
+- Generated schema type coverage preserves upstream `x-kubernetes-int-or-string`
+  metadata, removing the remaining generated metadata gaps for current pinned
+  Crossplane releases.
 
 ## Current
 
@@ -86,16 +89,11 @@ runs the full Go test suite, and builds both CLIs into `dist/local/`.
    suggest safe relationships such as composition type refs and package
    dependency references.
 
-2. Generated schema metadata debt cleanup.
-   Preserve upstream `x-kubernetes-int-or-string` type metadata in the generated
-   schema model, starting with the remaining `DeploymentRuntimeConfig` and
-   `ControllerConfig` known gaps.
-
-3. Safe value completions.
+2. Safe value completions.
    Add value completions from schema enums, defaults, and in-workspace facts
    without inventing values or querying remote systems.
 
-4. Developer/debug schema insight command.
+3. Developer/debug schema insight command.
    Add a command that explains bundle health, selected release, active package
    root, schema provenance, and completion suppression reasons for a file.
 

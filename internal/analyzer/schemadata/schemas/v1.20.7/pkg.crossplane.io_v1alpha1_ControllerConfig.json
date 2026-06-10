@@ -675,7 +675,8 @@
     },
     {
       "path": "spec.env[].valueFrom.resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.env[].valueFrom.resourceFieldRef.resource",
@@ -1482,7 +1483,8 @@
     },
     {
       "path": "spec.volumes[].downwardAPI.items[].resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.volumes[].downwardAPI.items[].resourceFieldRef.resource",
@@ -1502,7 +1504,8 @@
     },
     {
       "path": "spec.volumes[].emptyDir.sizeLimit",
-      "description": "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir"
+      "description": "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
+      "type": "int-or-string"
     },
     {
       "path": "spec.volumes[].ephemeral",
@@ -2159,7 +2162,8 @@
     },
     {
       "path": "spec.volumes[].projected.sources[].downwardAPI.items[].resourceFieldRef.divisor",
-      "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+      "description": "Specifies the output format of the exposed resources, defaults to \"1\"",
+      "type": "int-or-string"
     },
     {
       "path": "spec.volumes[].projected.sources[].downwardAPI.items[].resourceFieldRef.resource",

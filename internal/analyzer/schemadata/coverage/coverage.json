@@ -8,7 +8,7 @@
         "generatedGVKs": 22,
         "targetFields": 2538,
         "coveredUpstreamFields": 2538,
-        "knownGaps": 49
+        "knownGaps": 7
       },
       "gvks": [
         {
@@ -11566,7 +11566,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -13426,7 +13426,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -13474,7 +13474,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -14986,7 +14986,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -16053,7 +16053,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -16065,7 +16065,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -17661,7 +17661,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -17877,7 +17877,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -17949,7 +17949,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18069,7 +18069,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18141,7 +18141,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18309,7 +18309,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18393,7 +18393,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18669,7 +18669,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -18753,7 +18753,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -19389,7 +19389,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -19473,7 +19473,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20097,7 +20097,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20313,7 +20313,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20385,7 +20385,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20505,7 +20505,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20577,7 +20577,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20745,7 +20745,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -20829,7 +20829,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -21105,7 +21105,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -21189,7 +21189,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -21825,7 +21825,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -21909,7 +21909,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -22569,7 +22569,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -22785,7 +22785,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -22857,7 +22857,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -22977,7 +22977,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -23049,7 +23049,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -23217,7 +23217,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -23301,7 +23301,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -23577,7 +23577,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -23661,7 +23661,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -24297,7 +24297,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -24381,7 +24381,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -26157,7 +26157,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -26205,7 +26205,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -27717,7 +27717,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -30754,7 +30754,7 @@
         "generatedGVKs": 26,
         "targetFields": 2118,
         "coveredUpstreamFields": 2118,
-        "knownGaps": 45
+        "knownGaps": 7
       },
       "gvks": [
         {
@@ -40664,7 +40664,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -40676,7 +40676,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42332,7 +42332,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42548,7 +42548,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42620,7 +42620,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42740,7 +42740,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42812,7 +42812,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -42992,7 +42992,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -43076,7 +43076,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -43352,7 +43352,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -43436,7 +43436,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -44132,7 +44132,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -44216,7 +44216,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -44900,7 +44900,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45116,7 +45116,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45188,7 +45188,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45308,7 +45308,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45380,7 +45380,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45560,7 +45560,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45644,7 +45644,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -45920,7 +45920,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -46004,7 +46004,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -46700,7 +46700,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -46784,7 +46784,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -47516,7 +47516,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -47732,7 +47732,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -47804,7 +47804,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -47924,7 +47924,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -47996,7 +47996,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -48176,7 +48176,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -48260,7 +48260,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -48536,7 +48536,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -48620,7 +48620,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -49316,7 +49316,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -49400,7 +49400,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -51260,7 +51260,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -51308,7 +51308,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",
@@ -52820,7 +52820,7 @@
               "bucket": "covered-upstream",
               "metadata": {
                 "description": "covered",
-                "type": "missing",
+                "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
                 "default": "not-present-upstream",

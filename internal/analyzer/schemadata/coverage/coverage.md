@@ -3,14 +3,14 @@
 ## Release v1.20.7
 
 Upstream field coverage: 2538/2538 (100.00%)
-Known gaps: 49
+Known gaps: 7
 
 ### Metadata Coverage
 
 | Metadata | Covered | Overrides | Missing | Target | Coverage | No Upstream Fact |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | description | 2488 | 5 | 0 | 2493 | 100.00% | 45 |
-| type | 2484 | 0 | 42 | 2526 | 98.34% | 12 |
+| type | 2526 | 0 | 0 | 2526 | 100.00% | 12 |
 | required | 632 | 0 | 0 | 632 | 100.00% | 1906 |
 | enum | 86 | 0 | 0 | 86 | 100.00% | 2452 |
 | default | 178 | 0 | 0 | 178 | 100.00% | 2360 |
@@ -21,14 +21,10 @@ Known gaps: 49
 | Category | Count |
 | --- | ---: |
 | compat-only-schema | 7 |
-| missing-type | 42 |
 
 ### Metadata Gap Hotspots
 
-| API Version | Kind | Category | Count | Examples |
-| --- | --- | --- | ---: | --- |
-| pkg.crossplane.io/v1beta1 | DeploymentRuntimeConfig | missing-type | 38 | spec.deploymentTemplate.spec.strategy.rollingUpdate.maxSurge, spec.deploymentTemplate.spec.strategy.rollingUpdate.maxUnavailable, spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor |
-| pkg.crossplane.io/v1alpha1 | ControllerConfig | missing-type | 4 | spec.env[].valueFrom.resourceFieldRef.divisor, spec.volumes[].downwardAPI.items[].resourceFieldRef.divisor, spec.volumes[].emptyDir.sizeLimit |
+No metadata gaps.
 
 ### Worst-Covered GVKs
 
@@ -48,14 +44,14 @@ Known gaps: 49
 ## Release v2.2.1
 
 Upstream field coverage: 2118/2118 (100.00%)
-Known gaps: 45
+Known gaps: 7
 
 ### Metadata Coverage
 
 | Metadata | Covered | Overrides | Missing | Target | Coverage | No Upstream Fact |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | description | 2070 | 5 | 0 | 2075 | 100.00% | 43 |
-| type | 2080 | 0 | 38 | 2118 | 98.21% | 0 |
+| type | 2118 | 0 | 0 | 2118 | 100.00% | 0 |
 | required | 589 | 0 | 0 | 589 | 100.00% | 1529 |
 | enum | 24 | 0 | 0 | 24 | 100.00% | 2094 |
 | default | 128 | 0 | 0 | 128 | 100.00% | 1990 |
@@ -66,13 +62,10 @@ Known gaps: 45
 | Category | Count |
 | --- | ---: |
 | compat-only-schema | 7 |
-| missing-type | 38 |
 
 ### Metadata Gap Hotspots
 
-| API Version | Kind | Category | Count | Examples |
-| --- | --- | --- | ---: | --- |
-| pkg.crossplane.io/v1beta1 | DeploymentRuntimeConfig | missing-type | 38 | spec.deploymentTemplate.spec.strategy.rollingUpdate.maxSurge, spec.deploymentTemplate.spec.strategy.rollingUpdate.maxUnavailable, spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor |
+No metadata gaps.
 
 ### Worst-Covered GVKs
 
