@@ -64,11 +64,20 @@ runs the full Go test suite, and builds both CLIs into `dist/local/`.
   schema.
 - Generated schema coverage artifacts and a human-maintained baseline ratchet
   for current pinned Crossplane releases.
+- Human-readable schema coverage reports now include metadata coverage,
+  known-gap categories, and metadata gap hotspots, so schema debt is visible
+  without inspecting `coverage.json`.
+- Generated schema description coverage preserves array item descriptions when
+  the array field itself is undocumented, and intentionally generated
+  compatibility descriptions are reported as compatibility overrides instead of
+  missing upstream descriptions.
 
 ## Current
 
 - Keeping schema generation and update flow simple, offline, deterministic, and
   reviewable.
+- Following up on the scheduled drift signal that Crossplane `v2.3.2` is newer
+  than the current latest pinned release, Crossplane `v2.2.1`.
 
 ## Next
 
@@ -77,11 +86,16 @@ runs the full Go test suite, and builds both CLIs into `dist/local/`.
    suggest safe relationships such as composition type refs and package
    dependency references.
 
-2. Safe value completions.
+2. Generated schema metadata debt cleanup.
+   Preserve upstream `x-kubernetes-int-or-string` type metadata in the generated
+   schema model, starting with the remaining `DeploymentRuntimeConfig` and
+   `ControllerConfig` known gaps.
+
+3. Safe value completions.
    Add value completions from schema enums, defaults, and in-workspace facts
    without inventing values or querying remote systems.
 
-3. Developer/debug schema insight command.
+4. Developer/debug schema insight command.
    Add a command that explains bundle health, selected release, active package
    root, schema provenance, and completion suppression reasons for a file.
 

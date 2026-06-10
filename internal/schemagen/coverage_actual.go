@@ -39,15 +39,21 @@ func collectActualCoverageFields(outDir string) (map[actualCoverageKey]actualCov
 		overrides := compatibilityFieldDocs(doc.APIVersion, doc.Kind)
 		for _, field := range doc.Fields {
 			override, hasOverride := overrides[field.Path]
+			descriptionOverride := hasOverride && override.Description != "" && override.Description == field.Description
+			typeOverride := hasOverride && override.Type != "" && override.Type == field.Type
+			requiredOverride := hasOverride && override.Required && field.Required
 			actual[actualCoverageKey{Release: doc.Release, APIVersion: doc.APIVersion, Kind: doc.Kind, Path: field.Path}] = actualCoverageField{
-				Path:           field.Path,
-				Description:    field.Description,
-				Type:           field.Type,
-				Required:       field.Required,
-				Default:        field.Default,
-				Enum:           append([]string(nil), field.Enum...),
-				Deprecated:     field.Deprecated,
-				CompatOverride: hasOverride && fieldHasCompatibilityOverride(field, override),
+				Path:                      field.Path,
+				Description:               field.Description,
+				Type:                      field.Type,
+				Required:                  field.Required,
+				Default:                   field.Default,
+				Enum:                      append([]string(nil), field.Enum...),
+				Deprecated:                field.Deprecated,
+				CompatOverride:            descriptionOverride || typeOverride || requiredOverride,
+				CompatOverrideDescription: descriptionOverride,
+				CompatOverrideType:        typeOverride,
+				CompatOverrideRequired:    requiredOverride,
 			}
 		}
 		if strings.Contains(doc.Provenance.UpstreamSourcePath, "generated/compatibility/") {

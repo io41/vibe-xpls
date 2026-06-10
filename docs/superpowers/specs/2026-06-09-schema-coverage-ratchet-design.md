@@ -217,6 +217,12 @@ Target: no silent loss of user-facing completion or hover value. Documentation
 changes matter because completion and hover quality depend on descriptions and
 schema metadata, not only on field paths.
 
+Generated compatibility documentation can deliberately replace terse or generic
+upstream descriptions with more useful product-specific completion text. These
+overrides count as covered with compatibility override metadata and must be
+reported separately from exact upstream preservation; they are not baseline
+missing-description gaps.
+
 Metadata percentages must use explicit denominators:
 
 - description coverage: fields with an upstream description that also emit the

@@ -20,6 +20,7 @@ type metadataCoverageStatus string
 
 const (
 	metadataCovered            metadataCoverageStatus = "covered"
+	metadataCompatOverride     metadataCoverageStatus = "covered-with-compat-override"
 	metadataMissing            metadataCoverageStatus = "missing"
 	metadataNotPresentUpstream metadataCoverageStatus = "not-present-upstream"
 	metadataNotRequired        metadataCoverageStatus = "not-required"
@@ -71,15 +72,18 @@ type coverageTarget struct {
 }
 
 type actualCoverageField struct {
-	Path           string
-	Description    string
-	Type           string
-	Required       bool
-	Default        *json.RawMessage
-	Enum           []string
-	Deprecated     string
-	CompatOverride bool
-	CompatAdded    bool
+	Path                      string
+	Description               string
+	Type                      string
+	Required                  bool
+	Default                   *json.RawMessage
+	Enum                      []string
+	Deprecated                string
+	CompatOverride            bool
+	CompatOverrideDescription bool
+	CompatOverrideType        bool
+	CompatOverrideRequired    bool
+	CompatAdded               bool
 }
 
 type coverageFieldState struct {

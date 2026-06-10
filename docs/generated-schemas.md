@@ -34,6 +34,16 @@ the gap is intentional or not yet supported. Remove obsolete baseline entries
 when generator support improves; the coverage check reports entries that no
 longer match an observed gap.
 
+`internal/analyzer/schemadata/coverage/coverage.md` is the human review report.
+It summarizes upstream field coverage, metadata coverage, known gaps by
+category, and metadata gap hotspots. `coverage.json` remains the full
+machine-readable per-field source of truth.
+
+Generated compatibility documentation may intentionally replace terse or generic
+upstream descriptions with Crossplane-specific completion text. These fields are
+reported as `covered-with-compat-override` metadata, not as missing upstream
+description gaps.
+
 The generator must produce byte-identical output from committed inputs. Runtime never downloads schemas.
 
 ## Upstream Drift

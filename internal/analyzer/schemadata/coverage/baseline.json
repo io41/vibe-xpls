@@ -3,51 +3,6 @@
   "entries": [
     {
       "release": "v1.20.7",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "apiVersion",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v1.20.7",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "kind",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v1.20.7",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "metadata.name",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v1.20.7",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "spec.compositeTypeRef.apiVersion",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v1.20.7",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "spec.compositeTypeRef.kind",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v1.20.7",
       "apiVersion": "meta.pkg.crossplane.io/v1",
       "kind": "Configuration",
       "path": "apiVersion",
@@ -488,60 +443,6 @@
       "note": "initial coverage ratchet baseline"
     },
     {
-      "release": "v1.20.7",
-      "apiVersion": "pkg.crossplane.io/v1beta1",
-      "kind": "Lock",
-      "path": "packages[]",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "apiVersion",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "kind",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "metadata.name",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "spec.compositeTypeRef.apiVersion",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "apiextensions.crossplane.io/v1",
-      "kind": "Composition",
-      "path": "spec.compositeTypeRef.kind",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
       "release": "v2.2.1",
       "apiVersion": "meta.pkg.crossplane.io/v1",
       "kind": "Configuration",
@@ -944,15 +845,6 @@
       "path": "spec.deploymentTemplate.spec.template.spec.volumes[].projected.sources[].downwardAPI.items[].resourceFieldRef.divisor",
       "category": "missing-type",
       "reason": "current generator does not preserve this upstream type",
-      "note": "initial coverage ratchet baseline"
-    },
-    {
-      "release": "v2.2.1",
-      "apiVersion": "pkg.crossplane.io/v1beta1",
-      "kind": "Lock",
-      "path": "packages[]",
-      "category": "missing-description",
-      "reason": "current generator does not preserve this upstream description",
       "note": "initial coverage ratchet baseline"
     }
   ]

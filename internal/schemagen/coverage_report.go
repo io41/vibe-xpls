@@ -193,6 +193,45 @@ func renderCoverageMarkdown(state coverageState) string {
 			percent(totals.CoveredUpstreamFields, totals.TargetFields),
 		))
 		b.WriteString(fmt.Sprintf("Known gaps: %d\n\n", totals.KnownGaps))
+		b.WriteString("### Metadata Coverage\n\n")
+		b.WriteString("| Metadata | Covered | Overrides | Missing | Target | Coverage | No Upstream Fact |\n")
+		b.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+		for _, row := range metadataCoverageRows(gvks) {
+			b.WriteString(fmt.Sprintf(
+				"| %s | %d | %d | %d | %d | %.2f%% | %d |\n",
+				row.Name,
+				row.Covered,
+				row.Overrides,
+				row.Missing,
+				row.Target,
+				percent(row.Covered+row.Overrides, row.Target),
+				row.NoUpstreamFact,
+			))
+		}
+		b.WriteString("\n")
+		b.WriteString("### Known Gaps By Category\n\n")
+		if len(gaps) == 0 {
+			b.WriteString("No known gaps.\n\n")
+		} else {
+			b.WriteString("| Category | Count |\n")
+			b.WriteString("| --- | ---: |\n")
+			for _, row := range gapCategoryRows(gaps) {
+				b.WriteString(fmt.Sprintf("| %s | %d |\n", row.Category, row.Count))
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("### Metadata Gap Hotspots\n\n")
+		hotspots := metadataGapHotspots(gaps, 10)
+		if len(hotspots) == 0 {
+			b.WriteString("No metadata gaps.\n\n")
+		} else {
+			b.WriteString("| API Version | Kind | Category | Count | Examples |\n")
+			b.WriteString("| --- | --- | --- | ---: | --- |\n")
+			for _, row := range hotspots {
+				b.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %s |\n", row.APIVersion, row.Kind, row.Category, row.Count, strings.Join(row.Examples, ", ")))
+			}
+			b.WriteString("\n")
+		}
 		b.WriteString("### Worst-Covered GVKs\n\n")
 		b.WriteString("| API Version | Kind | Coverage | Known Gaps |\n")
 		b.WriteString("| --- | --- | ---: | ---: |\n")
@@ -202,6 +241,151 @@ func renderCoverageMarkdown(state coverageState) string {
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+type metadataCoverageRow struct {
+	Name           string
+	Covered        int
+	Overrides      int
+	Missing        int
+	Target         int
+	NoUpstreamFact int
+}
+
+func metadataCoverageRows(gvks []coverageGVKState) []metadataCoverageRow {
+	names := []string{"description", "type", "required", "enum", "default", "deprecated"}
+	rows := make([]metadataCoverageRow, 0, len(names))
+	for _, name := range names {
+		row := metadataCoverageRow{Name: name}
+		for _, gvk := range gvks {
+			for _, field := range gvk.Fields {
+				if !coverageFieldIsTarget(field) {
+					continue
+				}
+				row.add(metadataStatusByName(field.Metadata, name))
+			}
+		}
+		row.Target = row.Covered + row.Overrides + row.Missing
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func (row *metadataCoverageRow) add(status metadataCoverageStatus) {
+	switch status {
+	case metadataCovered:
+		row.Covered++
+	case metadataCompatOverride:
+		row.Overrides++
+	case metadataMissing:
+		row.Missing++
+	case metadataNotPresentUpstream, metadataNotRequired:
+		row.NoUpstreamFact++
+	}
+}
+
+func metadataStatusByName(metadata coverageMetadataState, name string) metadataCoverageStatus {
+	switch name {
+	case "description":
+		return metadata.Description
+	case "type":
+		return metadata.Type
+	case "required":
+		return metadata.Required
+	case "enum":
+		return metadata.Enum
+	case "default":
+		return metadata.Default
+	case "deprecated":
+		return metadata.Deprecated
+	default:
+		return ""
+	}
+}
+
+type gapCategoryRow struct {
+	Category gapCategory
+	Count    int
+}
+
+func gapCategoryRows(gaps []observedGap) []gapCategoryRow {
+	counts := map[gapCategory]int{}
+	for _, gap := range gaps {
+		counts[gap.Category]++
+	}
+	rows := make([]gapCategoryRow, 0, len(counts))
+	for category, count := range counts {
+		rows = append(rows, gapCategoryRow{Category: category, Count: count})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].Category < rows[j].Category
+	})
+	return rows
+}
+
+type metadataGapHotspot struct {
+	APIVersion string
+	Kind       string
+	Category   gapCategory
+	Count      int
+	Examples   []string
+}
+
+func metadataGapHotspots(gaps []observedGap, limit int) []metadataGapHotspot {
+	type hotspotKey struct {
+		APIVersion string
+		Kind       string
+		Category   gapCategory
+	}
+	byKey := map[hotspotKey]*metadataGapHotspot{}
+	for _, gap := range gaps {
+		if !gapCategoryIsMetadata(gap.Category) {
+			continue
+		}
+		key := hotspotKey{APIVersion: gap.APIVersion, Kind: gap.Kind, Category: gap.Category}
+		row, ok := byKey[key]
+		if !ok {
+			row = &metadataGapHotspot{
+				APIVersion: gap.APIVersion,
+				Kind:       gap.Kind,
+				Category:   gap.Category,
+			}
+			byKey[key] = row
+		}
+		row.Count++
+		if len(row.Examples) < 3 {
+			row.Examples = append(row.Examples, gap.Path)
+		}
+	}
+	rows := make([]metadataGapHotspot, 0, len(byKey))
+	for _, row := range byKey {
+		rows = append(rows, *row)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Count != rows[j].Count {
+			return rows[i].Count > rows[j].Count
+		}
+		if rows[i].APIVersion != rows[j].APIVersion {
+			return rows[i].APIVersion < rows[j].APIVersion
+		}
+		if rows[i].Kind != rows[j].Kind {
+			return rows[i].Kind < rows[j].Kind
+		}
+		return rows[i].Category < rows[j].Category
+	})
+	if len(rows) > limit {
+		return rows[:limit]
+	}
+	return rows
+}
+
+func gapCategoryIsMetadata(category gapCategory) bool {
+	switch category {
+	case gapMissingDescription, gapMissingType, gapMissingRequired, gapMissingEnum, gapMissingDefault, gapMissingDeprecation:
+		return true
+	default:
+		return false
+	}
 }
 
 func coverageReportReleases(state coverageState) []coverageReleaseReport {
@@ -465,8 +649,8 @@ func addCoverageField(gvks map[coverageGVKKey]*coverageGVKState, field coverageF
 
 func compareMetadata(target coverageTarget, actual actualCoverageField) coverageMetadataState {
 	return coverageMetadataState{
-		Description: compareStringMetadata(target.Description, actual.Description),
-		Type:        compareStringMetadata(target.Type, actual.Type),
+		Description: compareStringMetadata(target.Description, actual.Description, actual.CompatOverrideDescription),
+		Type:        compareStringMetadata(target.Type, actual.Type, actual.CompatOverrideType),
 		Required:    compareRequiredMetadata(target.Required, actual.Required),
 		Enum:        compareSliceMetadata(target.Enum, actual.Enum),
 		Default:     compareRawJSONMetadata(target.Default, actual.Default),
@@ -474,12 +658,15 @@ func compareMetadata(target coverageTarget, actual actualCoverageField) coverage
 	}
 }
 
-func compareStringMetadata(target, actual string) metadataCoverageStatus {
+func compareStringMetadata(target, actual string, compatOverride bool) metadataCoverageStatus {
 	if target == "" {
 		return metadataNotPresentUpstream
 	}
 	if target == actual {
 		return metadataCovered
+	}
+	if compatOverride && strings.TrimSpace(actual) != "" {
+		return metadataCompatOverride
 	}
 	return metadataMissing
 }

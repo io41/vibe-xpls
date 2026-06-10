@@ -8,7 +8,7 @@
         "generatedGVKs": 22,
         "targetFields": 2538,
         "coveredUpstreamFields": 2538,
-        "knownGaps": 55
+        "knownGaps": 49
       },
       "gvks": [
         {
@@ -924,7 +924,7 @@
               "path": "apiVersion",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -936,7 +936,7 @@
               "path": "kind",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -984,7 +984,7 @@
               "path": "metadata.name",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -1020,7 +1020,7 @@
               "path": "spec.compositeTypeRef.apiVersion",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
@@ -1032,7 +1032,7 @@
               "path": "spec.compositeTypeRef.kind",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
@@ -30172,7 +30172,7 @@
               "path": "packages[]",
               "bucket": "covered-upstream",
               "metadata": {
-                "description": "missing",
+                "description": "covered",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -30754,7 +30754,7 @@
         "generatedGVKs": 26,
         "targetFields": 2118,
         "coveredUpstreamFields": 2118,
-        "knownGaps": 51
+        "knownGaps": 45
       },
       "gvks": [
         {
@@ -31754,7 +31754,7 @@
               "path": "apiVersion",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -31766,7 +31766,7 @@
               "path": "kind",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -31814,7 +31814,7 @@
               "path": "metadata.name",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",
@@ -31850,7 +31850,7 @@
               "path": "spec.compositeTypeRef.apiVersion",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
@@ -31862,7 +31862,7 @@
               "path": "spec.compositeTypeRef.kind",
               "bucket": "covered-with-compat-override",
               "metadata": {
-                "description": "missing",
+                "description": "covered-with-compat-override",
                 "type": "covered",
                 "required": "covered",
                 "enum": "not-present-upstream",
@@ -55395,7 +55395,7 @@
               "path": "packages[]",
               "bucket": "covered-upstream",
               "metadata": {
-                "description": "missing",
+                "description": "covered",
                 "type": "covered",
                 "required": "not-required",
                 "enum": "not-present-upstream",

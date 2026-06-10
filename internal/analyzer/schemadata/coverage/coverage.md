@@ -3,14 +3,39 @@
 ## Release v1.20.7
 
 Upstream field coverage: 2538/2538 (100.00%)
-Known gaps: 55
+Known gaps: 49
+
+### Metadata Coverage
+
+| Metadata | Covered | Overrides | Missing | Target | Coverage | No Upstream Fact |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| description | 2488 | 5 | 0 | 2493 | 100.00% | 45 |
+| type | 2484 | 0 | 42 | 2526 | 98.34% | 12 |
+| required | 632 | 0 | 0 | 632 | 100.00% | 1906 |
+| enum | 86 | 0 | 0 | 86 | 100.00% | 2452 |
+| default | 178 | 0 | 0 | 178 | 100.00% | 2360 |
+| deprecated | 0 | 0 | 0 | 0 | 100.00% | 2538 |
+
+### Known Gaps By Category
+
+| Category | Count |
+| --- | ---: |
+| compat-only-schema | 7 |
+| missing-type | 42 |
+
+### Metadata Gap Hotspots
+
+| API Version | Kind | Category | Count | Examples |
+| --- | --- | --- | ---: | --- |
+| pkg.crossplane.io/v1beta1 | DeploymentRuntimeConfig | missing-type | 38 | spec.deploymentTemplate.spec.strategy.rollingUpdate.maxSurge, spec.deploymentTemplate.spec.strategy.rollingUpdate.maxUnavailable, spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor |
+| pkg.crossplane.io/v1alpha1 | ControllerConfig | missing-type | 4 | spec.env[].valueFrom.resourceFieldRef.divisor, spec.volumes[].downwardAPI.items[].resourceFieldRef.divisor, spec.volumes[].emptyDir.sizeLimit |
 
 ### Worst-Covered GVKs
 
 | API Version | Kind | Coverage | Known Gaps |
 | --- | --- | ---: | ---: |
 | apiextensions.crossplane.io/v1 | CompositeResourceDefinition | 100.00% | 0 |
-| apiextensions.crossplane.io/v1 | Composition | 100.00% | 5 |
+| apiextensions.crossplane.io/v1 | Composition | 100.00% | 0 |
 | apiextensions.crossplane.io/v1 | CompositionRevision | 100.00% | 0 |
 | apiextensions.crossplane.io/v1alpha1 | EnvironmentConfig | 100.00% | 0 |
 | apiextensions.crossplane.io/v1alpha1 | Usage | 100.00% | 0 |
@@ -23,14 +48,38 @@ Known gaps: 55
 ## Release v2.2.1
 
 Upstream field coverage: 2118/2118 (100.00%)
-Known gaps: 51
+Known gaps: 45
+
+### Metadata Coverage
+
+| Metadata | Covered | Overrides | Missing | Target | Coverage | No Upstream Fact |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| description | 2070 | 5 | 0 | 2075 | 100.00% | 43 |
+| type | 2080 | 0 | 38 | 2118 | 98.21% | 0 |
+| required | 589 | 0 | 0 | 589 | 100.00% | 1529 |
+| enum | 24 | 0 | 0 | 24 | 100.00% | 2094 |
+| default | 128 | 0 | 0 | 128 | 100.00% | 1990 |
+| deprecated | 0 | 0 | 0 | 0 | 100.00% | 2118 |
+
+### Known Gaps By Category
+
+| Category | Count |
+| --- | ---: |
+| compat-only-schema | 7 |
+| missing-type | 38 |
+
+### Metadata Gap Hotspots
+
+| API Version | Kind | Category | Count | Examples |
+| --- | --- | --- | ---: | --- |
+| pkg.crossplane.io/v1beta1 | DeploymentRuntimeConfig | missing-type | 38 | spec.deploymentTemplate.spec.strategy.rollingUpdate.maxSurge, spec.deploymentTemplate.spec.strategy.rollingUpdate.maxUnavailable, spec.deploymentTemplate.spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor |
 
 ### Worst-Covered GVKs
 
 | API Version | Kind | Coverage | Known Gaps |
 | --- | --- | ---: | ---: |
 | apiextensions.crossplane.io/v1 | CompositeResourceDefinition | 100.00% | 0 |
-| apiextensions.crossplane.io/v1 | Composition | 100.00% | 5 |
+| apiextensions.crossplane.io/v1 | Composition | 100.00% | 0 |
 | apiextensions.crossplane.io/v1 | CompositionRevision | 100.00% | 0 |
 | apiextensions.crossplane.io/v1alpha1 | ManagedResourceActivationPolicy | 100.00% | 0 |
 | apiextensions.crossplane.io/v1alpha1 | ManagedResourceDefinition | 100.00% | 0 |

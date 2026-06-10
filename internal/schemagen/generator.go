@@ -344,6 +344,7 @@ func walkProperties(fields map[string]analyzer.FieldDoc, root, schema openAPISch
 		if err != nil {
 			return err
 		}
+		mergeArrayItemDescription(fields, arrayPath, item)
 		return walkProperties(fields, root, item, arrayPath, item.Required)
 	}
 	names := make([]string, 0, len(schema.Properties))
@@ -365,6 +366,7 @@ func walkProperties(fields map[string]analyzer.FieldDoc, root, schema openAPISch
 			if err != nil {
 				return err
 			}
+			mergeArrayItemDescription(fields, arrayPath, item)
 			if err := walkProperties(fields, root, item, arrayPath, item.Required); err != nil {
 				return err
 			}
@@ -410,6 +412,18 @@ func putField(fields map[string]analyzer.FieldDoc, path string, schema openAPISc
 		Default:     rawDefault(schema.Default),
 		Enum:        enumStrings(schema.Enum),
 	}
+}
+
+func mergeArrayItemDescription(fields map[string]analyzer.FieldDoc, path string, item openAPISchema) {
+	if strings.TrimSpace(item.Description) == "" {
+		return
+	}
+	field, ok := fields[path]
+	if !ok || strings.TrimSpace(field.Description) != "" {
+		return
+	}
+	field.Description = item.Description
+	fields[path] = field
 }
 
 func resolveSchema(root, schema openAPISchema, seen map[string]struct{}) (openAPISchema, error) {

@@ -48,8 +48,14 @@ func TestCoverageBucketsSeparateUpstreamCompatAndMissingFields(t *testing.T) {
 
 	assertCoverageFieldBucket(t, state, "spec.present", bucketCoveredUpstream)
 	assertCoverageFieldBucket(t, state, "spec.compositeTypeRef.kind", bucketCoveredWithCompatOverride)
+	assertCoverageFieldDescriptionStatus(t, state, "spec.compositeTypeRef.kind", metadataCompatOverride)
 	assertCoverageFieldBucket(t, state, "spec.compatOnly", bucketCompatAddedField)
 	assertCoverageFieldBucket(t, state, "spec.missing", bucketMissing)
+	for _, gap := range state.Gaps {
+		if gap.Path == "spec.compositeTypeRef.kind" && gap.Category == gapMissingDescription {
+			t.Fatalf("compatibility override produced missing-description gap: %#v", gap)
+		}
+	}
 }
 
 func TestCoverageStateJSONUsesReportFieldNames(t *testing.T) {
@@ -220,6 +226,12 @@ func TestRenderCoverageMarkdownSummarizesWorstGVKs(t *testing.T) {
 		"## Release v1.20.7",
 		"Upstream field coverage: 1/2 (50.00%)",
 		"Known gaps: 1",
+		"### Metadata Coverage",
+		"| description | 1 | 0 | 0 | 1 | 100.00% | 0 |",
+		"### Known Gaps By Category",
+		"| missing-field | 1 |",
+		"### Metadata Gap Hotspots",
+		"No metadata gaps.",
 		"### Worst-Covered GVKs",
 		"| example.org/v1 | Widget | 50.00% | 1 |",
 	} {
@@ -260,6 +272,9 @@ func TestRenderCoverageJSONAndMarkdownCountMetadataOnlyGaps(t *testing.T) {
 	for _, want := range []string{
 		"Upstream field coverage: 1/1 (100.00%)",
 		"Known gaps: 1",
+		"| description | 0 | 0 | 1 | 1 | 0.00% | 0 |",
+		"| missing-description | 1 |",
+		"| example.org/v1 | Widget | missing-description | 1 | spec.present |",
 		"| example.org/v1 | Widget | 100.00% | 1 |",
 	} {
 		if !strings.Contains(markdown, want) {
@@ -474,6 +489,21 @@ func assertCoverageFieldBucket(t *testing.T, state coverageState, path string, b
 			if field.Path == path {
 				if field.Bucket != bucket {
 					t.Fatalf("%s bucket = %s, want %s", path, field.Bucket, bucket)
+				}
+				return
+			}
+		}
+	}
+	t.Fatalf("missing coverage field %s", path)
+}
+
+func assertCoverageFieldDescriptionStatus(t *testing.T, state coverageState, path string, status metadataCoverageStatus) {
+	t.Helper()
+	for _, gvk := range state.GVKs {
+		for _, field := range gvk.Fields {
+			if field.Path == path {
+				if field.Metadata.Description != status {
+					t.Fatalf("%s description metadata = %s, want %s", path, field.Metadata.Description, status)
 				}
 				return
 			}
